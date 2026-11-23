@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { PageLoader } from '../components/LoadingScreen';
 import { getAllEntries } from '../services/storage';
 import { DailyEntry } from '../types';
 import { 
@@ -23,7 +24,7 @@ const Analytics: React.FC = () => {
     fetch();
   }, [user]);
 
-  if (loading) return <div className="p-8 text-center text-stone-500">Loading analytics...</div>;
+  if (loading) return <PageLoader label="Loading analytics…" />;
 
   const chartData = entries.map(e => ({
     date: e.date.substring(5), // MM-DD

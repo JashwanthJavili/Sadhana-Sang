@@ -1,229 +1,499 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { getAllEntries, getSettings } from '../services/storage';
-import { DailyEntry, UserSettings } from '../types';
-import { TrendingUp, Award, Calendar, Sun, Moon } from 'lucide-react';
-import { LineChart, Line, ResponsiveContainer } from 'recharts';
+import { getJapaGoal } from '../utils/japaGoal';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { ref, get } from 'firebase/database';
+import { PenLine, ChevronRight, Trophy, CalendarDays, Moon, Clock, ArrowRight, BarChart3 } from 'lucide-react';
+import { db } from '../services/firebase';
+import { getAllEntries } from '../services/storage';
+import { DailyEntry } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserData } from '../contexts/UserDataContext';
-import LoadingScreen from '../components/LoadingScreen';
-
+import { PageLoader } from '../components/LoadingScreen';
+import MalaIcon from '../components/MalaIcon';
+import { localDateKey, shiftDateKey, parseDateKey, daysUntil } from '../utils/date';
 // @ts-ignore
-import versionData from '../version.json';
+import heroImage from '../utils/Images/krishna-embrace.jpg';
+
+/* -------------------------------------------------------------------------- */
+/* Types, constants & in-memory cache                                          */
+/* -------------------------------------------------------------------------- */
+
+
+interface ChantingSession {
+  id: string;
+  rounds: number;
+  timestamp: number;
+}
+interface ChantingStats {
+  totalRounds: number;
+  totalTime: number;
+}
+interface Festival {
+  id: string;
+  name: string;
+  date: string;
+}
+
+interface DashboardData {
+  entries: DailyEntry[];
+  sessions: ChantingSession[];
+  stats: ChantingStats | null;
+  festivals: Festival[] | null;
+}
+
+/** Keeps the last loaded data so returning to Home renders instantly */
+const cache = new Map<string, DashboardData>();
+
+const safeGet = async (path: string) => {
+  try {
+    const snap = await get(ref(db, path));
+    return snap.exists() ? snap.val() : null;
+  } catch {
+    return null;
+  }
+};
+
+/* -------------------------------------------------------------------------- */
+/* Presentational pieces                                                       */
+/* -------------------------------------------------------------------------- */
+
+const Card: React.FC<{ className?: string; children: React.ReactNode }> = ({ className = '', children }) => (
+  <section
+    className={`rounded-3xl bg-white/90 p-5 shadow-[0_1px_2px_rgba(67,27,17,0.04),0_8px_24px_-12px_rgba(67,27,17,0.12)] ring-1 ring-sandal-200 sm:p-6 ${className}`}
+  >
+    {children}
+  </section>
+);
+
+const CardTitle: React.FC<{ icon: React.ReactNode; title: string; action?: React.ReactNode }> = ({ icon, title, action }) => (
+  <div className="mb-4 flex items-center justify-between gap-3">
+    <h2 className="flex items-center gap-2 text-[15px] font-semibold text-maroon-900">
+      <span className="text-brand-600">{icon}</span>
+      {title}
+    </h2>
+    {action}
+  </div>
+);
+
+const TextLink: React.FC<{ to: string; children: React.ReactNode }> = ({ to, children }) => (
+  <Link to={to} className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand-700 transition hover:text-brand-800" style={{ minHeight: 0 }}>
+    {children}
+    <ChevronRight size={14} />
+  </Link>
+);
+
+const EmptyHint: React.FC<{ icon: React.ReactNode; text: string }> = ({ icon, text }) => (
+  <div className="flex items-center gap-3 rounded-2xl bg-sandal-50 p-4 ring-1 ring-sandal-200">
+    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-maroon-900/40 shadow-sm">{icon}</span>
+    <p className="text-sm text-maroon-900/55">{text}</p>
+  </div>
+);
+
+/** Circular progress ring (white-on-dark variant for the japa card) */
+const Ring: React.FC<{ value: number; max: number; size?: number }> = ({ value, max, size = 120 }) => {
+  const stroke = 10;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const pct = Math.min(value / max, 1);
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="-rotate-90">
+        <defs>
+          <linearGradient id="japaRing" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#FDE68A" />
+            <stop offset="100%" stopColor="#F6B23E" />
+          </linearGradient>
+        </defs>
+        <circle cx={size / 2} cy={size / 2} r={r} stroke="rgba(255,255,255,0.15)" strokeWidth={stroke} fill="none" />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          stroke="url(#japaRing)"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          fill="none"
+          strokeDasharray={c}
+          strokeDashoffset={c * (1 - pct)}
+          style={{ transition: 'stroke-dashoffset 900ms cubic-bezier(0.22,1,0.36,1)' }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-4xl font-semibold leading-none text-white">{value}</span>
+        <span className="mt-1 text-xs font-medium text-sandal-100/60">of {max}</span>
+      </div>
+    </div>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/* Dashboard                                                                   */
+/* -------------------------------------------------------------------------- */
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const { userSettings } = useUserData();
-  const [entries, setEntries] = useState<DailyEntry[]>([]);
-  const [todayEntry, setTodayEntry] = useState<DailyEntry | null>(null);
-  const [settings, setSettings] = useState<UserSettings | null>(null);
-  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+  const isGuest = user?.uid === 'guest';
 
-  // Sync context settings to local state
-  useEffect(() => {
-    if (userSettings) {
-      setSettings(userSettings);
-    }
-  }, [userSettings]);
+  const cached = user ? cache.get(user.uid) : undefined;
+  const [data, setData] = useState<DashboardData>(
+    cached || { entries: [], sessions: [], stats: null, festivals: null }
+  );
+  const [loading, setLoading] = useState(!cached);
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (user) {
-        const all = await getAllEntries(user.uid);
-        setEntries(all);
-        const today = new Date().toISOString().split('T')[0];
-        setTodayEntry(all.find(e => e.date === today) || null);
-        
-        const userSettings = await getSettings(user.uid);
-        setSettings(userSettings);
-        setLoading(false);
+    if (!user) return;
+    let cancelled = false;
+    const uid = user.uid;
+
+    const update = (patch: Partial<DashboardData>) => {
+      if (cancelled) return;
+      setData((prev) => {
+        const next = { ...prev, ...patch };
+        cache.set(uid, next);
+        return next;
+      });
+    };
+
+    const load = async () => {
+      // 1) Personal data — needed for the first paint
+      const [entries, sessionsVal, statsVal] = await Promise.all([
+        getAllEntries(uid).catch(() => [] as DailyEntry[]),
+        isGuest ? null : safeGet(`users/${uid}/chantingSessions`),
+        isGuest ? null : safeGet(`users/${uid}/chantingStats`),
+      ]);
+      update({
+        entries,
+        sessions: sessionsVal ? (Object.values(sessionsVal) as ChantingSession[]) : [],
+        stats: statsVal,
+      });
+      if (!cancelled) setLoading(false);
+
+      // 2) Shared calendar — loads in the background
+      if (!isGuest) {
+        const festivalsVal = await safeGet('festivals');
+        update({
+          festivals: festivalsVal ? Object.entries(festivalsVal).map(([id, v]: [string, any]) => ({ id, ...v })) : [],
+        });
       }
     };
-    fetchData();
 
-    // Listen for user data updates
-    const handleDataUpdate = () => {
-      console.log('📡 Dashboard: Received data update event');
-      fetchData();
+    load();
+    window.addEventListener('userDataUpdated', load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('userDataUpdated', load);
     };
-    
-    window.addEventListener('userDataUpdated', handleDataUpdate);
-    return () => window.removeEventListener('userDataUpdated', handleDataUpdate);
-  }, [user]);
+  }, [user, isGuest]);
 
-  const getAverageScore = (key: keyof typeof entries[0]['metrics']) => {
-    if (entries.length === 0) return 0;
-    const sum = entries.reduce((acc, curr) => acc + (curr.metrics[key] as number), 0);
-    return (sum / entries.length).toFixed(1);
+  /* ------------------------------ derived data ----------------------------- */
+
+  const { entries, sessions, stats, festivals } = data;
+  const today = localDateKey();
+
+  const roundsByDay = useMemo(() => {
+    const map = new Map<string, number>();
+    sessions.forEach((s) => {
+      if (!s?.timestamp) return;
+      const key = localDateKey(new Date(s.timestamp));
+      map.set(key, (map.get(key) || 0) + (Number(s.rounds) || 0));
+    });
+    // A planner entry may record more rounds (e.g. chanted on physical beads)
+    entries.forEach((e) => {
+      const r = Number(e.metrics?.chantingRounds) || 0;
+      if (r > (map.get(e.id) || 0)) map.set(e.id, r);
+    });
+    return map;
+  }, [sessions, entries]);
+
+  const practicedDays = useMemo(() => {
+    const set = new Set<string>();
+    roundsByDay.forEach((r, k) => r > 0 && set.add(k));
+    entries.forEach((e) => set.add(e.id));
+    return set;
+  }, [roundsByDay, entries]);
+
+  const roundsToday = roundsByDay.get(today) || 0;
+  const goal = getJapaGoal();
+  const remaining = Math.max(goal - roundsToday, 0);
+
+  const streak = useMemo(() => {
+    let day = practicedDays.has(today) ? today : shiftDateKey(today, -1);
+    let count = 0;
+    while (practicedDays.has(day)) {
+      count++;
+      day = shiftDateKey(day, -1);
+    }
+    return count;
+  }, [practicedDays, today]);
+
+  const bestStreak = useMemo(() => {
+    let best = 0;
+    let run = 0;
+    let prev = '';
+    [...practicedDays].sort().forEach((d) => {
+      run = prev && shiftDateKey(prev, 1) === d ? run + 1 : 1;
+      best = Math.max(best, run);
+      prev = d;
+    });
+    return Math.max(best, streak);
+  }, [practicedDays, streak]);
+
+  const week = useMemo(
+    () =>
+      Array.from({ length: 7 }, (_, i) => {
+        const key = shiftDateKey(today, i - 6);
+        return {
+          key,
+          label: parseDateKey(key).toLocaleDateString('en-IN', { weekday: 'narrow' }),
+          rounds: roundsByDay.get(key) || 0,
+          isToday: key === today,
+        };
+      }),
+    [roundsByDay, today]
+  );
+  const weekTotal = week.reduce((a, d) => a + d.rounds, 0);
+  const weekMax = Math.max(goal, 1, ...week.map((d) => d.rounds));
+
+  const upcoming = useMemo(
+    () => (festivals || []).filter((f) => f.date && daysUntil(f.date) >= 0).sort((a, b) => a.date.localeCompare(b.date)),
+    [festivals]
+  );
+  const nextEkadasi = upcoming.find((f) => /ekad/i.test(f.name));
+  const nextFestivals = upcoming.filter((f) => f.id !== nextEkadasi?.id).slice(0, 3);
+
+  /* ------------------------------- greeting ------------------------------- */
+
+  const hour = new Date().getHours();
+  const timeGreeting = hour < 4 ? 'Brahma muhurta' : hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const nudge =
+    goal && roundsToday >= goal
+      ? 'You reached your japa goal today. All glories to your sadhana!'
+      : hour < 7
+        ? 'The early morning is the best time to chant.'
+        : roundsToday > 0
+          ? goal
+            ? `${remaining} more to reach your goal — keep going.`
+            : 'Lovely chanting today — every round counts.'
+          : hour < 12
+            ? 'Begin your day with the holy names.'
+            : hour < 20
+              ? 'There is still time today to complete your rounds.'
+              : 'End the day peacefully — chant a little before rest.';
+  const name = userSettings?.userName || user?.displayName || 'Devotee';
+  const dateLabel = new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  if (loading) return <PageLoader label="Preparing your day…" />;
+
+  const formatCountdown = (key: string) => {
+    const d = daysUntil(key);
+    return d === 0 ? 'Today' : d === 1 ? 'Tomorrow' : `In ${d} days`;
   };
+  const formatDate = (key: string) => parseDateKey(key).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
 
-  const completedCommitments = todayEntry 
-    ? todayEntry.commitments.filter(c => c.done).length 
-    : 0;
-
-  const sparklineData = entries
-    .slice(0, 7)
-    .reverse()
-    .map(e => ({ value: e.metrics.disciplineScore }));
-
-  if (loading) return <LoadingScreen />;
+  /* -------------------------------- render -------------------------------- */
 
   return (
-    <div className="min-h-full space-y-4 sm:space-y-6 md:space-y-8 animate-fadeIn px-3 sm:px-4">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-orange-700 to-orange-900 rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 text-white shadow-lg sm:shadow-xl relative overflow-hidden transform transition-all duration-300 hover:shadow-2xl">
-        {/* Decorative Background Pattern */}
-        <div className="absolute top-0 right-0 opacity-10 transform translate-x-10 -translate-y-10">
-             <svg width="200" height="200" viewBox="0 0 24 24" fill="white">
-               <path d="M12,2C9,2,2,8,2,12c0,3.5,2.5,8,10,10c7.5-2,10-6.5,10-10C22,8,15,2,12,2z"/>
-             </svg>
-        </div>
-
-        <div className="relative z-10">
-          <h1 className="text-xl sm:text-2xl md:text-3xl font-serif font-bold mb-2">
-            Namaskar {settings?.userName || 'Devotee'}, Hare Krishna
-          </h1>
-          <p className="text-orange-100 text-xs sm:text-sm mb-1">
-            {settings?.iskconCenter || 'Local Center'}
-          </p>
-          {settings?.guruName && (
-            <p className="text-orange-200 text-xs sm:text-sm italic">
-              Guided by {settings.guruName}
-            </p>
-          )}
-          <div className="mt-4 sm:mt-6 md:mt-8 flex gap-3 sm:gap-4">
-            <Link 
-              to="/planner" 
-              className="bg-white text-orange-900 px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 md:py-3 rounded-lg font-semibold text-sm sm:text-base hover:bg-orange-50 transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2 transform hover:scale-105 active:scale-95"
-            >
-              <span>Today's Planner</span>
-              <TrendingUp size={16} />
-            </Link>
+    <div className="space-y-5 sm:space-y-6">
+      {/* ===================== Hero + Japa ===================== */}
+      <div className="grid gap-5 sm:gap-6 lg:grid-cols-3">
+        <section className="relative min-h-[230px] overflow-hidden rounded-3xl bg-sandal-50 ring-1 ring-sandal-200 lg:col-span-2">
+          <img
+            src={heroImage}
+            alt=""
+            aria-hidden="true"
+            className="absolute inset-y-0 right-0 h-full w-[62%] object-cover object-[45%_20%] opacity-90 [mask-image:linear-gradient(to_right,transparent_5%,black_80%)] sm:w-[58%] sm:opacity-100 sm:[mask-image:linear-gradient(to_right,transparent,black_55%)]"
+          />
+          <div className="relative flex h-full flex-col justify-between gap-6 p-6 sm:p-8">
+            <div className="max-w-[13.5rem] sm:max-w-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-brand-700/80">{dateLabel}</p>
+              <h1 className="mt-2 text-2xl font-semibold leading-tight text-maroon-900 sm:text-[28px]">
+                {timeGreeting},
+                <br />
+                {name}
+              </h1>
+              <p className="mt-2 text-sm leading-relaxed text-maroon-900/65">{nudge}</p>
+            </div>
+            <div>
+              <button onClick={() => navigate('/planner')} className="btn-primary rounded-2xl px-5 py-3">
+                <PenLine size={16} /> Log today's sadhana
+              </button>
+            </div>
           </div>
-        </div>
+        </section>
+
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-maroon-800 via-maroon-700 to-brand-700 p-6 text-white shadow-[0_20px_44px_-20px_rgba(67,27,17,0.65)] sm:p-7">
+          <div className="pointer-events-none absolute -right-14 -top-14 h-48 w-48 rounded-full bg-marigold-400/25 blur-2xl" />
+          <div className="relative flex items-center justify-between">
+            <h2 className="flex items-center gap-2 text-[15px] font-semibold text-white">
+              <MalaIcon size={18} /> Today's japa
+            </h2>
+            {goal > 0 && (
+              <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-semibold text-sandal-50">
+                {roundsToday >= goal ? 'Goal reached' : `${remaining} to go`}
+              </span>
+            )}
+          </div>
+          <div className="relative mt-5 flex items-center gap-5">
+            <Ring value={roundsToday} max={goal || Math.max(roundsToday, 1)} />
+            <div className="min-w-0">
+              <p className="text-sm text-sandal-100/75">{goal ? `Your goal: ${goal} rounds` : 'Chanted today'}</p>
+              <p className="text-2xl font-semibold leading-tight">
+                {roundsToday} round{roundsToday === 1 ? '' : 's'}
+              </p>
+              {roundsToday > 0 && <p className="mt-1 text-xs text-sandal-100/55">{(roundsToday * 108).toLocaleString('en-IN')} holy names</p>}
+            </div>
+          </div>
+          <button
+            onClick={() => navigate('/chanting')}
+            className="relative mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-3 text-sm font-semibold text-maroon-800 shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
+          >
+            {roundsToday > 0 ? 'Continue chanting' : 'Start chanting'} <ArrowRight size={16} />
+          </button>
+        </section>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
-        <div className="group bg-gradient-to-br from-white to-blue-50 p-4 sm:p-5 md:p-7 rounded-xl sm:rounded-2xl shadow-md sm:shadow-lg border-2 border-blue-200 hover:shadow-xl sm:hover:shadow-2xl hover:border-blue-400 transition-all duration-300 transform hover:scale-105 hover:-translate-y-1">
-          <div className="flex justify-between items-start mb-3 sm:mb-4 md:mb-5">
+      {/* ===================== Consistency + Upcoming + Journey ===================== */}
+      <div className="grid gap-5 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <Card className="flex flex-col">
+          <CardTitle icon={<Trophy size={17} />} title="Consistency" />
+          <div className="flex items-end gap-6">
             <div>
-              <p className="text-stone-600 text-xs sm:text-sm font-semibold uppercase tracking-wide mb-1">Discipline</p>
-              <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-stone-900">{getAverageScore('disciplineScore')} <span className="text-lg sm:text-xl md:text-2xl text-stone-500">/ 5</span></h3>
+              <p className="text-4xl font-semibold leading-none text-maroon-900">
+                {streak}
+                <span className="ml-1.5 text-base font-medium text-maroon-900/45">{streak === 1 ? 'day' : 'days'}</span>
+              </p>
+              <p className="mt-1.5 text-xs text-maroon-900/50">Current streak</p>
             </div>
-            <div className="p-2 sm:p-2.5 md:p-3 bg-gradient-to-br from-blue-100 to-blue-200 text-blue-700 rounded-lg sm:rounded-xl shadow-md transition-all duration-300 group-hover:scale-110 group-hover:rotate-6">
-              <Award size={18} className="sm:w-5 sm:h-5 md:w-6 md:h-6" />
+            <div className="pb-0.5">
+              <p className="text-lg font-semibold leading-none text-maroon-900/80">{bestStreak}</p>
+              <p className="mt-1.5 text-xs text-maroon-900/50">Best</p>
             </div>
           </div>
-          <div className="h-8 sm:h-10 md:h-12 mb-2 w-full">
-             <ResponsiveContainer width="100%" height={32} minWidth={50}>
-                <LineChart data={sparklineData}>
-                  <Line type="monotone" dataKey="value" stroke="#2563eb" strokeWidth={2} dot={false} />
-                </LineChart>
-             </ResponsiveContainer>
-          </div>
-          <p className="text-xs text-stone-500 font-medium">Last 7 days</p>
-        </div>
 
-        <div className="group bg-gradient-to-br from-white to-orange-50 p-4 sm:p-5 md:p-7 rounded-xl sm:rounded-2xl shadow-md sm:shadow-lg border-2 border-orange-200 hover:shadow-xl sm:hover:shadow-2xl hover:border-orange-400 transition-all duration-300 transform hover:scale-105 hover:-translate-y-1">
-           <div className="flex justify-between items-start mb-3 sm:mb-4 md:mb-5">
-            <div>
-              <p className="text-stone-600 text-xs sm:text-sm font-semibold uppercase tracking-wide mb-1">Chanting</p>
-              <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-stone-900">{getAverageScore('chantingRounds')} <span className="text-base sm:text-lg md:text-xl text-stone-500">Rnds</span></h3>
+          <div className="mt-5 flex flex-1 flex-col justify-end">
+            <div className="mb-2 flex items-baseline justify-between">
+              <p className="text-xs font-semibold uppercase tracking-[0.1em] text-maroon-900/40">This week</p>
+              <p className="text-xs text-maroon-900/50">{weekTotal} rounds</p>
             </div>
-            <div className="p-2 sm:p-2.5 md:p-3 bg-gradient-to-br from-orange-100 to-amber-200 text-orange-700 rounded-lg sm:rounded-xl shadow-md transition-all duration-300 group-hover:scale-110 group-hover:rotate-6">
-              <Sun size={18} className="sm:w-5 sm:h-5 md:w-6 md:h-6" />
+            <div className="relative flex h-20 items-end gap-2">
+              {goal > 0 && (
+                <div
+                  className="pointer-events-none absolute inset-x-0 border-t border-dashed border-brand-300"
+                  style={{ bottom: `${(goal / weekMax) * 100}%` }}
+                />
+              )}
+              {week.map((d) => (
+                <div key={d.key} className="flex h-full flex-1 flex-col items-center justify-end" title={`${d.rounds} rounds`}>
+                  <div
+                    className={`w-full max-w-[26px] rounded-lg transition-all duration-700 ${
+                      d.rounds > 0 && d.rounds >= (goal || 1)
+                        ? 'bg-gradient-to-t from-brand-600 to-marigold-400'
+                        : d.rounds > 0
+                          ? 'bg-marigold-400/60'
+                          : 'bg-sandal-200'
+                    }`}
+                    style={{ height: `${Math.max((d.rounds / weekMax) * 100, 5)}%` }}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="mt-1.5 flex gap-2">
+              {week.map((d) => (
+                <span key={d.key} className={`flex-1 text-center text-[11px] font-medium ${d.isToday ? 'text-brand-700' : 'text-maroon-900/40'}`}>
+                  {d.label}
+                </span>
+              ))}
             </div>
           </div>
-           <p className="text-xs sm:text-sm text-stone-600 font-medium mt-auto bg-orange-100 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg">Target: 16 daily</p>
-        </div>
+        </Card>
 
-        <div className="group bg-gradient-to-br from-white to-indigo-50 p-4 sm:p-5 md:p-7 rounded-xl sm:rounded-2xl shadow-md sm:shadow-lg border-2 border-indigo-200 hover:shadow-xl sm:hover:shadow-2xl hover:border-indigo-400 transition-all duration-300 transform hover:scale-105 hover:-translate-y-1">
-           <div className="flex justify-between items-start mb-3 sm:mb-4 md:mb-5">
-            <div>
-              <p className="text-stone-600 text-xs sm:text-sm font-semibold uppercase tracking-wide mb-1">Sleep</p>
-              <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-stone-900">{getAverageScore('totalSleep')} <span className="text-base sm:text-lg md:text-xl text-stone-500">Hrs</span></h3>
+        <Card>
+          <CardTitle icon={<CalendarDays size={17} />} title="Upcoming" action={<TextLink to="/festivals">Calendar</TextLink>} />
+          {isGuest ? (
+            <EmptyHint icon={<Moon size={18} />} text="Sign in to see upcoming Ekadasis and festivals." />
+          ) : festivals === null ? (
+            <div className="space-y-3">
+              <div className="skeleton h-[72px] rounded-2xl" />
+              <div className="skeleton h-10 rounded-xl" />
+              <div className="skeleton h-10 rounded-xl" />
             </div>
-            <div className="p-2 sm:p-2.5 md:p-3 bg-gradient-to-br from-indigo-100 to-purple-200 text-indigo-700 rounded-lg sm:rounded-xl shadow-md transition-all duration-300 group-hover:scale-110 group-hover:rotate-6">
-              <Moon size={18} className="sm:w-5 sm:h-5 md:w-6 md:h-6" />
-            </div>
-          </div>
-           <p className="text-xs sm:text-sm text-stone-600 font-medium mt-auto bg-indigo-100 px-2 sm:px-3 py-1.5 sm:py-2 rounded-lg">Rest vital</p>
-        </div>
-
-        <div className="group bg-gradient-to-br from-white to-green-50 p-4 sm:p-5 md:p-7 rounded-xl sm:rounded-2xl shadow-md sm:shadow-lg border-2 border-green-200 hover:shadow-xl sm:hover:shadow-2xl hover:border-green-400 transition-all duration-300 transform hover:scale-105 hover:-translate-y-1">
-           <div className="flex justify-between items-start mb-3 sm:mb-4 md:mb-5">
-            <div>
-              <p className="text-stone-600 text-xs sm:text-sm font-semibold uppercase tracking-wide mb-1">Today</p>
-              <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-stone-900">{completedCommitments} <span className="text-lg sm:text-xl md:text-2xl text-stone-500">/ 5</span></h3>
-            </div>
-            <div className="p-2 sm:p-2.5 md:p-3 bg-gradient-to-br from-green-100 to-emerald-200 text-green-700 rounded-lg sm:rounded-xl shadow-md transition-all duration-300 group-hover:scale-110 group-hover:rotate-6">
-              <TrendingUp size={18} className="sm:w-5 sm:h-5 md:w-6 md:h-6" />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <div className="w-full bg-stone-200 rounded-full h-3 shadow-inner">
-              <div 
-                className="bg-gradient-to-r from-green-500 to-emerald-600 h-3 rounded-full transition-all duration-500 shadow-md" 
-                style={{ width: `${(completedCommitments / 5) * 100}%` }}
-              ></div>
-            </div>
-            <p className="text-sm text-stone-600 font-medium text-right">{Math.round((completedCommitments / 5) * 100)}% Complete</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Recent Activity */}
-      <div className="bg-white rounded-2xl shadow-xl border-2 border-stone-200 overflow-hidden hover:shadow-2xl transition-shadow duration-300">
-        <div className="bg-gradient-to-r from-stone-50 to-stone-100 p-6 border-b-2 border-stone-200 flex justify-between items-center">
-          <h2 className="text-xl font-bold font-serif text-stone-800 flex items-center gap-2">
-            <Calendar className="text-orange-600" size={24} />
-            Recent Logs
-          </h2>
-          <Link to="/history" className="bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition-all duration-300 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95">View All</Link>
-        </div>
-        <div className="divide-y-2 divide-stone-100">
-          {entries.length === 0 ? (
-            <div className="p-12 text-center">
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-orange-100 mb-4">
-                <Calendar className="text-orange-600" size={36} />
-              </div>
-              <p className="text-stone-500 text-lg font-medium">No entries yet. Start your journey today!</p>
-              <Link to="/planner" className="inline-block mt-4 text-orange-600 font-semibold hover:underline">Create First Entry →</Link>
-            </div>
+          ) : !nextEkadasi && nextFestivals.length === 0 ? (
+            <EmptyHint icon={<Moon size={18} />} text="No upcoming dates added yet." />
           ) : (
-            entries.slice(0, 5).map(entry => (
-              <div key={entry.id} className="group p-5 hover:bg-gradient-to-r hover:from-orange-50 hover:to-amber-50 transition-all duration-300 flex items-center justify-between">
-                <div className="flex items-center gap-5">
-                  <div className="bg-gradient-to-br from-stone-100 to-stone-200 p-3 rounded-xl text-stone-600 shadow-md group-hover:shadow-lg group-hover:scale-110 transition-all duration-300">
-                    <Calendar size={22} />
-                  </div>
-                  <div>
-                    <p className="font-bold text-stone-900 text-lg mb-1">{entry.date}</p>
-                    <p className="text-sm text-stone-600 flex items-center gap-3">
-                      <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-lg font-semibold">Discipline: {entry.metrics.disciplineScore}/5</span>
-                      <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-lg font-semibold">Mood: {entry.metrics.mood}/10</span>
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className={`inline-flex items-center px-4 py-2 rounded-xl text-sm font-bold shadow-md ${
-                    entry.metrics.overallPerformance >= 8 ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white' :
-                    entry.metrics.overallPerformance >= 5 ? 'bg-gradient-to-r from-yellow-400 to-amber-500 text-white' :
-                    'bg-gradient-to-r from-red-500 to-rose-600 text-white'
-                  }`}>
-                    Perf: {entry.metrics.overallPerformance}/10
+            <div className="space-y-3">
+              {nextEkadasi && (
+                <Link
+                  to={`/festival/${nextEkadasi.id}`}
+                  className="flex items-center gap-3 rounded-2xl bg-gradient-to-br from-sky-50 to-indigo-50 p-3.5 ring-1 ring-indigo-100 transition hover:ring-indigo-200"
+                  style={{ minHeight: 0 }}
+                >
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm">
+                    <Moon size={19} />
                   </span>
-                </div>
-              </div>
-            ))
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-indigo-600/80">Next Ekadasi</span>
+                    <span className="block truncate text-sm font-semibold text-maroon-900">{nextEkadasi.name}</span>
+                    <span className="block text-xs text-maroon-900/50">{formatDate(nextEkadasi.date)}</span>
+                  </span>
+                  <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-indigo-700 shadow-sm">
+                    {formatCountdown(nextEkadasi.date)}
+                  </span>
+                </Link>
+              )}
+              <ul className="space-y-1">
+                {nextFestivals.map((f) => (
+                  <li key={f.id}>
+                    <Link to={`/festival/${f.id}`} className="flex items-center gap-3 rounded-xl px-1 py-2 transition hover:bg-sandal-100/60" style={{ minHeight: 0 }}>
+                      <span className="flex w-11 shrink-0 flex-col items-center rounded-lg bg-sandal-100 py-1 leading-none">
+                        <span className="text-[10px] font-semibold uppercase text-brand-700">
+                          {parseDateKey(f.date).toLocaleDateString('en-IN', { month: 'short' })}
+                        </span>
+                        <span className="mt-0.5 text-base font-semibold text-maroon-900">{parseDateKey(f.date).getDate()}</span>
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-maroon-900">{f.name}</span>
+                        <span className="block text-xs text-maroon-900/45">{formatCountdown(f.date)}</span>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
-        </div>
-      </div>
+        </Card>
 
-      {/* Version Footer */}
-      <div className="text-center text-stone-400 text-xs py-4">
-        <p>Sadhana Sang v{versionData.version}</p>
+        <Card className="md:col-span-2 lg:col-span-1">
+          <CardTitle icon={<Clock size={17} />} title="Your journey" action={<TextLink to="/analytics">Analytics</TextLink>} />
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Rounds', value: (stats?.totalRounds || 0).toLocaleString('en-IN') },
+              { label: 'Hours', value: Math.round((stats?.totalTime || 0) / 3600).toLocaleString('en-IN') },
+              { label: 'Days logged', value: entries.length.toLocaleString('en-IN') },
+            ].map((s) => (
+              <div key={s.label} className="rounded-2xl bg-sandal-100/70 px-3 py-4 text-center">
+                <p className="text-2xl font-semibold leading-none text-maroon-900">{s.value}</p>
+                <p className="mt-1.5 text-[11px] font-medium text-maroon-900/50">{s.label}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            {[
+              isGuest ? { to: '/analytics', label: 'Analytics', Icon: BarChart3 } : { to: '/journal', label: 'Journal', Icon: PenLine },
+              { to: '/history', label: 'History', Icon: CalendarDays },
+            ].map(({ to, label, Icon }) => (
+              <Link
+                key={to}
+                to={to}
+                className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-maroon-900/75 ring-1 ring-sandal-200 transition hover:bg-sandal-100/60 hover:text-maroon-900"
+                style={{ minHeight: 0 }}
+              >
+                <Icon size={15} className="text-brand-600" /> {label}
+              </Link>
+            ))}
+          </div>
+        </Card>
       </div>
     </div>
   );

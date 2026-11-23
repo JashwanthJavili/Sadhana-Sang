@@ -1,11 +1,33 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { Chat, UserProfile } from '../types/chat';
-import { getUserChats, getTotalUnreadCount } from '../services/chat';
-import { MessageCircle, Search, Users, Wifi, WifiOff, Filter, X } from 'lucide-react';
-// @ts-ignore
-import iskconLogo from '../utils/Images/Iscon_LOgo-removebg-preview.png';
+import { Chat } from '../types/chat';
+import { getUserChats } from '../services/chat';
+import { MessageCircle, Search, UserPlus, Lock, X } from 'lucide-react';
+import Avatar from '../components/Avatar';
+import { PageLoader } from '../components/LoadingScreen';
+import { isEncrypted } from '../services/encryption';
+
+const isBlank = (v?: string) => !v || v.toLowerCase() === 'n/a' || v === 'Not Specified';
+
+const timeLabel = (ts: number) => {
+  const d = new Date(ts);
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
+  const days = Math.floor((now.getTime() - ts) / 86_400_000);
+  if (days < 7) return days <= 1 ? 'Yesterday' : d.toLocaleDateString('en-IN', { weekday: 'short' });
+  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+};
+
+const chipCls = (active: boolean) =>
+  `inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition ${
+    active ? 'bg-brand-600 text-white shadow-sm' : 'bg-white text-maroon-800 ring-1 ring-sandal-300 hover:bg-sandal-100'
+  }`;
+
+const selectChipCls = (active: boolean) =>
+  `h-9 max-w-[11rem] shrink-0 cursor-pointer truncate rounded-full border-0 py-0 pl-4 pr-8 text-sm font-medium outline-none ring-1 transition focus:ring-2 focus:ring-marigold-400 ${
+    active ? 'bg-amber-100 text-maroon-900 ring-marigold-400' : 'bg-white text-maroon-800 ring-sandal-300'
+  }`;
 
 const ChatsList: React.FC = () => {
   const { user } = useAuth();
@@ -13,329 +35,224 @@ const ChatsList: React.FC = () => {
   const [chats, setChats] = useState<Chat[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
-  const [totalUnread, setTotalUnread] = useState(0);
-  const [showFilters, setShowFilters] = useState(false);
-  const [filters, setFilters] = useState({
-    iskconCenter: 'All',
-    guruName: 'All',
-  });
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const [filters, setFilters] = useState({ iskconCenter: 'All', guruName: 'All' });
 
   useEffect(() => {
     if (!user) return;
-
-    const unsubscribe = getUserChats(user.uid, (fetchedChats) => {
-      setChats(fetchedChats);
+    const unsubscribe = getUserChats(user.uid, (fetched) => {
+      setChats(fetched);
       setLoading(false);
     });
-
-    // Load total unread count with error handling
-    const loadUnreadCount = async () => {
-      try {
-        const count = await getTotalUnreadCount(user.uid);
-        setTotalUnread(count);
-      } catch (error) {
-        console.warn('Failed to load unread count:', error);
-        setTotalUnread(0);
-      }
-    };
-
-    loadUnreadCount();
-    const interval = setInterval(loadUnreadCount, 5000); // Update every 5 seconds
-
-    // Set timeout to stop loading
-    const timeout = setTimeout(() => {
-      setLoading(false);
-    }, 5000);
-
+    const timeout = setTimeout(() => setLoading(false), 5000);
     return () => {
       unsubscribe();
-      clearInterval(interval);
       clearTimeout(timeout);
     };
   }, [user]);
 
-  const filteredChats = chats.filter((chat) => {
-    const otherParticipant = chat.participants.find((p) => p !== user?.uid);
-    if (!otherParticipant) return false;
+  const other = (chat: Chat) => {
+    const id = chat.participants.find((p) => p !== user?.uid);
+    return id ? chat.participantDetails[id] : null;
+  };
 
-    const otherUser = chat.participantDetails[otherParticipant];
-    
-    // Search term filter
-    const matchesSearch = !searchTerm || 
-      otherUser.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      otherUser.guruName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      otherUser.iskconCenter.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    // ISKCON center filter
-    const matchesCenter = filters.iskconCenter === 'All' || 
-      (filters.iskconCenter === 'Not Specified' && (!otherUser.iskconCenter || otherUser.iskconCenter === '' || otherUser.iskconCenter.toLowerCase() === 'n/a')) ||
-      otherUser.iskconCenter === filters.iskconCenter;
-    
-    // Guru name filter
-    const matchesGuru = filters.guruName === 'All' || 
-      otherUser.guruName === filters.guruName;
-    
+  const unreadOf = (chat: Chat) => (user ? chat.unreadCount?.[user.uid] || 0 : 0);
+
+  // derived from the live list — no polling
+  const totalUnread = chats.reduce((sum, c) => sum + unreadOf(c), 0);
+  const unreadChats = chats.filter((c) => unreadOf(c) > 0).length;
+
+  const uniqueCenters = useMemo(() => Array.from(new Set(chats.map((c) => other(c)?.iskconCenter).filter((v): v is string => !!v && !isBlank(v)))), [chats]);
+  const uniqueGurus = useMemo(() => Array.from(new Set(chats.map((c) => other(c)?.guruName).filter((v): v is string => !!v && !isBlank(v)))), [chats]);
+  const hasNoCenter = chats.some((c) => isBlank(other(c)?.iskconCenter));
+  const activeFilters = (filters.iskconCenter !== 'All' ? 1 : 0) + (filters.guruName !== 'All' ? 1 : 0);
+
+  const shown = chats.filter((chat) => {
+    const o = other(chat);
+    if (!o) return false;
+    if (unreadOnly && unreadOf(chat) === 0) return false;
+    const q = searchTerm.trim().toLowerCase();
+    const matchesSearch = !q || o.userName.toLowerCase().includes(q) || (o.guruName || '').toLowerCase().includes(q) || (o.iskconCenter || '').toLowerCase().includes(q);
+    const matchesCenter =
+      filters.iskconCenter === 'All' || (filters.iskconCenter === 'Not Specified' ? isBlank(o.iskconCenter) : o.iskconCenter === filters.iskconCenter);
+    const matchesGuru = filters.guruName === 'All' || o.guruName === filters.guruName;
     return matchesSearch && matchesCenter && matchesGuru;
   });
 
-  const getOtherParticipant = (chat: Chat) => {
-    const otherParticipantId = chat.participants.find((p) => p !== user?.uid);
-    return otherParticipantId ? chat.participantDetails[otherParticipantId] : null;
-  };
-
-  // Get unique ISKCON centers and gurus from chats
-  const uniqueCenters = Array.from(new Set(
-    chats.map(chat => {
-      const otherUser = getOtherParticipant(chat);
-      return otherUser?.iskconCenter;
-    }).filter(Boolean).filter((c): c is string => typeof c === 'string' && c.toLowerCase() !== 'n/a')
-  ));
-
-  const uniqueGurus = Array.from(new Set(
-    chats.map(chat => {
-      const otherUser = getOtherParticipant(chat);
-      return otherUser?.guruName;
-    }).filter(Boolean).filter((g): g is string => typeof g === 'string' && g.toLowerCase() !== 'n/a')
-  ));
-
-  const hasChatsWithoutCenter = chats.some(chat => {
-    const otherUser = getOtherParticipant(chat);
-    return !otherUser?.iskconCenter || otherUser.iskconCenter === '' || otherUser.iskconCenter.toLowerCase() === 'n/a';
-  });
-
-  const formatTime = (timestamp: number) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    if (diffMins < 1) return 'just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
+  if (loading) return <PageLoader label="Opening your messages…" />;
 
   return (
-    <div className="space-y-6 sm:space-y-8 max-w-5xl mx-auto animate-fadeIn">
+    <div className="mx-auto w-full max-w-3xl animate-rise-in">
       {/* Header */}
-      <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-orange-600 rounded-lg sm:rounded-xl md:rounded-2xl p-4 sm:p-6 shadow-2xl border-2 border-orange-400">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
-          <div>
-            <h2 className="text-xl sm:text-2xl md:text-3xl font-serif font-bold text-white mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3">
-              <div className="bg-white/20 p-2 sm:p-3 rounded-lg sm:rounded-xl">
-                <MessageCircle className="text-white" size={24} />
-              </div>
-              Messages
-            </h2>
-            <p className="text-orange-100 text-sm sm:text-base md:text-lg font-medium">
-              {chats.length} conversation{chats.length !== 1 ? 's' : ''}
-              {totalUnread > 0 && ` • ${totalUnread} unread`}
-            </p>
-          </div>
-          <div className="flex gap-2 sm:gap-3">
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl text-sm sm:text-base font-bold transition-all shadow-lg transform hover:scale-105 active:scale-95 ${
-                showFilters ? 'bg-white text-orange-600' : 'bg-white/20 text-white hover:bg-white/30'
-              }`}
-            >
-              <Filter size={16} className="sm:w-5 sm:h-5" />
-              <span className="hidden sm:inline">Filters</span>
-            </button>
-            <button
-              onClick={() => navigate('/community')}
-              className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-white text-orange-600 rounded-lg sm:rounded-xl text-sm sm:text-base font-bold hover:bg-orange-50 transition-all shadow-lg transform hover:scale-105 active:scale-95 whitespace-nowrap"
-            >
-              <Users size={20} />
-              Find Devotees
-            </button>
-          </div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-2xl font-bold tracking-tight text-maroon-900">Messages</h1>
+          <p className="mt-0.5 truncate text-sm text-maroon-900/55">
+            {totalUnread > 0 ? `${totalUnread} new message${totalUnread === 1 ? '' : 's'}` : 'Talk with the devotees you know'}
+          </p>
         </div>
-      </div>
-
-      {/* Search and Filters */}
-      <div className="space-y-4">
-        {/* Search Bar */}
-        <div className="relative">
-          <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-stone-400" size={24} />
-          <input
-            type="text"
-            placeholder="Search conversations..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-14 pr-4 py-4 border-3 border-stone-300 rounded-xl focus:ring-4 focus:ring-orange-300 focus:border-orange-500 outline-none text-base font-semibold shadow-md"
-          />
-        </div>
-
-        {/* Filter Panel */}
-        {showFilters && (
-          <div className="bg-white rounded-xl shadow-lg border-2 border-stone-200 p-6 space-y-4 animate-slideDown">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-stone-900">Filter Conversations</h3>
-              <button
-                onClick={() => setShowFilters(false)}
-                className="text-stone-400 hover:text-stone-600 transition-colors"
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Spiritual Guide Filter */}
-              <select
-                value={filters.guruName}
-                onChange={(e) => setFilters({ ...filters, guruName: e.target.value })}
-                className="p-4 border-2 border-stone-200 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none font-semibold"
-              >
-                <option value="All">All Spiritual Guides</option>
-                {uniqueGurus.map(guru => (
-                  <option key={guru} value={guru}>{guru}</option>
-                ))}
-              </select>
-
-              {/* ISKCON Center Filter */}
-              <select
-                value={filters.iskconCenter}
-                onChange={(e) => setFilters({ ...filters, iskconCenter: e.target.value })}
-                className="p-4 border-2 border-stone-200 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none font-semibold"
-              >
-                <option value="All">All ISKCON Centers</option>
-                {uniqueCenters.map(center => (
-                  <option key={center} value={center}>{center}</option>
-                ))}
-                {hasChatsWithoutCenter && (
-                  <option value="Not Specified">Not Specified</option>
-                )}
-              </select>
-            </div>
-
-            {/* Clear Filters */}
-            {((filters.guruName && filters.guruName !== 'All') || (filters.iskconCenter && filters.iskconCenter !== 'All')) && (
-              <button
-                onClick={() => setFilters({ guruName: 'All', iskconCenter: 'All' })}
-                className="text-orange-600 hover:text-orange-700 font-semibold text-sm transition-colors"
-              >
-                Clear all filters
-              </button>
-            )}
-          </div>
+        {chats.length > 0 && (
+          <button
+            onClick={() => navigate('/community')}
+            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-amber-50 px-3.5 text-sm font-semibold text-brand-700 ring-1 ring-amber-200 transition hover:bg-amber-100"
+          >
+            <UserPlus size={16} />
+            Find devotees
+          </button>
         )}
       </div>
 
-      {/* Loading State */}
-      {loading ? (
-        <div className="text-center py-16">
-          <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-orange-600 border-t-transparent"></div>
-          <p className="mt-4 text-stone-600 font-medium">Loading conversations...</p>
-        </div>
-      ) : filteredChats.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-xl border-2 border-dashed border-stone-300">
-          <MessageCircle className="mx-auto mb-4 text-stone-400" size={64} />
-          <p className="text-stone-600 text-lg font-medium mb-2">
-            {chats.length === 0 ? 'No conversations yet' : 'No matching conversations'}
+      {chats.length === 0 ? (
+        /* Empty state */
+        <div className="mt-6 rounded-3xl bg-white px-6 py-12 text-center shadow-card ring-1 ring-sandal-200">
+          <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-50 text-brand-600 ring-1 ring-amber-200">
+            <MessageCircle size={28} />
+          </span>
+          <h2 className="mt-4 text-lg font-semibold text-maroon-900">No messages yet</h2>
+          <p className="mx-auto mt-1 max-w-xs text-sm text-maroon-900/60">
+            Connect with devotees in the community, then start a conversation here.
           </p>
-          <p className="text-stone-400 mb-4">
-            {chats.length === 0
-              ? 'Start connecting with fellow devotees'
-              : 'Try a different search term'}
-          </p>
-          {chats.length === 0 && (
-            <button
-              onClick={() => navigate('/community')}
-              className="bg-gradient-to-r from-orange-600 to-amber-600 text-white px-6 py-3 rounded-lg font-bold hover:from-orange-700 hover:to-amber-700 transition-all shadow-lg transform hover:scale-105 active:scale-95"
-            >
-              Browse Community
-            </button>
-          )}
+          <button onClick={() => navigate('/community')} className="btn-primary mt-6 h-11 px-5">
+            <UserPlus size={17} /> Find devotees
+          </button>
         </div>
       ) : (
-        <div className="space-y-3">
-          {filteredChats.map((chat) => {
-            const otherUser = getOtherParticipant(chat);
-            if (!otherUser) return null;
-
-            const unreadCount = chat.unreadCount[user?.uid || ''] || 0;
-            const isUnread = unreadCount > 0;
-
-            return (
-              <div
-                key={chat.id}
-                onClick={() => navigate(`/chat/${chat.id}`)}
-                className={`bg-white rounded-xl shadow-md hover:shadow-xl transition-all cursor-pointer border-2 ${
-                  isUnread ? 'border-orange-400 bg-orange-50/50' : 'border-stone-200 hover:border-orange-300'
-                } p-5 transform hover:scale-[1.02]`}
+        <>
+          {/* Search */}
+          <label className="mt-4 flex h-12 items-center gap-2.5 rounded-2xl bg-white px-4 shadow-soft ring-1 ring-sandal-200 focus-within:ring-2 focus-within:ring-marigold-400">
+            <Search size={18} className="shrink-0 text-maroon-900/40" />
+            <input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search by name or temple"
+              className="w-full min-w-0 bg-transparent text-[15px] text-maroon-900 outline-none placeholder:text-maroon-900/40"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="-mr-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-maroon-900/40 hover:bg-sandal-100"
+                aria-label="Clear search"
               >
-                <div className="flex items-center gap-4">
-                  {/* Avatar */}
-                  <div className="relative flex-shrink-0">
-                    <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-lg overflow-hidden">
-                      {otherUser.photoURL ? (
-                        <img
-                          src={otherUser.photoURL}
-                          alt={otherUser.userName}
-                          className="w-full h-full rounded-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.src = iskconLogo;
-                            e.currentTarget.classList.remove('rounded-full');
-                            e.currentTarget.classList.add('rounded-full', 'p-1.5');
-                          }}
-                        />
-                      ) : (
-                        <img
-                          src={iskconLogo}
-                          alt="ISKCON"
-                          className="w-full h-full object-contain p-1.5"
-                        />
-                      )}
-                    </div>
-                    {/* Online indicator would go here if we track it in chat context */}
-                  </div>
+                <X size={16} />
+              </button>
+            )}
+          </label>
 
-                  {/* Chat Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1">
-                      <h3 className={`font-bold text-lg ${isUnread ? 'text-orange-900' : 'text-stone-900'}`}>
-                        {otherUser.userName}
-                      </h3>
-                      {chat.lastMessage && (
-                        <span className={`text-sm ${isUnread ? 'text-orange-600 font-bold' : 'text-stone-500'}`}>
-                          {formatTime(chat.lastMessage.timestamp)}
+          {/* Filter chips */}
+          <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-none sm:mx-0 sm:px-0">
+            <button onClick={() => setUnreadOnly(false)} className={chipCls(!unreadOnly)}>
+              All
+            </button>
+            <button onClick={() => setUnreadOnly(true)} className={chipCls(unreadOnly)}>
+              Unread
+              {unreadChats > 0 && (
+                <span className={`rounded-full px-1.5 text-[11px] font-bold ${unreadOnly ? 'bg-white/25 text-white' : 'bg-brand-600 text-white'}`}>{unreadChats}</span>
+              )}
+            </button>
+            {uniqueCenters.length > 0 && (
+              <select
+                aria-label="Filter by temple"
+                value={filters.iskconCenter}
+                onChange={(e) => setFilters({ ...filters, iskconCenter: e.target.value })}
+                className={selectChipCls(filters.iskconCenter !== 'All')}
+              >
+                <option value="All">Any temple</option>
+                {uniqueCenters.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+                {hasNoCenter && <option value="Not Specified">Not specified</option>}
+              </select>
+            )}
+            {uniqueGurus.length > 0 && (
+              <select
+                aria-label="Filter by teacher"
+                value={filters.guruName}
+                onChange={(e) => setFilters({ ...filters, guruName: e.target.value })}
+                className={selectChipCls(filters.guruName !== 'All')}
+              >
+                <option value="All">Any teacher</option>
+                {uniqueGurus.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
+            )}
+            {activeFilters > 0 && (
+              <button
+                onClick={() => setFilters({ guruName: 'All', iskconCenter: 'All' })}
+                className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full px-3 text-sm font-medium text-brand-700 hover:bg-amber-50"
+              >
+                <X size={14} /> Clear
+              </button>
+            )}
+          </div>
+
+          {/* Conversations */}
+          {shown.length === 0 ? (
+            <div className="mt-3 rounded-3xl bg-white px-6 py-10 text-center ring-1 ring-sandal-200">
+              <p className="text-sm font-medium text-maroon-900/70">{unreadOnly ? 'You are all caught up' : 'No conversation found'}</p>
+              <p className="mt-1 text-xs text-maroon-900/45">{unreadOnly ? 'There are no unread messages.' : 'Try a different search or clear the filters.'}</p>
+            </div>
+          ) : (
+            <ul className="mt-3 overflow-hidden rounded-3xl bg-white shadow-card ring-1 ring-sandal-200">
+              {shown.map((chat, i) => {
+                const o = other(chat);
+                if (!o) return null;
+                const unread = unreadOf(chat);
+                const last = chat.lastMessage;
+                const locked = !!last && (last.text === '[Encrypted Message]' || isEncrypted(last.text || ''));
+                const temple = !isBlank(o.iskconCenter) ? o.iskconCenter : '';
+                return (
+                  <li key={chat.id}>
+                    <button
+                      onClick={() => navigate(`/chat/${chat.id}`)}
+                      className={`flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-sandal-50 active:bg-sandal-100 ${unread ? 'bg-amber-50/50' : ''}`}
+                    >
+                      <Avatar src={o.photoURL} name={o.userName} className="h-12 w-12 ring-2 ring-amber-100" textClassName="text-base" />
+                      <span className="flex min-w-0 flex-1 flex-col py-0.5">
+                        <span className="flex items-baseline justify-between gap-2">
+                          <span className={`truncate text-[15px] text-maroon-900 ${unread ? 'font-semibold' : 'font-medium'}`}>{o.userName}</span>
+                          {last && (
+                            <span className={`shrink-0 text-xs ${unread ? 'font-semibold text-brand-600' : 'text-maroon-900/40'}`}>{timeLabel(last.timestamp)}</span>
+                          )}
                         </span>
-                      )}
-                    </div>
-
-                    <p className="text-sm text-stone-600 mb-1">
-                      {otherUser.guruName && otherUser.guruName.toLowerCase() !== 'n/a' ? otherUser.guruName : 'N/A'} • {otherUser.iskconCenter && otherUser.iskconCenter.toLowerCase() !== 'n/a' ? otherUser.iskconCenter : 'N/A'}
-                    </p>
-
-                    <div className="flex items-center justify-between">
-                      {chat.lastMessage ? (
-                        <p className={`text-sm truncate flex-1 ${isUnread ? 'font-bold text-stone-900' : 'text-stone-500'}`}>
-                          {chat.lastMessage.senderId === user?.uid && 'You: '}
-                          {chat.lastMessage.text === '[Encrypted Message]' ? '🔒 Encrypted Message' : chat.lastMessage.text}
-                        </p>
-                      ) : (
-                        <p className="text-sm text-stone-400 italic">Start a conversation</p>
-                      )}
-
-                      {isUnread && (
-                        <div className="ml-2 flex-shrink-0 bg-orange-600 text-white text-xs font-bold px-2 py-1 rounded-full min-w-[24px] text-center">
-                          {unreadCount}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+                        <span className="mt-0.5 flex items-center justify-between gap-2">
+                          <span className={`flex min-w-0 items-center gap-1 text-sm ${unread ? 'font-medium text-maroon-900/80' : 'text-maroon-900/50'}`}>
+                            {last ? (
+                              <>
+                                {last.senderId === user?.uid && <span className="shrink-0 text-maroon-900/40">You:</span>}
+                                {locked ? (
+                                  <>
+                                    <Lock size={13} className="shrink-0" />
+                                    <span className="truncate">Message</span>
+                                  </>
+                                ) : (
+                                  <span className="truncate">{last.text}</span>
+                                )}
+                              </>
+                            ) : (
+                              <span className="truncate italic text-maroon-900/40">{temple || 'Say Hare Krishna'}</span>
+                            )}
+                          </span>
+                          {unread > 0 && (
+                            <span className="flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-full bg-brand-600 px-1.5 text-[11px] font-bold text-white">
+                              {unread > 99 ? '99+' : unread}
+                            </span>
+                          )}
+                        </span>
+                      </span>
+                    </button>
+                    {i < shown.length - 1 && <div className="ml-[76px] h-px bg-sandal-200/70" />}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
       )}
-
-
     </div>
   );
 };

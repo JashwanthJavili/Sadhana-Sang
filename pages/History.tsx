@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { PageLoader } from '../components/LoadingScreen';
 import { Link } from 'react-router-dom';
 import { getAllEntries } from '../services/storage';
 import { DailyEntry } from '../types';
@@ -21,11 +22,7 @@ const History: React.FC = () => {
     fetch();
   }, [user]);
 
-  if (loading) return (
-    <div className="flex items-center justify-center min-h-[400px]">
-      <LoadingSpinner message="Loading history..." size="lg" />
-    </div>
-  );
+  if (loading) return <PageLoader label="Loading history…" />;
 
   return (
     <div className="space-y-6 sm:space-y-8 animate-fadeIn">

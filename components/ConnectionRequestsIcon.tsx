@@ -34,13 +34,13 @@ const ConnectionRequestsIcon: React.FC = () => {
   return (
     <button
       onClick={handleClick}
-      className="relative w-14 h-14 bg-gradient-to-r from-orange-600 to-orange-700 rounded-full flex items-center justify-center transition-shadow duration-300 shadow-lg hover:shadow-xl"
+      className="header-icon-btn"
       aria-label="Connection requests"
       title="Connection Requests"
     >
-      <UserPlus size={24} className="text-white" />
+      <UserPlus size={19} />
       {pendingCount > 0 && (
-        <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold rounded-full h-6 min-w-[22px] flex items-center justify-center border-2 border-orange-600 shadow-lg">
+        <span className="absolute right-1.5 top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand-600 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-sandal-50">
           {pendingCount > 9 ? '9+' : pendingCount}
         </span>
       )}

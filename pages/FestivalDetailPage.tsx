@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { PageLoader } from '../components/LoadingScreen';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../services/firebase';
 import { ref, get } from 'firebase/database';
@@ -95,23 +96,14 @@ const FestivalDetailPage: React.FC = () => {
     setSelectedLang('');
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="inline-block w-16 h-16 border-4 border-purple-200 border-t-purple-600 rounded-full animate-spin mb-4"></div>
-          <p className="text-stone-600 font-medium text-lg">Loading festival details...</p>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <PageLoader label="Loading festival…" />;
 
   if (!festival) {
     return (
       <div className="text-center py-12">
         <p className="text-stone-600 text-lg mb-4">Festival not found</p>
         <button
-          onClick={() => navigate('/festivals')}
+          onClick={() => navigate('/festivals?tab=festivals')}
           className="px-6 py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition-all"
         >
           Back to Festivals
@@ -124,7 +116,7 @@ const FestivalDetailPage: React.FC = () => {
     <div className="space-y-8 max-w-4xl mx-auto">
       {/* Back Button */}
       <button
-        onClick={() => navigate('/festivals')}
+        onClick={() => navigate('/festivals?tab=festivals')}
         className="flex items-center gap-2 text-purple-600 hover:text-purple-700 font-semibold transition-all"
       >
         <ArrowLeft size={20} />

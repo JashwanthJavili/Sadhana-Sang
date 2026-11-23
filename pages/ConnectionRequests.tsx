@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { PageLoader } from '../components/LoadingScreen';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { 
@@ -13,7 +14,7 @@ import { database } from '../services/firebase';
 import { ref, get } from 'firebase/database';
 import { UserCircle, CheckCircle, XCircle, Clock, ArrowLeft, Loader } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
-import iskconLogo from '../utils/Images/Iscon_LOgo-removebg-preview.png';
+import Avatar from '../components/Avatar';
 
 const ConnectionRequests: React.FC = () => {
   const { user: currentUser } = useAuth();
@@ -143,13 +144,7 @@ const ConnectionRequests: React.FC = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center">
-        <Loader className="w-8 h-8 text-blue-600 animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return <PageLoader label="Loading requests…" />;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
@@ -199,23 +194,7 @@ const ConnectionRequests: React.FC = () => {
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                       <div className="flex items-start gap-3 flex-1 min-w-0">
                         <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center flex-shrink-0 overflow-hidden shadow-md">
-                          {photoURL ? (
-                            <img 
-                              src={photoURL} 
-                              alt={displayName} 
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                e.currentTarget.src = iskconLogo;
-                                e.currentTarget.classList.add('p-1.5', 'object-contain');
-                              }}
-                            />
-                          ) : (
-                            <img
-                              src={iskconLogo}
-                              alt="ISKCON"
-                              className="w-full h-full object-contain p-1.5"
-                            />
-                          )}
+                          <Avatar src={photoURL} name={displayName} className="h-full w-full" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <h3 className="font-semibold text-gray-900 dark:text-white truncate">
@@ -302,23 +281,7 @@ const ConnectionRequests: React.FC = () => {
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                       <div className="flex items-start gap-3 flex-1 min-w-0">
                         <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center flex-shrink-0 overflow-hidden shadow-md">
-                          {photoURL ? (
-                            <img 
-                              src={photoURL} 
-                              alt={displayName} 
-                              className="w-full h-full object-cover"
-                              onError={(e) => {
-                                e.currentTarget.src = iskconLogo;
-                                e.currentTarget.classList.add('p-1.5', 'object-contain');
-                              }}
-                            />
-                          ) : (
-                            <img
-                              src={iskconLogo}
-                              alt="ISKCON"
-                              className="w-full h-full object-contain p-1.5"
-                            />
-                          )}
+                          <Avatar src={photoURL} name={displayName} className="h-full w-full" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <h3 className="font-semibold text-gray-900 dark:text-white truncate">

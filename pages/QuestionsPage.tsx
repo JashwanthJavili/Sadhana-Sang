@@ -1,10 +1,50 @@
 import React, { useEffect, useState } from 'react';
+import { PageLoader } from '../components/LoadingScreen';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Question } from '../types/questions';
-import { getAllQuestions, searchQuestions, upvoteQuestion } from '../services/questions';
-import { HelpCircle, Search, Plus, ThumbsUp, MessageCircle, Eye, TrendingUp, Clock, Filter, X } from 'lucide-react';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { getAllQuestions, upvoteQuestion } from '../services/questions';
+import { Search, Plus, ThumbsUp, MessageCircle, CheckCircle2, HelpCircle, X } from 'lucide-react';
+
+const QUESTION_CATEGORIES: Array<{ value: Question['category']; label: string }> = [
+  { value: 'spiritual', label: 'Spiritual guidance' },
+  { value: 'sadhana', label: 'Daily practice' },
+  { value: 'scripture', label: 'Scriptures' },
+  { value: 'lifestyle', label: 'Devotional life' },
+  { value: 'general', label: 'General' },
+];
+
+const categoryLabel = (c: Question['category']) => QUESTION_CATEGORIES.find((x) => x.value === c)?.label ?? c;
+
+const timeAgo = (timestamp: number) => {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} hr ago`;
+  if (seconds < 604800) {
+    const d = Math.floor(seconds / 86400);
+    return `${d} ${d === 1 ? 'day' : 'days'} ago`;
+  }
+  return new Date(timestamp).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+const Avatar: React.FC<{ name: string; photo?: string; size?: 'sm' | 'md' }> = ({ name, photo, size = 'sm' }) => {
+  const cls = size === 'md' ? 'h-10 w-10 text-sm' : 'h-7 w-7 text-xs';
+  if (photo) return <img src={photo} alt="" className={`${cls} shrink-0 rounded-full object-cover ring-1 ring-sandal-200`} />;
+  return (
+    <span className={`${cls} flex shrink-0 items-center justify-center rounded-full bg-amber-100 font-semibold text-brand-700`}>
+      {(name || '?').trim().charAt(0).toUpperCase()}
+    </span>
+  );
+};
+
+type SortKey = 'recent' | 'popular' | 'unanswered';
+
+const SORTS: Array<{ value: SortKey; label: string }> = [
+  { value: 'recent', label: 'Newest' },
+  { value: 'popular', label: 'Popular' },
+  { value: 'unanswered', label: 'Not answered' },
+];
 
 const QuestionsPage: React.FC = () => {
   const { user } = useAuth();
@@ -13,18 +53,8 @@ const QuestionsPage: React.FC = () => {
   const [filteredQuestions, setFilteredQuestions] = useState<Question[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<Question['category'] | 'all'>('all');
-  const [sortBy, setSortBy] = useState<'recent' | 'popular' | 'unanswered'>('recent');
-  const [showFilters, setShowFilters] = useState(false);
+  const [sortBy, setSortBy] = useState<SortKey>('recent');
   const [loading, setLoading] = useState(true);
-
-  const categories: Array<{ value: Question['category'] | 'all'; label: string; emoji?: string }> = [
-    { value: 'all', label: 'All Topics' },
-    { value: 'spiritual', label: 'Spiritual Guidance' },
-    { value: 'sadhana', label: 'Sadhana & Practice' },
-    { value: 'scripture', label: 'Scriptural Studies' },
-    { value: 'lifestyle', label: 'Devotional Life' },
-    { value: 'general', label: 'Community Discussion' },
-  ];
 
   useEffect(() => {
     const unsubscribe = getAllQuestions((fetchedQuestions) => {
@@ -38,28 +68,27 @@ const QuestionsPage: React.FC = () => {
   useEffect(() => {
     let filtered = [...questions];
 
-    // Apply category filter
     if (selectedCategory !== 'all') {
-      filtered = filtered.filter(q => q.category === selectedCategory);
+      filtered = filtered.filter((q) => q.category === selectedCategory);
     }
 
-    // Apply search filter
     if (searchTerm) {
-      filtered = filtered.filter(q =>
-        q.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        q.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        q.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        q.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+      const s = searchTerm.toLowerCase();
+      filtered = filtered.filter(
+        (q) =>
+          q.title.toLowerCase().includes(s) ||
+          q.content.toLowerCase().includes(s) ||
+          q.userName.toLowerCase().includes(s) ||
+          q.tags.some((tag) => tag.toLowerCase().includes(s))
       );
     }
 
-    // Apply sorting
     filtered.sort((a, b) => {
       if (sortBy === 'recent') {
         return b.timestamp - a.timestamp;
       } else if (sortBy === 'popular') {
-        return (b.upvotes.length + b.viewCount) - (a.upvotes.length + a.viewCount);
-      } else { // unanswered
+        return b.upvotes.length + b.viewCount - (a.upvotes.length + a.viewCount);
+      } else {
         if (a.answerCount === 0 && b.answerCount > 0) return -1;
         if (a.answerCount > 0 && b.answerCount === 0) return 1;
         return b.timestamp - a.timestamp;
@@ -75,217 +104,159 @@ const QuestionsPage: React.FC = () => {
     await upvoteQuestion(questionId, user.uid);
   };
 
-  const formatTimeAgo = (timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 60) return 'just now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-    return new Date(timestamp).toLocaleDateString();
-  };
+  if (loading) return <PageLoader label="Loading questions…" />;
 
-  const getCategoryColor = (category: Question['category']) => {
-    const colors = {
-      spiritual: 'bg-purple-100 text-purple-700 border-purple-300',
-      sadhana: 'bg-orange-100 text-orange-700 border-orange-300',
-      scripture: 'bg-blue-100 text-blue-700 border-blue-300',
-      lifestyle: 'bg-green-100 text-green-700 border-green-300',
-      general: 'bg-stone-100 text-stone-700 border-stone-300',
-    };
-    return colors[category];
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <LoadingSpinner message="Loading questions..." size="lg" />
-      </div>
-    );
-  }
+  const filtering = !!searchTerm || selectedCategory !== 'all';
+  const chips: Array<{ value: Question['category'] | 'all'; label: string }> = [{ value: 'all', label: 'All' }, ...QUESTION_CATEGORIES];
 
   return (
-    <div className="space-y-6 sm:space-y-8 max-w-6xl mx-auto animate-fadeIn">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-orange-600 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-2xl border-2 border-orange-400">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex-1">
-            <h2 className="text-lg sm:text-2xl md:text-3xl font-serif font-bold text-white mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3">
-              <div className="bg-white/20 p-1.5 sm:p-3 rounded-lg sm:rounded-xl">
-                <HelpCircle className="text-white" size={20} />
-              </div>
-              Community Q&A
-            </h2>
-            <p className="text-orange-100 text-xs sm:text-base md:text-lg font-medium">
-              Ask questions, share knowledge, help fellow devotees
+    <div className="mx-auto max-w-3xl space-y-4 animate-fadeIn sm:space-y-5">
+      {/* Intro */}
+      <section className="rounded-3xl bg-gradient-to-br from-amber-100 via-orange-50 to-white p-5 ring-1 ring-amber-200/70 sm:p-7">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold text-maroon-900 sm:text-2xl">Questions and answers</h1>
+            <p className="mt-1 text-sm leading-relaxed text-maroon-900/65">
+              Ask what is on your mind. Fellow devotees will share what they have learned.
             </p>
           </div>
-          <button
-            onClick={() => navigate('/questions/ask')}
-            className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-white text-orange-600 rounded-lg sm:rounded-xl text-sm sm:text-base font-bold hover:bg-orange-50 transition-all shadow-lg transform hover:scale-105 active:scale-95 whitespace-nowrap self-start sm:self-center"
-          >
-            <Plus size={16} className="sm:w-5 sm:h-5" />
-            Ask Question
+          <button onClick={() => navigate('/questions/ask')} className="btn-primary w-full shrink-0 sm:w-auto">
+            <Plus size={16} /> Ask a question
           </button>
         </div>
-      </div>
+      </section>
 
-      {/* Search & Filters */}
-      <div className="space-y-3">
-        {/* Search Bar */}
-        <div className="relative">
-          <Search className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-stone-400" size={18} />
-          <input
-            type="text"
-            placeholder="Search questions..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 sm:pl-12 pr-3 sm:pr-4 py-2 sm:py-2.5 border-2 border-stone-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-orange-300 focus:border-orange-500 outline-none text-sm sm:text-base font-medium shadow-sm"
-          />
-        </div>
+      {/* Search */}
+      <label className="flex items-center gap-2 rounded-2xl bg-white px-4 ring-1 ring-sandal-200 focus-within:ring-marigold-400">
+        <Search size={17} className="shrink-0 text-maroon-900/35" />
+        <input
+          type="text"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Search questions"
+          className="w-full min-w-0 bg-transparent py-3 text-sm text-maroon-900 outline-none placeholder:text-maroon-900/35"
+        />
+        {searchTerm && (
+          <button onClick={() => setSearchTerm('')} className="icon-btn -mr-2 shrink-0" aria-label="Clear search">
+            <X size={16} />
+          </button>
+        )}
+      </label>
 
-        {/* Compact Filter Bar */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-white p-2 sm:p-3 rounded-lg border-2 border-stone-200 shadow-sm">
-          {/* Category Dropdown - Full width on mobile */}
-          <div className="flex items-center gap-1.5 bg-stone-50 px-3 py-2 sm:py-1.5 rounded-md border border-stone-300 flex-1 sm:flex-initial">
-            <Filter size={14} className="text-stone-500 flex-shrink-0" />
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value as Question['category'] | 'all')}
-              className="text-xs sm:text-sm font-semibold bg-transparent outline-none cursor-pointer text-stone-700 flex-1"
-            >
-              {categories.map((cat) => (
-                <option key={cat.value} value={cat.value}>
-                  {cat.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Sort Options - Compact Icons */}
-          <div className="flex items-center gap-1.5 sm:gap-1 justify-center">
-            <span className="text-xs font-semibold text-stone-500 mr-1">Sort:</span>
-            {[
-              { value: 'recent' as const, icon: Clock, tooltip: 'Recent' },
-              { value: 'popular' as const, icon: TrendingUp, tooltip: 'Popular' },
-              { value: 'unanswered' as const, icon: HelpCircle, tooltip: 'Unanswered' },
-            ].map((sort) => (
+      {/* Category chips */}
+      <div className="overflow-x-auto scrollbar-none">
+        <div className="flex w-max gap-2">
+          {chips.map((c) => {
+            const active = selectedCategory === c.value;
+            return (
               <button
-                key={sort.value}
-                onClick={() => setSortBy(sort.value)}
-                title={sort.tooltip}
-                className={`p-2 rounded-md transition-all flex-1 sm:flex-initial ${
-                  sortBy === sort.value
-                    ? 'bg-orange-100 text-orange-700 border border-orange-300'
-                    : 'bg-white border border-stone-200 text-stone-500 hover:bg-stone-50'
+                key={c.value}
+                onClick={() => setSelectedCategory(c.value)}
+                aria-pressed={active}
+                className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition ${
+                  active ? 'bg-brand-600 text-white shadow-sm' : 'bg-white text-maroon-900/70 ring-1 ring-sandal-200 hover:ring-marigold-400/60'
                 }`}
               >
-                <sort.icon size={14} className="mx-auto" />
+                {c.label}
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* Questions List */}
+      {/* Sort */}
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-medium text-maroon-900/55">
+          {filteredQuestions.length} {filteredQuestions.length === 1 ? 'question' : 'questions'}
+        </p>
+        <div className="inline-flex rounded-xl bg-sandal-200/60 p-1 ring-1 ring-sandal-300/50" role="tablist" aria-label="Sort questions">
+          {SORTS.map((s) => (
+            <button
+              key={s.value}
+              role="tab"
+              aria-selected={sortBy === s.value}
+              onClick={() => setSortBy(s.value)}
+              className={`whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-semibold transition sm:px-3 ${
+                sortBy === s.value ? 'bg-white text-maroon-900 shadow-sm' : 'text-maroon-900/50 hover:text-maroon-900'
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* List */}
       {filteredQuestions.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-xl border-2 border-dashed border-stone-300">
-          <HelpCircle className="mx-auto mb-4 text-stone-400" size={64} />
-          <p className="text-stone-600 text-lg font-medium mb-2">
-            {searchTerm || selectedCategory !== 'all' ? 'No questions found' : 'No questions yet'}
+        <div className="rounded-3xl bg-white p-8 text-center ring-1 ring-sandal-200 sm:p-10">
+          <HelpCircle size={36} className="mx-auto text-maroon-900/25" />
+          <p className="mt-3 text-sm font-semibold text-maroon-900">{filtering ? 'No questions found' : 'No questions yet'}</p>
+          <p className="mt-1 text-sm text-maroon-900/55">
+            {filtering ? 'Try a different word or topic.' : 'Be the first to ask something.'}
           </p>
-          <p className="text-stone-400 mb-4">
-            {searchTerm || selectedCategory !== 'all'
-              ? 'Try adjusting your search or filters'
-              : 'Be the first to ask a question!'}
-          </p>
-          <button
-            onClick={() => navigate('/questions/ask')}
-            className="bg-gradient-to-r from-orange-600 to-amber-600 text-white px-6 py-3 rounded-lg font-bold hover:from-orange-700 hover:to-amber-700 transition-all shadow-lg transform hover:scale-105 active:scale-95"
-          >
-            Ask First Question
+          <button onClick={() => navigate('/questions/ask')} className="btn-primary mt-5">
+            <Plus size={16} /> Ask a question
           </button>
         </div>
       ) : (
-        <div className="space-y-6">
-          {filteredQuestions.map((question) => (
-            <div
-              key={question.id}
-              onClick={() => navigate(`/questions/${question.id}`)}
-              className="bg-white rounded-lg sm:rounded-xl border border-stone-200 shadow-md hover:shadow-xl transition-all cursor-pointer hover:border-orange-300 overflow-hidden transform hover:scale-[1.01]"
-            >
-              <div className="flex gap-2 sm:gap-4 p-3 sm:p-6">
-                {/* Voting Section - Compact on mobile */}
-                <div className="flex flex-col items-center gap-1 sm:gap-2 flex-shrink-0">
-                  <button
-                    onClick={(e) => handleUpvote(question.id, e)}
-                    className={`p-1.5 sm:p-2 rounded-lg transition-all ${
-                      user && question.upvotes?.includes(user.uid)
-                        ? 'bg-orange-100 text-orange-600'
-                        : 'bg-stone-100 text-stone-600 hover:bg-orange-50'
-                    }`}
-                  >
-                    <ThumbsUp size={16} className="sm:w-5 sm:h-5" />
-                  </button>
-                  <span className="font-bold text-sm sm:text-lg text-stone-900">{question.upvotes?.length || 0}</span>
-                </div>
-
-                {/* Question Content */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2 sm:mb-3">
-                    <h3 className="text-base sm:text-xl font-bold text-stone-900 hover:text-orange-600 transition-colors pr-2 break-words">
-                      {question.title}
-                    </h3>
-                    <span className={`px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm font-semibold border ${getCategoryColor(question.category)} self-start flex-shrink-0`}>
-                      {question.category}
+        <ul className="space-y-3">
+          {filteredQuestions.map((q, i) => {
+            const liked = !!user && !!q.upvotes?.includes(user.uid);
+            const answered = q.answerCount > 0;
+            return (
+              <li key={q.id} className="animate-rise-in" style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}>
+                <div
+                  role="link"
+                  tabIndex={0}
+                  onClick={() => navigate(`/questions/${q.id}`)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') navigate(`/questions/${q.id}`);
+                  }}
+                  className="cursor-pointer rounded-2xl bg-white p-4 shadow-soft ring-1 ring-sandal-200 transition hover:-translate-y-px hover:shadow-card hover:ring-marigold-400/60 sm:p-5"
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[11px] font-semibold text-brand-700 ring-1 ring-amber-200/70">
+                      {categoryLabel(q.category)}
                     </span>
+                    {answered ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
+                        <CheckCircle2 size={12} /> Answered
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-sandal-100 px-2.5 py-0.5 text-[11px] font-semibold text-maroon-900/55">Waiting for answers</span>
+                    )}
                   </div>
 
-                  <p className="text-xs sm:text-sm text-stone-700 mb-2 sm:mb-3 line-clamp-2 break-words">{question.content}</p>
+                  <h2 className="mt-2.5 break-words text-base font-semibold leading-snug text-maroon-900 sm:text-lg">{q.title}</h2>
+                  <p className="mt-1 line-clamp-2 break-words text-sm leading-relaxed text-maroon-900/60">{q.content}</p>
 
-                  {/* Tags */}
-                  {question.tags && question.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-2 sm:mb-3">
-                      {question.tags.slice(0, 3).map((tag, idx) => (
-                        <span
-                          key={idx}
-                          className="px-2 sm:px-3 py-0.5 sm:py-1 bg-stone-100 text-stone-600 rounded-full text-xs font-medium"
-                        >
-                          #{tag}
-                        </span>
-                      ))}
-                      {question.tags.length > 3 && (
-                        <span className="px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full text-xs font-medium">
-                          +{question.tags.length - 3}
-                        </span>
-                      )}
+                  <div className="mt-4 flex items-center gap-3 border-t border-sandal-100 pt-3">
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                      <Avatar name={q.userName} photo={q.userPhoto} />
+                      <div className="min-w-0 leading-tight">
+                        <p className="truncate text-xs font-semibold text-maroon-900/80">{q.userName}</p>
+                        <p className="text-[11px] text-maroon-900/45">{timeAgo(q.timestamp)}</p>
+                      </div>
                     </div>
-                  )}
-
-                  {/* Meta Info - Stack on mobile */}
-                  <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-4 gap-y-1 text-xs sm:text-sm text-stone-500">
-                    <span className="flex items-center gap-1 flex-shrink-0">
-                      <MessageCircle size={14} className="sm:w-4 sm:h-4" />
-                      <span className="hidden sm:inline">{question.answerCount} {question.answerCount === 1 ? 'answer' : 'answers'}</span>
-                      <span className="sm:hidden">{question.answerCount}</span>
+                    <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-maroon-900/60">
+                      <MessageCircle size={15} /> {q.answerCount}
                     </span>
-                    <span className="flex items-center gap-1 flex-shrink-0">
-                      <Eye size={14} className="sm:w-4 sm:h-4" />
-                      <span className="hidden sm:inline">{question.viewCount} views</span>
-                      <span className="sm:hidden">{question.viewCount}</span>
-                    </span>
-                    <span className="hidden sm:inline">•</span>
-                    <span className="truncate max-w-[150px] sm:max-w-none">
-                      <span className="hidden sm:inline">asked by </span>
-                      <span className="font-semibold text-stone-700">{question.userName}</span>
-                    </span>
-                    <span className="hidden sm:inline">•</span>
-                    <span className="flex-shrink-0">{formatTimeAgo(question.timestamp)}</span>
+                    <button
+                      onClick={(e) => handleUpvote(q.id, e)}
+                      aria-pressed={liked}
+                      aria-label="Helpful"
+                      className={`inline-flex h-9 shrink-0 items-center gap-1 rounded-full px-3 text-xs font-semibold transition ${
+                        liked ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200' : 'text-maroon-900/60 ring-1 ring-sandal-200 hover:bg-amber-50'
+                      }`}
+                    >
+                      <ThumbsUp size={14} /> {q.upvotes?.length || 0}
+                    </button>
                   </div>
                 </div>
-              </div>
-            </div>
-          ))}
-        </div>
+              </li>
+            );
+          })}
+        </ul>
       )}
     </div>
   );

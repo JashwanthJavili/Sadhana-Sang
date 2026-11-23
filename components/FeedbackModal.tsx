@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { X, MessageCircle, Send, Star, Heart, ThumbsUp, Sparkles } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { X, Star, Send, Heart, Loader2 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
@@ -8,327 +8,264 @@ import { db } from '../services/firebase';
 
 interface FeedbackModalProps {
   onClose: () => void;
+  /** Pre-selected star rating (e.g. chosen in the feedback nudge) */
+  initialRating?: number;
 }
 
-const FeedbackModal: React.FC<FeedbackModalProps> = ({ onClose }) => {
-  const [rating, setRating] = useState(0);
-  const [hoveredRating, setHoveredRating] = useState(0);
-  const [category, setCategory] = useState('');
-  const [message, setMessage] = useState('');
-  const [submitted, setSubmitted] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+const CONTENT = {
+  en: {
+    title: 'Share your experience',
+    subtitle: 'Your feedback helps us serve devotees better',
+    ratingLabel: 'How would you rate Sadhana Sang?',
+    categoryLabel: 'What is it about?',
+    categories: {
+      general: 'General',
+      feature: 'Feature idea',
+      bug: 'Report a bug',
+      usability: 'Ease of use',
+      spiritual: 'Spiritual journey',
+      other: 'Other',
+    },
+    messagePlaceholder: 'Tell us more (optional)…',
+    submit: 'Send feedback',
+    cancel: 'Not now',
+    thankYou: 'Thank you!',
+    thankYouMessage: 'Your feedback helps us serve the devotee community better. Hare Krishna 🙏',
+    ratings: ['Poor', 'Fair', 'Good', 'Very good', 'Excellent'],
+    needRating: 'Please choose a rating',
+  },
+  hi: {
+    title: 'अपना अनुभव साझा करें',
+    subtitle: 'आपकी प्रतिक्रिया हमें भक्तों की बेहतर सेवा करने में मदद करती है',
+    ratingLabel: 'आप साधना संग को कैसे रेट करेंगे?',
+    categoryLabel: 'यह किस बारे में है?',
+    categories: {
+      general: 'सामान्य',
+      feature: 'फीचर सुझाव',
+      bug: 'बग रिपोर्ट',
+      usability: 'उपयोग में आसानी',
+      spiritual: 'आध्यात्मिक यात्रा',
+      other: 'अन्य',
+    },
+    messagePlaceholder: 'और बताएं (वैकल्पिक)…',
+    submit: 'भेजें',
+    cancel: 'अभी नहीं',
+    thankYou: 'धन्यवाद!',
+    thankYouMessage: 'आपकी प्रतिक्रिया हमें भक्त समुदाय की बेहतर सेवा करने में मदद करती है। हरे कृष्ण 🙏',
+    ratings: ['खराब', 'ठीक', 'अच्छा', 'बहुत अच्छा', 'उत्कृष्ट'],
+    needRating: 'कृपया रेटिंग चुनें',
+  },
+  te: {
+    title: 'మీ అనుభవాన్ని పంచుకోండి',
+    subtitle: 'మీ అభిప్రాయం భక్తులకు మెరుగైన సేవ చేయడంలో సహాయపడుతుంది',
+    ratingLabel: 'సాధన సంగ్‌ను ఎలా రేట్ చేస్తారు?',
+    categoryLabel: 'ఇది దేని గురించి?',
+    categories: {
+      general: 'సాధారణం',
+      feature: 'ఫీచర్ సూచన',
+      bug: 'బగ్ నివేదిక',
+      usability: 'వినియోగ సౌలభ్యం',
+      spiritual: 'ఆధ్యాత్మిక ప్రయాణం',
+      other: 'ఇతర',
+    },
+    messagePlaceholder: 'మరింత చెప్పండి (ఐచ్ఛికం)…',
+    submit: 'పంపండి',
+    cancel: 'ఇప్పుడు కాదు',
+    thankYou: 'ధన్యవాదాలు!',
+    thankYouMessage: 'మీ అభిప్రాయం భక్త సమాజానికి మెరుగైన సేవ చేయడానికి సహాయపడుతుంది. హరే కృష్ణ 🙏',
+    ratings: ['పేద', 'సరైన', 'మంచి', 'చాలా మంచి', 'అద్భుతం'],
+    needRating: 'దయచేసి రేటింగ్ ఎంచుకోండి',
+  },
+};
+
+const FeedbackModal: React.FC<FeedbackModalProps> = ({ onClose, initialRating = 0 }) => {
   const { language } = useLanguage();
   const { user } = useAuth();
   const { showSuccess, showError } = useToast();
+  const t = CONTENT[(language as 'en' | 'hi' | 'te')] || CONTENT.en;
 
-  const lang = language as 'en' | 'hi' | 'te';
+  const [rating, setRating] = useState(initialRating);
+  const [hovered, setHovered] = useState(0);
+  const [category, setCategory] = useState('general');
+  const [message, setMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [closing, setClosing] = useState(false);
 
-  const handleMaybeLater = async () => {
-    try {
-      if (user?.uid) {
-        const dismissedRef = ref(db, `users/${user.uid}/lastFeedbackDismissed`);
-        await set(dismissedRef, {
-          timestamp: Date.now()
-        });
-      }
-      onClose();
-    } catch (error) {
-      console.error('Error saving dismissal:', error);
-      onClose();
-    }
+  const close = () => {
+    setClosing(true);
+    setTimeout(onClose, 180);
   };
 
-  const content = {
-    en: {
-      title: 'Share Your Experience',
-      subtitle: 'Your feedback helps us serve devotees better',
-      ratingLabel: 'How would you rate your experience?',
-      categoryLabel: 'What would you like to share about?',
-      categories: {
-        feature: 'Feature Request',
-        bug: 'Report a Bug',
-        general: 'General Feedback',
-        spiritual: 'Spiritual Journey',
-        usability: 'App Usability',
-        other: 'Other'
-      },
-      messageLabel: 'Share your thoughts with us',
-      messagePlaceholder: 'Tell us more about your experience, suggestions, or how Sadhana Tracker has helped your spiritual journey...',
-      submitButton: 'Submit Feedback',
-      laterButton: 'Maybe Later',
-      thankYou: 'Thank you for your valuable feedback!',
-      thankYouMessage: 'Your input helps us improve and serve the devotee community better.',
-      submitAgain: 'Found a bug or issue? Feel free to submit feedback again anytime!',
-      ratingDescriptions: ['Poor', 'Fair', 'Good', 'Very Good', 'Excellent']
-    },
-    hi: {
-      title: 'अपना अनुभव साझा करें',
-      subtitle: 'आपकी प्रतिक्रिया हमें भक्तों की बेहतर सेवा करने में मदद करती है',
-      ratingLabel: 'आप अपने अनुभव को कैसे रेट करेंगे?',
-      categoryLabel: 'आप किस बारे में साझा करना चाहेंगे?',
-      categories: {
-        feature: 'फीचर अनुरोध',
-        bug: 'बग रिपोर्ट करें',
-        general: 'सामान्य प्रतिक्रिया',
-        spiritual: 'आध्यात्मिक यात्रा',
-        usability: 'ऐप उपयोगिता',
-        other: 'अन्य'
-      },
-      messageLabel: 'हमारे साथ अपने विचार साझा करें',
-      messagePlaceholder: 'अपने अनुभव, सुझाव या साधना ट्रैकर ने आपकी आध्यात्मिक यात्रा में कैसे मदद की, इसके बारे में और बताएं...',
-      submitButton: 'प्रतिक्रिया सबमिट करें',
-      laterButton: 'बाद में शायद',
-      thankYou: 'आपकी मूल्यवान प्रतिक्रिया के लिए धन्यवाद!',
-      thankYouMessage: 'आपका इनपुट हमें सुधारने और भक्त समुदाय की बेहतर सेवा करने में मदद करता है।',
-      submitAgain: 'कोई बग या समस्या मिली? कभी भी फिर से प्रतिक्रिया सबमिट करें!',
-      ratingDescriptions: ['खराब', 'ठीक', 'अच्छा', 'बहुत अच्छा', 'उत्कृष्ट']
-    },
-    te: {
-      title: 'మీ అనుభవాన్ని పంచుకోండి',
-      subtitle: 'మీ అభిప్రాయం భక్తులకు మెరుగైన సేవ చేయడంలో మాకు సహాయపడుతుంది',
-      ratingLabel: 'మీ అనుభవాన్ని ఎలా రేట్ చేస్తారు?',
-      categoryLabel: 'మీరు దేని గురించి పంచుకోవాలనుకుంటున్నారు?',
-      categories: {
-        feature: 'ఫీచర్ అభ్యర్థన',
-        bug: 'బగ్ నివేదించండి',
-        general: 'సాధారణ అభిప్రాయం',
-        spiritual: 'ఆధ్యాత్మిక ప్రయాణం',
-        usability: 'యాప్ వినియోగం',
-        other: 'ఇతర'
-      },
-      messageLabel: 'మీ ఆలోచనలను మాతో పంచుకోండి',
-      messagePlaceholder: 'మీ అనుభవం, సూచనలు లేదా సాధన ట్రాకర్ మీ ఆధ్యాత్మిక ప్రయాణానికి ఎలా సహాయపడింది అనే దాని గురించి మరింత చెప్పండి...',
-      submitButton: 'అభిప్రాయం సమర్పించండి',
-      laterButton: 'తర్వాత చూద్దాం',
-      thankYou: 'మీ విలువైన అభిప్రాయానికి ధన్యవాదాలు!',
-      thankYouMessage: 'మీ ఇన్‌పుట్ మాకు మెరుగుపరచడానికి మరియు భక్త సమాజానికి మెరుగైన సేవ చేయడానికి సహాయపడుతుంది।',
-      submitAgain: 'బగ్ లేదా సమస్య దొరికిందా? ఎప్పుడైనా మళ్లీ అభిప్రాయం సమర్పించండి!',
-      ratingDescriptions: ['పేద', 'సరైన', 'మంచి', 'చాలా మంచి', 'అద్భుతమైన']
-    }
-  };
+  // Close on Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSubmit = async () => {
-    if (!user || rating === 0) {
-      showError('Please provide a rating');
+    if (!user) return;
+    if (rating === 0) {
+      showError(t.needRating);
       return;
     }
-
-    if (!category) {
-      showError('Please select a category');
-      return;
-    }
-
     setSubmitting(true);
-
     try {
-      const feedbackData = {
+      const newRef = push(ref(db, `users/${user.uid}/feedbacks`));
+      await set(newRef, {
         userName: user.displayName || 'Anonymous',
         userEmail: user.email || '',
         rating,
         category,
         message: message.trim(),
         timestamp: Date.now(),
-        status: 'new', // new, reviewed, resolved
-        language: lang
-      };
-
-      // Save to Firebase under /users/{userId}/feedback
-      const userFeedbacksRef = ref(db, `users/${user.uid}/feedbacks`);
-      const newFeedbackRef = push(userFeedbacksRef);
-      await set(newFeedbackRef, feedbackData);
-
-      // Also update user's last feedback timestamp
-      const lastFeedbackRef = ref(db, `users/${user.uid}/lastFeedback`);
-      await set(lastFeedbackRef, {
+        status: 'new',
+        language,
+      });
+      await set(ref(db, `users/${user.uid}/lastFeedback`), {
         timestamp: Date.now(),
         rating,
-        feedbackId: newFeedbackRef.key
+        feedbackId: newRef.key,
       });
-
       setSubmitted(true);
-      showSuccess('Feedback Submitted!', 'Thank you for helping us improve Sadhana Tracker');
-
-      // Auto-close after 3 seconds
-      setTimeout(() => {
-        onClose();
-      }, 3000);
-
+      showSuccess('Feedback sent', 'Thank you for helping us improve');
+      setTimeout(close, 2200);
     } catch (error) {
       console.error('Error submitting feedback:', error);
-      showError('Failed to Submit', 'Please try again later');
+      showError('Could not send feedback', 'Please try again later');
       setSubmitting(false);
     }
   };
 
-  if (submitted) {
-    return (
-      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100000] p-4 animate-fadeIn">
-        <div className="bg-gradient-to-br from-white via-green-50 to-emerald-50 rounded-2xl sm:rounded-3xl shadow-2xl max-w-md w-full p-6 sm:p-8 text-center space-y-4 sm:space-y-6 border-2 border-green-200 animate-scale-in">
-          <div className="bg-gradient-to-r from-green-100 to-emerald-100 w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center mx-auto shadow-lg">
-            <Heart className="text-green-600 w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 fill-green-600 animate-bounce" />
-          </div>
-          
-          <div className="space-y-2 sm:space-y-3">
-            <h2 className="text-xl sm:text-2xl md:text-3xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
-              {content[lang].thankYou}
-            </h2>
-            <p className="text-stone-700 text-sm sm:text-base md:text-lg leading-relaxed px-2">
-              {content[lang].thankYouMessage}
-            </p>
-            <p className="text-blue-600 text-xs sm:text-sm font-semibold mt-3 sm:mt-4 px-2">
-              {content[lang].submitAgain}
-            </p>
-            <p className="text-orange-600 font-bold text-sm sm:text-base">Hare Krishna! 🙏</p>
-          </div>
-
-          <div className="flex justify-center gap-1 sm:gap-2">
-            {[...Array(5)].map((_, i) => (
-              <Star
-                key={i}
-                className={`w-5 h-5 sm:w-6 sm:h-6 md:w-7 md:h-7 transition-all ${
-                  i < rating 
-                    ? 'text-yellow-400 fill-yellow-400 scale-110' 
-                    : 'text-stone-300'
-                }`}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const shown = hovered || rating;
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[100000] p-2 sm:p-4 animate-fadeIn">
-      <div className="bg-gradient-to-br from-white via-orange-50/30 to-amber-50/40 rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-lg max-h-[95vh] sm:max-h-[90vh] overflow-y-auto border-2 border-orange-200/50">
-        {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-orange-500 via-orange-600 to-amber-600 p-4 sm:p-6 rounded-t-2xl sm:rounded-t-3xl border-b-2 border-orange-700 z-10">
-          <div className="flex justify-between items-start gap-3">
-            <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-              <div className="bg-white/20 p-2 sm:p-3 rounded-lg sm:rounded-xl backdrop-blur-sm flex-shrink-0">
-                <MessageCircle className="text-white w-5 h-5 sm:w-7 sm:h-7" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h2 className="text-lg sm:text-2xl md:text-3xl font-bold text-white truncate">{content[lang].title}</h2>
-                <p className="text-orange-100 text-xs sm:text-sm mt-0.5 sm:mt-1 line-clamp-1">{content[lang].subtitle}</p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="p-1.5 sm:p-2 hover:bg-white/20 rounded-lg sm:rounded-xl transition-colors flex-shrink-0"
-              aria-label="Close"
-            >
-              <X className="text-white w-5 h-5 sm:w-6 sm:h-6" />
-            </button>
-          </div>
-        </div>
+    <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4" role="dialog" aria-modal="true">
+      <div
+        className={`absolute inset-0 bg-maroon-900/30 backdrop-blur-[2px] transition-opacity duration-200 ${closing ? 'opacity-0' : 'animate-fadeIn'}`}
+        onClick={close}
+      />
 
-        {/* Content */}
-        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-          {/* Rating */}
-          <div className="space-y-2 sm:space-y-3">
-            <label className="block text-sm sm:text-base md:text-lg font-bold text-stone-900">
-              {content[lang].ratingLabel}
-            </label>
-            <div className="flex items-center justify-center gap-1.5 sm:gap-2 md:gap-3 bg-gradient-to-r from-orange-50 to-amber-50 p-3 sm:p-4 rounded-xl border-2 border-orange-200">
-              {[1, 2, 3, 4, 5].map((star) => (
+      <div
+        className={`relative w-full max-w-md overflow-hidden rounded-t-3xl bg-sandal-50 shadow-2xl ring-1 ring-sandal-300/60 transition-all duration-200 sm:rounded-3xl ${
+          closing ? 'translate-y-4 opacity-0' : 'animate-scale-in'
+        }`}
+      >
+        {/* grab handle on mobile */}
+        <div className="mx-auto mt-2.5 h-1 w-10 rounded-full bg-sandal-300 sm:hidden" />
+
+        {submitted ? (
+          <div className="px-6 pb-10 pt-8 text-center sm:pt-10">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-marigold-400 to-brand-600 shadow-glow">
+              <Heart className="h-7 w-7 fill-white text-white" />
+            </div>
+            <h2 className="mt-5 font-elegant text-3xl font-semibold text-maroon-900">{t.thankYou}</h2>
+            <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-maroon-900/60">{t.thankYouMessage}</p>
+          </div>
+        ) : (
+          <>
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 px-6 pb-2 pt-5 sm:pt-6">
+              <div>
+                <h2 className="font-elegant text-[1.75rem] font-semibold leading-tight text-maroon-900">{t.title}</h2>
+                <p className="mt-1 text-sm text-maroon-900/55">{t.subtitle}</p>
+              </div>
+              <button
+                onClick={close}
+                className="-mr-2 -mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-maroon-900/40 transition hover:bg-sandal-200/70 hover:text-maroon-800"
+                aria-label="Close"
+              >
+                <X size={19} />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] space-y-5 overflow-y-auto px-6 pb-6 pt-3">
+              {/* Rating */}
+              <div>
+                <p className="mb-2 text-sm font-semibold text-maroon-800">{t.ratingLabel}</p>
+                <div className="flex items-center gap-3 rounded-2xl bg-white/80 px-4 py-3 ring-1 ring-sandal-300/60">
+                  <div className="flex gap-1" onMouseLeave={() => setHovered(0)}>
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setRating(s)}
+                        onMouseEnter={() => setHovered(s)}
+                        className="rounded-lg p-0.5 transition-transform duration-150 hover:scale-110 active:scale-95"
+                        aria-label={`${s} star${s > 1 ? 's' : ''}`}
+                        style={{ minHeight: 0 }}
+                      >
+                        <Star
+                          className={`h-8 w-8 transition-colors duration-150 ${
+                            s <= shown ? 'fill-marigold-400 text-marigold-400' : 'text-sandal-300'
+                          }`}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                  <span className="ml-auto text-sm font-medium text-maroon-500">{shown ? t.ratings[shown - 1] : ''}</span>
+                </div>
+              </div>
+
+              {/* Category */}
+              <div>
+                <p className="mb-2 text-sm font-semibold text-maroon-800">{t.categoryLabel}</p>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(t.categories).map(([key, label]) => (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setCategory(key)}
+                      className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-all duration-150 ${
+                        category === key
+                          ? 'bg-maroon-800 text-sandal-50 shadow-sm'
+                          : 'bg-white/80 text-maroon-800/70 ring-1 ring-sandal-300/80 hover:bg-white hover:text-maroon-800'
+                      }`}
+                      style={{ minHeight: 0 }}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Message */}
+              <div className="relative">
+                <textarea
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder={t.messagePlaceholder}
+                  rows={3}
+                  maxLength={1000}
+                  className="block w-full resize-none rounded-2xl border border-sandal-300/80 bg-white/80 px-4 py-3 text-sm text-maroon-900 placeholder:text-maroon-900/35 transition focus:border-marigold-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-marigold-400/20"
+                />
+                {message.length > 0 && (
+                  <span className="absolute bottom-2.5 right-3 text-[11px] text-maroon-900/35">{message.length}/1000</span>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3 pt-1">
                 <button
-                  key={star}
-                  onClick={() => setRating(star)}
-                  onMouseEnter={() => setHoveredRating(star)}
-                  onMouseLeave={() => setHoveredRating(0)}
-                  className="transition-transform hover:scale-110 active:scale-95 focus:outline-none focus:ring-2 focus:ring-orange-400 rounded-lg p-1"
-                  aria-label={`Rate ${star} stars`}
+                  onClick={close}
+                  className="flex-1 rounded-2xl py-3 text-sm font-semibold text-maroon-800/70 transition hover:bg-sandal-200/60 hover:text-maroon-800"
                 >
-                  <Star
-                    className={`w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 transition-all ${
-                      star <= (hoveredRating || rating)
-                        ? 'text-yellow-400 fill-yellow-400 drop-shadow-lg'
-                        : 'text-stone-300'
-                    }`}
-                  />
+                  {t.cancel}
                 </button>
-              ))}
-            </div>
-            {(hoveredRating || rating) > 0 && (
-              <div className="text-center">
-                <span className="inline-block px-3 py-1.5 sm:px-4 sm:py-2 bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs sm:text-sm font-bold rounded-full animate-scale-in shadow-md">
-                  {content[lang].ratingDescriptions[(hoveredRating || rating) - 1]}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Category */}
-          <div className="space-y-2 sm:space-y-3">
-            <label className="block text-sm sm:text-base md:text-lg font-bold text-stone-900">
-              {content[lang].categoryLabel}
-            </label>
-            <div className="grid grid-cols-2 gap-2 sm:gap-3">
-              {Object.entries(content[lang].categories).map(([key, label]) => (
                 <button
-                  key={key}
-                  onClick={() => setCategory(key)}
-                  className={`p-2.5 sm:p-3 md:p-4 rounded-lg sm:rounded-xl border-2 font-semibold text-xs sm:text-sm md:text-base transition-all transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-orange-400 ${
-                    category === key
-                      ? 'bg-gradient-to-r from-orange-500 to-amber-600 text-white border-orange-600 shadow-lg'
-                      : 'bg-white text-stone-700 border-stone-300 hover:border-orange-400 hover:bg-orange-50'
-                  }`}
+                  onClick={handleSubmit}
+                  disabled={submitting || rating === 0}
+                  className="flex flex-[1.4] items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-brand-600 to-marigold-500 py-3 text-sm font-semibold text-white shadow-[0_10px_24px_-10px_rgba(234,88,12,0.7)] transition hover:shadow-[0_14px_28px_-10px_rgba(234,88,12,0.8)] active:scale-[0.99] disabled:opacity-50"
                 >
-                  <span className="line-clamp-1">{label}</span>
+                  {submitting ? <Loader2 size={17} className="animate-spin" /> : <Send size={16} />}
+                  {t.submit}
                 </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Message */}
-          <div className="space-y-2 sm:space-y-3">
-            <label className="block text-sm sm:text-base md:text-lg font-bold text-stone-900 flex items-center gap-2">
-              {content[lang].messageLabel}
-              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500" />
-            </label>
-            <div className="relative">
-              <textarea
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder={content[lang].messagePlaceholder}
-                className="w-full p-3 sm:p-4 border-2 border-stone-300 rounded-xl focus:ring-2 focus:ring-orange-400 focus:border-orange-500 outline-none text-sm sm:text-base resize-none shadow-sm hover:border-orange-300 transition-all bg-white"
-                rows={4}
-                maxLength={1000}
-              />
-              <div className="absolute bottom-2 right-2 sm:bottom-3 sm:right-3 text-xs text-stone-400 bg-white/80 backdrop-blur-sm px-2 py-1 rounded-md">
-                {message.length}/1000
               </div>
             </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-2 sm:pt-4">
-            <button
-              onClick={handleMaybeLater}
-              className="w-full sm:flex-1 px-4 sm:px-6 py-3 sm:py-4 bg-stone-200 hover:bg-stone-300 text-stone-800 rounded-xl font-bold text-sm sm:text-base md:text-lg transition-all transform hover:scale-105 active:scale-95 focus:outline-none focus:ring-2 focus:ring-stone-400"
-            >
-              {content[lang].laterButton}
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={submitting || rating === 0 || !category}
-              className="w-full sm:flex-1 px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white rounded-xl font-bold text-sm sm:text-base md:text-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-orange-400"
-            >
-              {submitting ? (
-                <>
-                  <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 sm:border-3 border-white border-t-transparent rounded-full animate-spin" />
-                  <span className="text-sm sm:text-base">Submitting...</span>
-                </>
-              ) : (
-                <>
-                  <Send size={18} className="sm:w-5 sm:h-5" />
-                  {content[lang].submitButton}
-                </>
-              )}
-            </button>
-          </div>
-        </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -1,1219 +1,575 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { Undo2, Maximize2, X, Settings2, Check, Loader2, Minus, Plus, RotateCcw, Vibrate, Bell } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { ref, get, set } from 'firebase/database';
-import { db } from '../services/firebase';
 import { useToast } from '../contexts/ToastContext';
-import { Clock, RotateCcw, Calendar, X, Plus, Minus, Play, Pause, History as HistoryIcon, Award, CheckCircle, Flame, Sparkles, HelpCircle, Info, Settings } from 'lucide-react';
-import { requestVibrationPermission, vibrate } from '../utils/permissions';
+import { ChantingSession, loadSessions, saveSession } from '../services/japa';
+import { localDateKey, parseDateKey, daysUntil } from '../utils/date';
+import { JAPA_SETTINGS_KEY } from '../utils/japaGoal';
 
-interface ChantingSession {
-  id: string;
+/* -------------------------------------------------------------------------- */
+/* State                                                                       */
+/* -------------------------------------------------------------------------- */
+
+interface Live {
   beads: number;
   rounds: number;
-  date: string;
-  startTime: string;
-  completeTime: string;
-  timestamp: number;
-  duration: number;
-  completed: boolean;
+  laps: number[]; // seconds per finished round
+  startedAt: number | null;
+  roundStartedAt: number | null;
 }
 
-interface ChantingStats {
-  totalRounds: number;
-  totalBeads: number;
-  totalTime: number;
-  sessions: ChantingSession[];
+interface JapaSettings {
+  goal: number; // 0 = no goal
+  perRound: number;
+  vibrate: boolean;
+  sound: boolean;
 }
 
-const BEADS_PER_ROUND = 108;
+const EMPTY: Live = { beads: 0, rounds: 0, laps: [], startedAt: null, roundStartedAt: null };
+const DEFAULT_SETTINGS: JapaSettings = { goal: 0, perRound: 108, vibrate: true, sound: true };
+const SETTINGS_KEY = JAPA_SETTINGS_KEY;
+
+const readJSON = <T,>(key: string, fallback: T): T => {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? { ...fallback, ...JSON.parse(raw) } : fallback;
+  } catch {
+    return fallback;
+  }
+};
+const writeJSON = (key: string, value: unknown) => {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* storage blocked */
+  }
+};
+
+const mins = (sec: number) => {
+  const m = Math.max(1, Math.round(sec / 60));
+  return m >= 60 ? `${Math.floor(m / 60)} hr ${m % 60} min` : `${m} min`;
+};
+
+/* -------------------------------------------------------------------------- */
+/* Bell + vibration                                                            */
+/* -------------------------------------------------------------------------- */
+
+let audioCtx: AudioContext | null = null;
+const playBell = () => {
+  try {
+    audioCtx ||= new (window.AudioContext || (window as any).webkitAudioContext)();
+    const ctx = audioCtx;
+    const now = ctx.currentTime;
+    [
+      [523, 0.35, 1.8],
+      [659, 0.22, 1.6],
+      [784, 0.16, 1.4],
+    ].forEach(([freq, vol, dur]) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = freq;
+      o.connect(g);
+      g.connect(ctx.destination);
+      g.gain.setValueAtTime(0.0001, now);
+      g.gain.exponentialRampToValueAtTime(vol, now + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+      o.start(now);
+      o.stop(now + dur);
+    });
+  } catch {
+    /* no audio */
+  }
+};
+
+const buzz = (pattern: number | number[]) => {
+  try {
+    navigator.vibrate?.(pattern);
+  } catch {
+    /* not supported */
+  }
+};
+
+/* -------------------------------------------------------------------------- */
+/* Small pieces                                                                */
+/* -------------------------------------------------------------------------- */
+
+const Switch: React.FC<{ on: boolean; onChange: (v: boolean) => void; label: string }> = ({ on, onChange, label }) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={on}
+    aria-label={label}
+    onClick={() => onChange(!on)}
+    className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-200 ${on ? 'bg-gradient-to-r from-marigold-400 to-brand-500' : 'bg-sandal-300'}`}
+    style={{ minHeight: 0 }}
+  >
+    <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-all duration-200 ${on ? 'left-6' : 'left-1'}`} />
+  </button>
+);
+
+const MiniStepper: React.FC<{ value: number; onChange: (v: number) => void; max: number }> = ({ value, onChange, max }) => (
+  <div className="inline-flex items-center gap-1.5">
+    {[
+      { d: -1, Icon: Minus, label: 'Decrease', off: value <= 0 },
+      { d: 1, Icon: Plus, label: 'Increase', off: value >= max },
+    ].map(({ d, Icon, label, off }, i) => (
+      <React.Fragment key={label}>
+        {i === 1 && <span className="min-w-[2.5rem] text-center text-base font-semibold tabular-nums text-maroon-900">{value}</span>}
+        <button
+          type="button"
+          onClick={() => onChange(Math.min(max, Math.max(0, value + d)))}
+          disabled={off}
+          className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-maroon-800 ring-1 ring-sandal-300 transition active:scale-95 disabled:opacity-40"
+          aria-label={label}
+          style={{ minHeight: 0 }}
+        >
+          <Icon size={15} />
+        </button>
+      </React.Fragment>
+    ))}
+  </div>
+);
+
+/** Simple round tap target with a thin progress line around it */
+const TapCircle: React.FC<{ value: number; total: number; className?: string; children: React.ReactNode }> = ({ value, total, className = '', children }) => {
+  const r = 46;
+  const c = 2 * Math.PI * r;
+  return (
+    <div className={`relative aspect-square ${className}`}>
+      <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full -rotate-90" aria-hidden="true">
+        <circle cx="50" cy="50" r={r} fill="none" strokeWidth="3" className="stroke-amber-100" />
+        <circle
+          cx="50"
+          cy="50"
+          r={r}
+          fill="none"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={c * (1 - value / total)}
+          className="stroke-brand-500 transition-[stroke-dashoffset] duration-200"
+        />
+      </svg>
+      <div className="absolute inset-[9%] flex flex-col items-center justify-center rounded-full bg-gradient-to-br from-white to-amber-50 text-center shadow-[0_10px_30px_-12px_rgba(238,154,30,0.55)] ring-1 ring-amber-100">
+        {children}
+      </div>
+    </div>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/* Page                                                                        */
+/* -------------------------------------------------------------------------- */
 
 export default function ChantingCounter() {
   const { user } = useAuth();
   const { showSuccess, showWarning } = useToast();
-  
-  // Core state - Start rounds at 0, beads at 0 (000:000 format)
-  const [currentBead, setCurrentBead] = useState(0);
-  const [currentRound, setCurrentRound] = useState(0);
-  const [timerSeconds, setTimerSeconds] = useState(0);
-  const [isRunning, setIsRunning] = useState(false);
-  const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
-  
-  // Settings
-  const [showSettingsModal, setShowSettingsModal] = useState(false);
-  const [showGuideModal, setShowGuideModal] = useState(false);
-  // Inline guide panel (shows explanation beside the counter)
-  const [showInlineGuide, setShowInlineGuide] = useState(false);
-  const [guideLanguage, setGuideLanguage] = useState<'en' | 'hi' | 'te'>('en');
-  const [targetRounds, setTargetRounds] = useState(16);
-  const [targetBeads, setTargetBeads] = useState(BEADS_PER_ROUND);
-  const [autoLapEnabled, setAutoLapEnabled] = useState(true);
-  const [vibrationEnabled, setVibrationEnabled] = useState(true);
-  const [soundEnabled, setSoundEnabled] = useState(true);
-  const [clickAreaShape, setClickAreaShape] = useState<'circle' | 'square'>('circle');
-  const [hideBeadNumbers, setHideBeadNumbers] = useState(false);
-  
-  // History
+  const uid = user?.uid || 'guest';
+  const liveKey = `ss_japa_live_${uid}`;
+
+  const [settings, setSettings] = useState<JapaSettings>(() => readJSON(SETTINGS_KEY, DEFAULT_SETTINGS));
+  const [live, setLiveState] = useState<Live>(() => readJSON(liveKey, EMPTY));
+  const liveRef = useRef(live);
   const [sessions, setSessions] = useState<ChantingSession[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
-  const [stats, setStats] = useState<ChantingStats | null>(null);
-  
-  // Long press and double click detection
-  const timerPressRef = useRef<NodeJS.Timeout | null>(null);
-  const beadsPressRef = useRef<NodeJS.Timeout | null>(null);
-  const timerClickRef = useRef<number>(0);
-  const beadsClickRef = useRef<number>(0);
-  const [isLongPress, setIsLongPress] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [focus, setFocus] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [pulse, setPulse] = useState(0);
 
-  // Load sessions and stats
-  useEffect(() => {
-    if (user && user.uid !== 'guest') {
-      loadSessions();
-      loadStats();
-    }
-  }, [user]);
+  const setLive = useCallback(
+    (next: Live) => {
+      liveRef.current = next;
+      setLiveState(next);
+      writeJSON(liveKey, next);
+    },
+    [liveKey]
+  );
 
-  // Timer interval
+  const updateSettings = (patch: Partial<JapaSettings>) =>
+    setSettings((s) => {
+      const next = { ...s, ...patch };
+      writeJSON(SETTINGS_KEY, next);
+      return next;
+    });
+
   useEffect(() => {
-    let interval: NodeJS.Timeout | null = null;
-    
-    if (isRunning) {
-      interval = setInterval(() => {
-        setTimerSeconds(prev => prev + 1);
-      }, 1000);
-    } else if (interval) {
-      clearInterval(interval);
-    }
-    
+    loadSessions(uid).then(setSessions);
+  }, [uid]);
+
+  // Keep the screen awake in full-screen mode
+  useEffect(() => {
+    if (!focus) return;
+    let lock: any = null;
+    let done = false;
+    (async () => {
+      try {
+        lock = await (navigator as any).wakeLock?.request('screen');
+        if (done) lock?.release?.();
+      } catch {
+        /* not supported */
+      }
+    })();
     return () => {
-      if (interval) clearInterval(interval);
+      done = true;
+      lock?.release?.();
     };
-  }, [isRunning]);
+  }, [focus]);
 
-  const loadSessions = async () => {
-    if (!user || user.uid === 'guest') return;
+  /* ----------------------------- counting ----------------------------- */
 
-    try {
-      const sessionsRef = ref(db, `users/${user.uid}/chantingSessions`);
-      const snapshot = await get(sessionsRef);
-      
-      if (snapshot.exists()) {
-        const sessionsData = snapshot.val();
-        const sessionsArray = Object.values(sessionsData) as ChantingSession[];
-        setSessions(sessionsArray.sort((a, b) => b.timestamp - a.timestamp).slice(0, 30));
-      }
-    } catch (error) {
-      console.error('Error loading sessions:', error);
-    }
-  };
-
-  const loadStats = async () => {
-    if (!user || user.uid === 'guest') return;
-
-    try {
-      const statsRef = ref(db, `users/${user.uid}/chantingStats`);
-      const snapshot = await get(statsRef);
-      
-      if (snapshot.exists()) {
-        setStats(snapshot.val());
-      } else {
-        const initialStats: ChantingStats = {
-          totalRounds: 0,
-          totalBeads: 0,
-          totalTime: 0,
-          sessions: []
-        };
-        setStats(initialStats);
-      }
-    } catch (error) {
-      console.error('Error loading stats:', error);
-    }
-  };
-
-  const handleBeadIncrement = () => {
-    const newBead = currentBead + 1;
-    
-    // Vibrate on each bead count
-    if (vibrationEnabled) {
-      // Strong vibration for clear feedback
-      if ('vibrate' in navigator) {
-        navigator.vibrate(100); // Strong 100ms vibration
-      }
-    }
-    
-    if (newBead >= targetBeads) {
-      // Round completed (108 beads done)
-      const newRound = currentRound + 1;
-      setCurrentRound(newRound);
-      setCurrentBead(0); // Reset to bead 0 for next round
-      
-      // Play bell sound for round completion
-      if (soundEnabled) {
-        playRoundCompleteSound();
-      }
-      
-      // Triple vibration for round completion - very strong
-      if (vibrationEnabled && 'vibrate' in navigator) {
-        navigator.vibrate([300, 100, 300, 100, 300]); // Triple strong vibration
-      }
-      
-      if (newRound >= targetRounds && autoLapEnabled) {
-        showSuccess('Target rounds completed! 🎉');
-      }
-    } else {
-      setCurrentBead(newBead);
-    }
-  };
-
-  const playRoundCompleteSound = () => {
-    try {
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      
-      // Create a realistic temple bell sound with multiple harmonics
-      const playTone = (frequency: number, startTime: number, duration: number, volume: number) => {
-        const oscillator = audioContext.createOscillator();
-        const gainNode = audioContext.createGain();
-        
-        oscillator.connect(gainNode);
-        gainNode.connect(audioContext.destination);
-        
-        oscillator.frequency.value = frequency;
-        oscillator.type = 'sine';
-        
-        gainNode.gain.setValueAtTime(volume, startTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
-        
-        oscillator.start(startTime);
-        oscillator.stop(startTime + duration);
-      };
-      
-      const now = audioContext.currentTime;
-      
-      // Temple bell sound - multiple harmonics for rich tone
-      playTone(523, now, 1.5, 0.6);      // C5 - fundamental
-      playTone(659, now, 1.5, 0.4);      // E5 - third harmonic
-      playTone(784, now, 1.5, 0.3);      // G5 - fifth harmonic
-      playTone(1047, now + 0.05, 1.2, 0.2); // C6 - octave
-      
-      // Add a gentle strike sound at the beginning
-      playTone(200, now, 0.1, 0.5);
-      
-    } catch (error) {
-      console.error('Error playing sound:', error);
-    }
-  };
-
-  // Timer click: Start/Pause, Double-click: Reset
-  const handleTimerClick = () => {
+  const count = useCallback(() => {
     const now = Date.now();
-    
-    if (now - timerClickRef.current < 300) {
-      // Double click detected
-      handleTimerReset();
-      timerClickRef.current = 0;
+    let l = { ...liveRef.current };
+    if (!l.startedAt) l = { ...l, startedAt: now, roundStartedAt: now };
+
+    if (l.beads + 1 >= settings.perRound) {
+      const rounds = l.rounds + 1;
+      l = { ...l, beads: 0, rounds, laps: [...l.laps, (now - (l.roundStartedAt || now)) / 1000], roundStartedAt: now };
+      if (settings.sound) playBell();
+      if (settings.vibrate) buzz([140, 70, 140]);
+      if (settings.goal && rounds === settings.goal) showSuccess('Goal reached!', 'Hare Krishna 🙏');
     } else {
-      // Single click: Start/Pause
-      timerClickRef.current = now;
-      setTimeout(() => {
-        if (timerClickRef.current === now) {
-          // It was a single click
-          if (!isRunning && !sessionStartTime) {
-            setSessionStartTime(Date.now());
-            setIsRunning(true);
-          } else {
-            setIsRunning(!isRunning);
-          }
-        }
-      }, 300);
+      l = { ...l, beads: l.beads + 1 };
+      if (settings.vibrate) buzz(18);
     }
+    setLive(l);
+    setPulse((p) => p + 1);
+  }, [settings, setLive, showSuccess]);
+
+  const undo = useCallback(() => {
+    const l = liveRef.current;
+    if (l.beads > 0) setLive({ ...l, beads: l.beads - 1 });
+    else if (l.rounds > 0) setLive({ ...l, rounds: l.rounds - 1, beads: settings.perRound - 1, laps: l.laps.slice(0, -1) });
+  }, [settings.perRound, setLive]);
+
+  const reset = () => {
+    setLive(EMPTY);
+    setConfirmReset(false);
+    setShowSettings(false);
   };
 
-  // Timer long press (mobile): Reset
-  const handleTimerLongPressStart = () => {
-    timerPressRef.current = setTimeout(() => {
-      setIsLongPress(true);
-      handleTimerReset();
-    }, 600);
-  };
+  // Keyboard: Space to count, Backspace to undo
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (showSettings || (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable))) return;
+      if (e.code === 'Space' || e.key === 'Enter') {
+        e.preventDefault();
+        if (!e.repeat) count();
+      } else if (e.key === 'Backspace') {
+        e.preventDefault();
+        undo();
+      } else if (e.key === 'Escape') setFocus(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [count, undo, showSettings]);
 
-  const handleTimerLongPressEnd = () => {
-    if (timerPressRef.current) {
-      clearTimeout(timerPressRef.current);
-    }
-    setTimeout(() => setIsLongPress(false), 100);
-  };
+  /* ----------------------------- save ----------------------------- */
 
-  const handleTimerReset = () => {
-    setIsRunning(false);
-    setTimerSeconds(0);
-    setSessionStartTime(null);
-    showSuccess('⏱️ Timer reset');
-  };
+  const today = localDateKey();
+  const savedToday = useMemo(
+    () => sessions.filter((s) => localDateKey(new Date(s.timestamp)) === today).reduce((a, s) => a + (Number(s.rounds) || 0), 0),
+    [sessions, today]
+  );
 
-  // Beads click: Configure, Double-click: Reset
-  const handleBeadsClick = () => {
-    const now = Date.now();
-    
-    if (now - beadsClickRef.current < 300) {
-      // Double click detected
-      handleBeadsReset();
-      beadsClickRef.current = 0;
-    } else {
-      // Single click: Open settings
-      beadsClickRef.current = now;
-      setTimeout(() => {
-        if (beadsClickRef.current === now) {
-          setShowSettingsModal(true);
-        }
-      }, 300);
-    }
-  };
-
-  // Beads long press (mobile): Reset
-  const handleBeadsLongPressStart = () => {
-    beadsPressRef.current = setTimeout(() => {
-      setIsLongPress(true);
-      handleBeadsReset();
-    }, 600);
-  };
-
-  const handleBeadsLongPressEnd = () => {
-    if (beadsPressRef.current) {
-      clearTimeout(beadsPressRef.current);
-    }
-    setTimeout(() => setIsLongPress(false), 100);
-  };
-
-  const handleBeadsReset = () => {
-    setCurrentBead(0);
-    setCurrentRound(0);
-    showSuccess('📿 Counter reset to 000:000');
-  };
-
-  const handleSaveSettings = () => {
-    setShowSettingsModal(false);
-    showSuccess('Settings saved');
-  };
-
-  const handleResetSettings = () => {
-    setCurrentBead(0);
-    setCurrentRound(0);
-    setShowSettingsModal(false);
-    showSuccess('Counter reset to 000:000');
-  };
-
-  const handleSaveSession = async () => {
-    if (!user || user.uid === 'guest') {
-      showWarning('Sign In Required', 'Please sign in to save your chanting sessions');
-      return;
-    }
-
-    if (currentRound === 0 && currentBead === 0) {
-      showWarning('No Activity', 'Please complete at least one bead before saving');
-      return;
-    }
-
+  const onSave = async () => {
+    const l = liveRef.current;
+    if (!l.rounds && !l.beads) return;
+    setSaving(true);
     try {
-      const now = new Date();
-      const session: ChantingSession = {
-        id: Date.now().toString(),
-        beads: currentBead,
-        rounds: currentRound,
-        date: now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit' }),
-        startTime: sessionStartTime ? new Date(sessionStartTime).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '--:--',
-        completeTime: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
-        timestamp: Date.now(),
-        duration: timerSeconds,
-        completed: currentBead === 0 && currentRound > 0
-      };
-
-      const sessionsRef = ref(db, `users/${user.uid}/chantingSessions/${session.id}`);
-      await set(sessionsRef, session);
-
-      // Update stats
-      const newStats: ChantingStats = {
-        totalRounds: (stats?.totalRounds || 0) + currentRound,
-        totalBeads: (stats?.totalBeads || 0) + (currentRound * targetBeads) + currentBead,
-        totalTime: (stats?.totalTime || 0) + timerSeconds,
-        sessions: [...(stats?.sessions || []), session].slice(-30)
-      };
-
-      const statsRef = ref(db, `users/${user.uid}/chantingStats`);
-      await set(statsRef, newStats);
-
-      showSuccess('Session saved successfully! 🙏');
-      loadSessions();
-      loadStats();
-      
-      // Reset for new session
-      setCurrentBead(0);
-      setCurrentRound(0);
-      setTimerSeconds(0);
-      setIsRunning(false);
-      setSessionStartTime(null);
-    } catch (error) {
-      console.error('Error saving session:', error);
-      showWarning('Error', 'Failed to save session');
+      const started = l.startedAt || Date.now();
+      const session = await saveSession(
+        uid,
+        { rounds: l.rounds, beads: l.beads, beadsPerRound: settings.perRound, startedAt: started, durationSec: (Date.now() - started) / 1000, laps: l.laps },
+        savedToday
+      );
+      setSessions((s) => [session, ...s]);
+      setLive(EMPTY);
+      setFocus(false);
+      showSuccess('Saved 🙏', l.rounds ? `${l.rounds} round${l.rounds > 1 ? 's' : ''} added to today` : 'Your count is saved');
+    } catch (e) {
+      console.error(e);
+      showWarning('Could not save', 'Please check your internet and try again. Your count is safe on this phone.');
+    } finally {
+      setSaving(false);
     }
   };
 
-  const formatTimer = (seconds: number): string => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  /* ----------------------------- derived ----------------------------- */
+
+  const goal = settings.goal;
+  const todayTotal = savedToday + live.rounds;
+  const hasCount = live.rounds > 0 || live.beads > 0;
+  const left = Math.max(goal - todayTotal, 0);
+
+  const dayName = (ts: number) => {
+    const off = daysUntil(localDateKey(new Date(ts)));
+    return off === 0 ? 'Today' : off === -1 ? 'Yesterday' : parseDateKey(localDateKey(new Date(ts))).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   };
 
-  const formatBeadCount = (): string => {
-    return `${currentRound.toString().padStart(3, '0')}:${currentBead.toString().padStart(3, '0')}`;
-  };
+  const renderCount = (big?: boolean) => (
+    <>
+      <span key={pulse} className={`font-semibold leading-none tabular-nums text-maroon-900 animate-[japaPop_160ms_ease-out] ${big ? 'text-8xl' : 'text-6xl'}`}>
+        {live.beads}
+      </span>
+      <span className="mt-1.5 text-xs font-medium text-maroon-900/50">
+        of {settings.perRound} · Round {live.rounds + 1}
+      </span>
+    </>
+  );
 
-  const getCompletionPercentage = (session: ChantingSession): number => {
-    const total = targetRounds * targetBeads;
-    const completed = session.rounds * targetBeads + session.beads;
-    return Math.round((completed / total) * 100);
-  };
+  /* ----------------------------- render ----------------------------- */
 
   return (
-    <div className="space-y-4 sm:space-y-6 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-orange-500 to-amber-600 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-xl border-2 border-orange-300">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div className="flex items-center gap-3">
-            <Sparkles className="text-white animate-pulse" size={32} />
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white flex items-center gap-2">
-                  📿 Japa Counter
-                </h1>
-                <button
-                  onClick={() => setShowGuideModal(true)}
-                  className="p-1.5 bg-white/20 hover:bg-white/30 rounded-full transition-all shadow-md hover:shadow-lg transform hover:scale-110 active:scale-95"
-                  title="How to Use"
-                >
-                  <HelpCircle className="text-white" size={20} />
-                </button>
-              </div>
-              <p className="text-white/90 text-sm sm:text-base mt-1">Hare Krishna Maha Mantra</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setShowSettingsModal(true)}
-              className="p-2 sm:p-3 bg-white/20 hover:bg-white/30 rounded-lg transition-all shadow-lg"
-              title="Settings"
-            >
-              <Settings className="text-white" size={20} />
-            </button>
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className="p-2 sm:p-3 bg-white/20 hover:bg-white/30 rounded-lg transition-all shadow-lg"
-              title="View History"
-            >
-              <HistoryIcon className="text-white" size={20} />
-            </button>
-            <button
-              onClick={handleSaveSession}
-              className="px-4 py-2 sm:px-6 sm:py-3 bg-white text-orange-600 hover:bg-orange-50 rounded-lg font-semibold transition-all shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
-            >
-              Save Session
-            </button>
-          </div>
-        </div>
-      </div>
+    <div className="mx-auto max-w-md space-y-4">
+      <style>{`@keyframes japaPop { 0% { transform: scale(0.9); opacity: .6 } 100% { transform: scale(1); opacity: 1 } }`}</style>
 
-      {/* Usage Instructions - Collapsible (Moved to Top) */}
-      <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl border-2 border-orange-200 overflow-hidden">
-        <button
-          onClick={() => setShowInlineGuide(!showInlineGuide)}
-          className="w-full p-4 sm:p-6 flex items-center justify-between hover:bg-orange-100/50 transition-all"
-        >
-          <h3 className="text-sm sm:text-base font-bold text-orange-600">How to Use</h3>
-          <div className={`transform transition-transform ${showInlineGuide ? 'rotate-180' : ''}`}>
-            <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
-        </button>
-        
-        {showInlineGuide && (
-          <div className="px-4 sm:px-6 pb-4 sm:pb-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="bg-white rounded-lg p-3 border border-orange-200">
-                <p className="text-xs sm:text-sm font-semibold text-stone-700 mb-2">📿 BEADS Counter:</p>
-                <ul className="text-xs text-stone-600 space-y-1">
-                  <li>• <strong>Web:</strong> Click = Configure • 2× Click = Reset</li>
-                  <li>• <strong>Mobile:</strong> Tap = Configure • Long press = Reset</li>
-                </ul>
-              </div>
-              <div className="bg-white rounded-lg p-3 border border-orange-200">
-                <p className="text-xs sm:text-sm font-semibold text-stone-700 mb-2">⏱️ TIMER:</p>
-                <ul className="text-xs text-stone-600 space-y-1">
-                  <li>• <strong>Web:</strong> Click = Start/Pause • 2× Click = Reset</li>
-                  <li>• <strong>Mobile:</strong> Tap = Start/Pause • Long press = Reset</li>
-                </ul>
-              </div>
-            </div>
+      {/* Today */}
+      <div className="rounded-3xl bg-white p-4 shadow-soft ring-1 ring-sandal-200">
+        <div className="flex items-baseline justify-between">
+          <p className="text-sm font-semibold text-maroon-900">Today</p>
+          <p className="text-sm text-maroon-900/60">
+            <span className="text-lg font-semibold text-brand-600">{todayTotal}</span> round{todayTotal === 1 ? '' : 's'}
+            {goal > 0 && <span> of {goal}</span>}
+          </p>
+        </div>
+        {goal > 0 && (
+          <div className="mt-2.5 h-2.5 overflow-hidden rounded-full bg-sandal-200">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-amber-300 via-marigold-400 to-brand-500 transition-all duration-500"
+              style={{ width: `${Math.min((todayTotal / goal) * 100, 100)}%` }}
+            />
           </div>
         )}
+        <p className="mt-2 text-xs text-maroon-900/55">
+          {goal > 0
+            ? left
+              ? `${left} more to reach your goal`
+              : 'Goal reached — Hare Krishna 🙏'
+            : todayTotal
+              ? 'Every round is precious 🙏'
+              : 'Even one round is a beautiful start 🙏'}
+        </p>
       </div>
 
-      {/* Main Counter Section */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:gap-6">
-        {/* Beads Display */}
-        <div 
-          onClick={handleBeadsClick}
-          onTouchStart={handleBeadsLongPressStart}
-          onTouchEnd={handleBeadsLongPressEnd}
-          className="bg-white rounded-lg sm:rounded-xl lg:rounded-2xl p-3 sm:p-6 lg:p-8 shadow-xl border-2 border-orange-200 cursor-pointer hover:border-orange-400 hover:shadow-2xl transition-all transform hover:scale-[1.02] active:scale-[0.98]"
-        >
-          <div className="text-center">
-            <div className="text-xs sm:text-sm lg:text-base font-semibold text-orange-600 mb-2 sm:mb-3 flex items-center justify-center gap-1 sm:gap-2">
-              📿 <span className="hidden sm:inline">BEADS</span>
-            </div>
-            <div className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-stone-800 tracking-wider font-mono">
-              {formatBeadCount()}
-            </div>
-            <p className="text-[0.65rem] sm:text-xs text-stone-500 mt-2 sm:mt-3">Rounds : Current Bead</p>
-          </div>
-        </div>
+      {/* Counter */}
+      <section className="relative overflow-hidden rounded-[28px] bg-gradient-to-b from-amber-50 via-white to-orange-50 p-4 sm:p-5 shadow-card ring-1 ring-amber-200/70">
+        <div className="pointer-events-none absolute left-1/2 top-[38%] h-52 w-52 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-200/40 blur-3xl" />
 
-        {/* Timer Display */}
-        <div 
-          onClick={handleTimerClick}
-          onTouchStart={handleTimerLongPressStart}
-          onTouchEnd={handleTimerLongPressEnd}
-          className="bg-white rounded-lg sm:rounded-xl lg:rounded-2xl p-3 sm:p-6 lg:p-8 shadow-xl border-2 border-orange-200 cursor-pointer hover:border-orange-400 hover:shadow-2xl transition-all transform hover:scale-[1.02] active:scale-[0.98]"
-        >
-          <div className="text-center">
-            <div className="text-xs sm:text-sm lg:text-base font-semibold text-orange-600 mb-2 sm:mb-3 flex items-center justify-center gap-1 sm:gap-2">
-              <Clock size={14} className="sm:w-[18px] sm:h-[18px]" /> <span className="hidden sm:inline">TIMER</span>
-            </div>
-            <div className="text-2xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold text-stone-800 tracking-wider font-mono">
-              {formatTimer(timerSeconds)}
-            </div>
-            <p className="text-[0.65rem] sm:text-xs text-stone-500 mt-2 sm:mt-3">{isRunning ? 'Running...' : 'Ready'}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Tap Button to Increment Beads (Removed duplicate instructions) */}
-      {/* Tap Button to Increment Beads */}
-      {clickAreaShape === 'circle' ? (
-        // Circle Mode - Traditional round button
-        <div className="bg-white rounded-xl sm:rounded-2xl p-6 sm:p-8 shadow-xl border-2 border-orange-200">
-          <div className="flex flex-col items-center gap-6">
-            <button
-              onClick={handleBeadIncrement}
-              className="w-36 h-36 sm:w-44 sm:h-44 md:w-52 md:h-52 bg-gradient-to-br from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white rounded-full shadow-2xl transform transition-all hover:scale-105 active:scale-95 flex flex-col items-center justify-center border-4 sm:border-6 border-orange-300 relative overflow-hidden group"
-            >
-              <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              {!hideBeadNumbers && (
-                <span className="text-7xl sm:text-8xl md:text-9xl font-bold relative z-10">{currentBead}</span>
-              )}
-              <span className={`text-sm sm:text-base font-medium ${hideBeadNumbers ? '' : 'mt-2'} relative z-10 opacity-90`}>
-                {hideBeadNumbers ? <span className="text-6xl sm:text-7xl md:text-8xl font-bold">Tap</span> : 'Tap to Count'}
-              </span>
-            </button>
-            {!hideBeadNumbers && (
-              <div className="text-center">
-                <p className="text-stone-700 text-base sm:text-lg font-semibold mb-1">
-                  {targetBeads - currentBead} beads remaining
-                </p>
-                <p className="text-stone-500 text-sm">in this round</p>
-              </div>
-            )}
-          </div>
-        </div>
-      ) : (
-        // Square Mode - Entire box becomes orange and clickable
         <button
-          onClick={handleBeadIncrement}
-          className="w-full bg-gradient-to-br from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 rounded-xl sm:rounded-2xl p-6 sm:p-8 shadow-xl border-4 border-orange-300 transform transition-all hover:scale-[1.02] active:scale-[0.98] relative overflow-hidden group"
+          type="button"
+          onPointerDown={(e) => e.button === 0 && count()}
+          onKeyDown={(e) => (e.key === ' ' || e.key === 'Enter') && e.preventDefault()}
+          className="relative mx-auto block w-full max-w-[220px] select-none rounded-full outline-none transition-transform duration-100 [-webkit-tap-highlight-color:transparent] [touch-action:manipulation] focus-visible:ring-2 focus-visible:ring-marigold-400 active:scale-[0.98]"
+          aria-label={`Count. ${live.beads} beads, round ${live.rounds + 1}`}
         >
-          <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          <div className="flex flex-col items-center gap-6 relative z-10">
-            <div className="text-center">
-              {!hideBeadNumbers && (
-                <span className="text-7xl sm:text-8xl md:text-9xl font-bold text-white block">{currentBead}</span>
-              )}
-              <span className={`text-base sm:text-lg font-bold text-white block ${hideBeadNumbers ? '' : 'mt-4'} opacity-90`}>
-                {hideBeadNumbers ? <span className="text-6xl sm:text-7xl md:text-8xl">Tap to Count</span> : 'Tap to Count'}
-              </span>
-            </div>
-            {!hideBeadNumbers && (
-              <div className="text-center">
-                <p className="text-white text-base sm:text-lg font-semibold mb-1">
-                  {targetBeads - currentBead} beads remaining
-                </p>
-                <p className="text-orange-100 text-sm">in this round</p>
-              </div>
-            )}
-          </div>
+          <TapCircle value={live.beads} total={settings.perRound}>
+            {renderCount()}
+          </TapCircle>
         </button>
+
+        <p className="relative mt-2 text-center text-sm text-maroon-900/55">{hasCount ? `${live.rounds} round${live.rounds === 1 ? '' : 's'} in this session` : 'Tap the beads to count'}</p>
+
+        {/* Buttons */}
+        <div className="relative mt-5 grid grid-cols-3 gap-2">
+          {[
+            { label: 'Undo', Icon: Undo2, onClick: undo, disabled: !hasCount },
+            { label: 'Full screen', Icon: Maximize2, onClick: () => setFocus(true) },
+            { label: 'Settings', Icon: Settings2, onClick: () => setShowSettings(true) },
+          ].map(({ label, Icon, onClick, disabled }) => (
+            <button
+              key={label}
+              type="button"
+              onClick={onClick}
+              disabled={disabled}
+              className="flex flex-col items-center gap-1 rounded-2xl bg-white py-3 text-xs font-semibold text-maroon-800 ring-1 ring-sandal-200 transition hover:ring-marigold-400 active:scale-95 disabled:opacity-40"
+            >
+              <Icon size={19} className="text-brand-500" />
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={!hasCount || saving}
+          className="relative mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-marigold-400 to-brand-500 py-3.5 text-base font-semibold text-white shadow-[0_10px_24px_-10px_rgba(238,154,30,0.8)] transition hover:brightness-105 active:scale-[0.99] disabled:from-sandal-200 disabled:to-sandal-200 disabled:text-maroon-900/35 disabled:shadow-none"
+        >
+          {saving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+          Save
+        </button>
+      </section>
+
+      {/* Recent */}
+      {sessions.length > 0 && (
+        <div className="rounded-3xl bg-white p-4 shadow-soft ring-1 ring-sandal-200">
+          <p className="mb-2 text-sm font-semibold text-maroon-900">Recent</p>
+          <ul className="divide-y divide-sandal-200/70">
+            {sessions.slice(0, 4).map((s) => (
+              <li key={s.id} className="flex items-center justify-between py-2.5 text-sm">
+                <span className="text-maroon-900/70">
+                  {dayName(s.timestamp)} · {s.startTime}
+                </span>
+                <span className="font-semibold text-maroon-900">
+                  {s.rounds} round{s.rounds === 1 ? '' : 's'}
+                  {s.duration ? <span className="ml-1.5 font-normal text-maroon-900/45">({mins(s.duration)})</span> : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
-      {/* Rounds Progress */}
-      <div className="bg-white rounded-xl sm:rounded-2xl p-6 shadow-xl border-2 border-orange-200">
-        <div className="flex flex-col sm:flex-row justify-between items-center gap-6">
-          <div className="text-center sm:text-left">
-            <div className="text-sm font-semibold text-orange-600 mb-2 flex items-center gap-2 justify-center sm:justify-start">
-              <RotateCcw size={18} /> Rounds Progress
-            </div>
-            <div className="text-4xl sm:text-5xl md:text-6xl font-bold text-stone-800">
-              {currentRound} <span className="text-stone-400">/</span> {targetRounds}
-            </div>
-          </div>
-          <div className="w-32 h-32 sm:w-36 sm:h-36 relative">
-            <svg className="transform -rotate-90 w-full h-full" viewBox="0 0 100 100">
-              <circle
-                cx="50"
-                cy="50"
-                r="45"
-                fill="none"
-                stroke="#fed7aa"
-                strokeWidth="10"
-              />
-              <circle
-                cx="50"
-                cy="50"
-                r="45"
-                fill="none"
-                stroke="#f97316"
-                strokeWidth="10"
-                strokeDasharray={`${(currentRound / targetRounds) * 283} 283`}
-                strokeLinecap="round"
-                className="transition-all duration-500"
-              />
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-2xl font-bold text-orange-600">
-                {Math.round((currentRound / targetRounds) * 100)}%
+      {/* ===================== Full screen ===================== */}
+      {focus &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[140] flex select-none flex-col bg-gradient-to-b from-amber-50 via-white to-orange-50 [touch-action:manipulation] [-webkit-tap-highlight-color:transparent]"
+            onPointerDown={(e) => {
+              if (e.button !== 0 || (e.target as HTMLElement).closest('[data-no-count]')) return;
+              count();
+            }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Full screen — tap anywhere to count"
+          >
+            <div className="flex items-center justify-between px-5" style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top))' }} data-no-count>
+              <span className="rounded-full bg-white px-3.5 py-1.5 text-sm font-semibold text-maroon-900 shadow-soft ring-1 ring-sandal-200">
+                {todayTotal} round{todayTotal === 1 ? '' : 's'} today
               </span>
+              <div className="flex gap-2">
+                <button type="button" onClick={undo} className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-maroon-800 shadow-soft ring-1 ring-sandal-200" aria-label="Undo" style={{ minHeight: 0 }}>
+                  <Undo2 size={19} />
+                </button>
+                <button type="button" onClick={() => setFocus(false)} className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-maroon-800 shadow-soft ring-1 ring-sandal-200" aria-label="Close full screen" style={{ minHeight: 0 }}>
+                  <X size={20} />
+                </button>
+              </div>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Quick Stats */}
-      {stats && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-5 sm:p-6 border-2 border-orange-200 text-center shadow-lg hover:shadow-xl transition-all transform hover:scale-105">
-            <Award className="mx-auto text-orange-600 mb-3" size={28} />
-            <div className="text-3xl sm:text-4xl font-bold text-orange-600">{stats.totalRounds}</div>
-            <div className="text-xs sm:text-sm text-stone-600 mt-2 font-medium">Total Rounds</div>
-          </div>
-          <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-5 sm:p-6 border-2 border-orange-200 text-center shadow-lg hover:shadow-xl transition-all transform hover:scale-105">
-            <CheckCircle className="mx-auto text-orange-600 mb-3" size={28} />
-            <div className="text-3xl sm:text-4xl font-bold text-orange-600">{stats.totalBeads.toLocaleString()}</div>
-            <div className="text-xs sm:text-sm text-stone-600 mt-2 font-medium">Total Beads</div>
-          </div>
-          <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-5 sm:p-6 border-2 border-orange-200 text-center shadow-lg hover:shadow-xl transition-all transform hover:scale-105">
-            <Flame className="mx-auto text-orange-600 mb-3" size={28} />
-            <div className="text-3xl sm:text-4xl font-bold text-orange-600">{Math.floor(stats.totalTime / 60)}m</div>
-            <div className="text-xs sm:text-sm text-stone-600 mt-2 font-medium">Total Time</div>
-          </div>
-        </div>
-      )}
-
-      {/* Chanting Inspiration */}
-      <div className="bg-gradient-to-br from-orange-500 to-amber-600 rounded-xl sm:rounded-2xl p-6 sm:p-8 shadow-xl text-white border-2 border-orange-300">
-        <h3 className="text-lg sm:text-xl font-bold mb-3 flex items-center gap-2">
-          ✨ Chanting Inspiration
-        </h3>
-        <p className="text-sm sm:text-base italic mb-3 font-medium opacity-95">
-          "Associating With The Supreme Lord Directly"
-        </p>
-        <p className="text-xs sm:text-sm leading-relaxed opacity-90">
-          By chanting the holy names, you are directly associating with the Supreme Lord Krishna. 
-          Each round brings you closer to spiritual perfection and purifies your consciousness. 
-          The Hare Krishna mantra is the greatest benediction for humanity. Stay consistent and experience divine transformation!
-        </p>
-      </div>
-
-      {/* Settings Modal */}
-      {showSettingsModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center z-50 p-4 pt-8 sm:pt-16 animate-fade-in overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border-2 border-orange-200 animate-scale-in">
-            <div className="flex items-center justify-between p-6 border-b-2 border-orange-100 bg-gradient-to-r from-orange-50 to-amber-50">
-              <h2 className="text-xl sm:text-2xl font-bold text-stone-800 flex items-center gap-2">
-                ⚙️ Settings
-              </h2>
-              <button
-                onClick={() => setShowSettingsModal(false)}
-                className="p-2 hover:bg-orange-100 rounded-lg transition-colors"
-              >
-                <X size={24} className="text-stone-600" />
-              </button>
+            <div className="flex flex-1 items-center justify-center px-6">
+              <TapCircle value={live.beads} total={settings.perRound} className="w-full max-w-[min(80vw,55vh)]">
+                {renderCount(true)}
+              </TapCircle>
             </div>
+            <p className="pb-8 text-center text-sm text-maroon-900/45">Tap anywhere to count</p>
+          </div>,
+          document.body
+        )}
 
-            <div className="p-6 space-y-6">
-              {/* Completed Rounds Setting */}
-              <div>
-                <label className="block text-sm font-bold text-stone-700 mb-3">COMPLETED ROUNDS</label>
-                <div className="flex items-center justify-between bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 border-2 border-orange-200">
-                  <button
-                    onClick={() => setCurrentRound(Math.max(0, currentRound - 1))}
-                    className="p-3 bg-white hover:bg-orange-50 rounded-lg transition-colors shadow-md border-2 border-orange-300"
-                  >
-                    <Minus size={20} className="text-orange-600" />
-                  </button>
-                  <span className="text-4xl font-bold text-orange-600">{currentRound}</span>
-                  <button
-                    onClick={() => setCurrentRound(currentRound + 1)}
-                    className="p-3 bg-white hover:bg-orange-50 rounded-lg transition-colors shadow-md border-2 border-orange-300"
-                  >
-                    <Plus size={20} className="text-orange-600" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Current Bead Position Setting with Scrollable Picker */}
-              <div>
-                <label className="block text-sm font-bold text-stone-700 mb-3">CURRENT BEAD POSITION (0-107)</label>
-                <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 border-2 border-orange-200">
-                  <div className="flex items-center justify-center gap-4 mb-4">
-                    <button
-                      onClick={() => setCurrentBead(Math.max(0, currentBead - 1))}
-                      className="p-3 bg-white hover:bg-orange-50 rounded-lg transition-colors shadow-md border-2 border-orange-300"
-                    >
-                      <Minus size={20} className="text-orange-600" />
-                    </button>
-                    <span className="text-4xl font-bold text-orange-600 min-w-[100px] text-center">{currentBead}</span>
-                    <button
-                      onClick={() => setCurrentBead(Math.min(107, currentBead + 1))}
-                      className="p-3 bg-white hover:bg-orange-50 rounded-lg transition-colors shadow-md border-2 border-orange-300"
-                    >
-                      <Plus size={20} className="text-orange-600" />
-                    </button>
-                  </div>
-                  
-                  {/* Scrollable Number Picker */}
-                  <div className="relative">
-                    <div className="flex overflow-x-auto gap-2 py-4 px-2 bg-white rounded-lg border-2 border-orange-300 scrollbar-thin scrollbar-thumb-orange-400 scrollbar-track-orange-100" style={{ scrollbarWidth: 'thin' }}>
-                      {Array.from({ length: 108 }, (_, i) => i).map((num) => (
-                        <button
-                          key={num}
-                          onClick={() => setCurrentBead(num)}
-                          className={`flex-shrink-0 w-12 h-12 rounded-lg font-bold transition-all ${
-                            currentBead === num
-                              ? 'bg-gradient-to-r from-orange-500 to-amber-600 text-white shadow-lg scale-110'
-                              : 'bg-orange-100 text-stone-700 hover:bg-orange-200'
-                          }`}
-                        >
-                          {num}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-xs text-stone-500 mt-2 text-center">Scroll horizontally to select bead position (0-107)</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Auto Lap Toggle */}
-              <div className="flex items-center justify-between bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 border-2 border-orange-200">
-                <span className="text-sm font-bold text-stone-700">Auto lap on round finish</span>
-                <button
-                  onClick={() => setAutoLapEnabled(!autoLapEnabled)}
-                  className={`relative w-16 h-8 rounded-full transition-colors shadow-inner ${autoLapEnabled ? 'bg-orange-600' : 'bg-stone-300'}`}
-                >
-                  <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-md transition-transform ${autoLapEnabled ? 'translate-x-8' : 'translate-x-0'}`} />
+      {/* ===================== Settings ===================== */}
+      {showSettings &&
+        createPortal(
+          <div className="fixed inset-0 z-[130] flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="Settings">
+            <div className="absolute inset-0 animate-fadeIn bg-maroon-900/25 backdrop-blur-[2px]" onClick={() => setShowSettings(false)} />
+            <div
+              style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
+              className="relative max-h-[90dvh] w-full animate-rise-in overflow-y-auto rounded-t-[28px] bg-white p-5 sm:max-w-sm sm:rounded-[28px] sm:p-6"
+            >
+              <div className="mb-5 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-maroon-900">Settings</h3>
+                <button type="button" onClick={() => setShowSettings(false)} className="icon-btn" aria-label="Close">
+                  <X size={18} />
                 </button>
               </div>
 
-              {/* Vibration Toggle */}
-              <div className="flex items-center justify-between bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 border-2 border-orange-200">
-                <div className="flex-1">
-                  <span className="text-sm font-bold text-stone-700 block">📳 Vibration feedback</span>
-                  <span className="text-xs text-stone-500">
-                    {vibrationEnabled ? 'Tap each bead to feel vibration' : 'Enable to get haptic feedback'}
-                  </span>
-                </div>
-                <button
-                  onClick={async () => {
-                    if (!vibrationEnabled) {
-                      // Request permission when enabling
-                      const permission = await requestVibrationPermission();
-                      if (permission.granted) {
-                        setVibrationEnabled(true);
-                        // Test with strong vibration pattern
-                        if ('vibrate' in navigator) {
-                          navigator.vibrate([200, 100, 200, 100, 200]);
-                        }
-                        showSuccess('Vibration enabled - You should feel 3 strong pulses');
-                      } else {
-                        showWarning('Vibration Not Available', permission.error || 'Your device does not support vibration');
-                      }
-                    } else {
-                      setVibrationEnabled(false);
-                      showSuccess('Vibration disabled');
-                    }
-                  }}
-                  className={`relative w-16 h-8 rounded-full transition-colors shadow-inner ${vibrationEnabled ? 'bg-orange-600' : 'bg-stone-300'}`}
-                >
-                  <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-md transition-transform ${vibrationEnabled ? 'translate-x-8' : 'translate-x-0'}`} />
-                </button>
-              </div>
-
-              {/* Sound Toggle */}
-              <div className="flex items-center justify-between bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 border-2 border-orange-200">
-                <div className="flex-1">
-                  <span className="text-sm font-bold text-stone-700 block">🔔 Sound on round complete</span>
-                  <span className="text-xs text-stone-500">
-                    {soundEnabled ? 'Bell sound plays after 108 beads' : 'Enable to hear completion sound'}
-                  </span>
-                </div>
-                <button
-                  onClick={() => {
-                    const newState = !soundEnabled;
-                    setSoundEnabled(newState);
-                    if (newState) {
-                      // Test sound when enabling
-                      playRoundCompleteSound();
-                      showSuccess('Sound enabled - You should hear a bell');
-                    } else {
-                      showSuccess('Sound disabled');
-                    }
-                  }}
-                  className={`relative w-16 h-8 rounded-full transition-colors shadow-inner ${soundEnabled ? 'bg-orange-600' : 'bg-stone-300'}`}
-                >
-                  <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-md transition-transform ${soundEnabled ? 'translate-x-8' : 'translate-x-0'}`} />
-                </button>
-              </div>
-
-              {/* Hide Bead Numbers Toggle */}
-              <div className="flex items-center justify-between bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 border-2 border-orange-200">
+              <div className="space-y-5">
                 <div>
-                  <span className="text-sm font-bold text-stone-700 block">🎯 Hide bead numbers</span>
-                  <span className="text-xs text-stone-500">Increase focus during chanting</span>
+                  <p className="text-sm font-semibold text-maroon-900">Daily goal</p>
+                  <p className="mb-2 text-xs text-maroon-900/50">Optional — choose what feels right for you</p>
+                  <div className="flex flex-wrap gap-2">
+                    {[0, 1, 2, 4, 8, 16].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => updateSettings({ goal: n })}
+                        className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${goal === n ? 'bg-brand-500 text-white' : 'bg-sandal-100 text-maroon-800/75'}`}
+                        style={{ minHeight: 0 }}
+                      >
+                        {n === 0 ? 'No goal' : n}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <button
-                  onClick={() => setHideBeadNumbers(!hideBeadNumbers)}
-                  className={`relative w-16 h-8 rounded-full transition-colors shadow-inner ${hideBeadNumbers ? 'bg-orange-600' : 'bg-stone-300'}`}
-                >
-                  <div className={`absolute top-1 left-1 w-6 h-6 bg-white rounded-full shadow-md transition-transform ${hideBeadNumbers ? 'translate-x-8' : 'translate-x-0'}`} />
-                </button>
-              </div>
 
-              {/* Click Area Shape Toggle */}
-              <div>
-                <label className="block text-sm font-bold text-stone-700 mb-3">TAP BUTTON SHAPE</label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => setClickAreaShape('circle')}
-                    className={`p-4 rounded-xl border-2 transition-all ${
-                      clickAreaShape === 'circle'
-                        ? 'bg-gradient-to-r from-orange-500 to-amber-600 text-white border-orange-600 shadow-lg'
-                        : 'bg-white text-stone-700 border-orange-200 hover:border-orange-400'
-                    }`}
-                  >
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center">
-                        <div className="w-8 h-8 rounded-full bg-orange-400"></div>
-                      </div>
-                      <span className="font-bold text-sm">Circle</span>
-                      <span className="text-xs opacity-80">(Default)</span>
-                    </div>
-                  </button>
-                  <button
-                    onClick={() => setClickAreaShape('square')}
-                    className={`p-4 rounded-xl border-2 transition-all ${
-                      clickAreaShape === 'square'
-                        ? 'bg-gradient-to-r from-orange-500 to-amber-600 text-white border-orange-600 shadow-lg'
-                        : 'bg-white text-stone-700 border-orange-200 hover:border-orange-400'
-                    }`}
-                  >
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="w-12 h-12 rounded-2xl bg-orange-100 flex items-center justify-center">
-                        <div className="w-8 h-8 rounded-2xl bg-orange-400"></div>
-                      </div>
-                      <span className="font-bold text-sm">Square</span>
-                      <span className="text-xs opacity-80">(Box shape)</span>
-                    </div>
-                  </button>
+                <div>
+                  <p className="mb-2 text-sm font-semibold text-maroon-900">Beads in one round</p>
+                  <div className="flex gap-2">
+                    {[27, 54, 108].map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => {
+                          updateSettings({ perRound: n });
+                          if (liveRef.current.beads >= n) setLive({ ...liveRef.current, beads: n - 1 });
+                        }}
+                        className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${settings.perRound === n ? 'bg-brand-500 text-white' : 'bg-sandal-100 text-maroon-800/75'}`}
+                        style={{ minHeight: 0 }}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              {/* Action Buttons */}
-              <div className="grid responsive-grid-2 gap-3 pt-4">
-                <button
-                  onClick={handleResetSettings}
-                  className="py-3 bg-stone-200 hover:bg-stone-300 text-stone-700 rounded-xl font-bold transition-all shadow-md border-2 border-stone-300 transform hover:scale-105 active:scale-95"
-                >
-                  RESET TO 0
-                </button>
-                <button
-                  onClick={handleSaveSettings}
-                  className="py-3 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white rounded-xl font-bold transition-all shadow-md transform hover:scale-105 active:scale-95"
-                >
-                  DONE
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Usage Guide Modal */}
-      {showGuideModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden shadow-2xl border-2 border-orange-200 animate-scale-in">
-            <div className="flex items-center justify-between p-6 border-b-2 border-orange-100 bg-gradient-to-r from-orange-50 to-amber-50">
-              <div className="flex items-center gap-3">
-                <Info className="text-orange-600" size={28} />
-                <h2 className="text-xl sm:text-2xl font-bold text-stone-800">How to Use Japa Counter</h2>
-              </div>
-              <button
-                onClick={() => setShowGuideModal(false)}
-                className="p-2 hover:bg-orange-100 rounded-lg transition-colors"
-              >
-                <X size={24} className="text-stone-600" />
-              </button>
-            </div>
-
-            {/* Language Tabs */}
-            <div className="flex border-b-2 border-orange-100 bg-orange-50">
-              <button
-                onClick={() => setGuideLanguage('en')}
-                className={`flex-1 py-3 px-4 font-bold transition-colors ${
-                  guideLanguage === 'en'
-                    ? 'bg-white text-orange-600 border-b-4 border-orange-600'
-                    : 'text-stone-600 hover:bg-orange-100'
-                }`}
-              >
-                🇬🇧 English
-              </button>
-              <button
-                onClick={() => setGuideLanguage('hi')}
-                className={`flex-1 py-3 px-4 font-bold transition-colors ${
-                  guideLanguage === 'hi'
-                    ? 'bg-white text-orange-600 border-b-4 border-orange-600'
-                    : 'text-stone-600 hover:bg-orange-100'
-                }`}
-              >
-                🇮🇳 हिंदी
-              </button>
-              <button
-                onClick={() => setGuideLanguage('te')}
-                className={`flex-1 py-3 px-4 font-bold transition-colors ${
-                  guideLanguage === 'te'
-                    ? 'bg-white text-orange-600 border-b-4 border-orange-600'
-                    : 'text-stone-600 hover:bg-orange-100'
-                }`}
-              >
-                🇮🇳 తెలుగు
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto max-h-[calc(85vh-180px)] space-y-6">
-              {guideLanguage === 'en' && (
-                <>
-                  <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-5 border-2 border-orange-200">
-                    <h3 className="text-lg font-bold text-orange-600 mb-3 flex items-center gap-2">
-                      📿 BEADS Counter
-                    </h3>
-                    <ul className="space-y-2 text-stone-700">
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span><strong>Web (Desktop):</strong> Click once to open settings and configure your position. Double-click to reset beads to 0 and rounds to 0.</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span><strong>Mobile (Touch):</strong> Tap once to open settings. Long press to reset beads to 0 and rounds to 0.</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span><strong>Settings:</strong> Set completed rounds (0+) and current bead position (0-107). Scroll through bead numbers for quick selection.</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span><strong>Display Format:</strong> Shows as 000:000 (Rounds:Beads). Example: 002:025 means 2 complete rounds, currently at bead 25.</span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-5 border-2 border-orange-200">
-                    <h3 className="text-lg font-bold text-orange-600 mb-3 flex items-center gap-2">
-                      ⏱️ TIMER
-                    </h3>
-                    <ul className="space-y-2 text-stone-700">
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span><strong>Web (Desktop):</strong> Click once to start/pause timer. Double-click to reset timer to 00:00:00.</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span><strong>Mobile (Touch):</strong> Tap once to start/pause timer. Long press to reset timer to 00:00:00.</span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-5 border-2 border-orange-200">
-                    <h3 className="text-lg font-bold text-orange-600 mb-3 flex items-center gap-2">
-                      🎯 TAP BUTTON
-                    </h3>
-                    <ul className="space-y-2 text-stone-700">
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span>Tap the large circular button in the center to increment bead count.</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span>When you complete 108 beads, it automatically increases round count and resets beads to 0.</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span>The display shows remaining beads in the current round.</span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-5 border-2 border-green-200">
-                    <h3 className="text-lg font-bold text-green-600 mb-3 flex items-center gap-2">
-                      💾 Saving Sessions
-                    </h3>
-                    <p className="text-stone-700">
-                      Click "Save Session" button to save your chanting progress to history. View your past sessions and track your spiritual journey over time!
-                    </p>
-                  </div>
-                </>
-              )}
-
-              {guideLanguage === 'hi' && (
-                <>
-                  <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-5 border-2 border-orange-200">
-                    <h3 className="text-lg font-bold text-orange-600 mb-3 flex items-center gap-2">
-                      📿 मनके काउंटर
-                    </h3>
-                    <ul className="space-y-2 text-stone-700">
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span><strong>वेब (डेस्कटॉप):</strong> सेटिंग खोलने और अपनी स्थिति कॉन्फ़िगर करने के लिए एक बार क्लिक करें। मनकों को 0 और राउंड को 0 पर रीसेट करने के लिए डबल-क्लिक करें।</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span><strong>मोबाइल (टच):</strong> सेटिंग खोलने के लिए एक बार टैप करें। मनकों को 0 और राउंड को 0 पर रीसेट करने के लिए लंबा दबाएं।</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span><strong>सेटिंग्स:</strong> पूर्ण राउंड (0+) और वर्तमान मनका स्थिति (0-107) सेट करें। त्वरित चयन के लिए मनका संख्याओं को स्क्रॉल करें।</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span><strong>प्रदर्शन प्रारूप:</strong> 000:000 (राउंड:मनके) के रूप में दिखाता है। उदाहरण: 002:025 का मतलब 2 पूर्ण राउंड, वर्तमान में मनका 25 पर।</span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-5 border-2 border-orange-200">
-                    <h3 className="text-lg font-bold text-orange-600 mb-3 flex items-center gap-2">
-                      ⏱️ टाइमर
-                    </h3>
-                    <ul className="space-y-2 text-stone-700">
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span><strong>वेब (डेस्कटॉप):</strong> टाइमर शुरू/रोकने के लिए एक बार क्लिक करें। टाइमर को 00:00:00 पर रीसेट करने के लिए डबल-क्लिक करें।</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span><strong>मोबाइल (टच):</strong> टाइमर शुरू/रोकने के लिए एक बार टैप करें। टाइमर को 00:00:00 पर रीसेट करने के लिए लंबा दबाएं।</span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-5 border-2 border-orange-200">
-                    <h3 className="text-lg font-bold text-orange-600 mb-3 flex items-center gap-2">
-                      🎯 टैप बटन
-                    </h3>
-                    <ul className="space-y-2 text-stone-700">
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span>मनका गिनती बढ़ाने के लिए केंद्र में बड़े गोलाकार बटन को टैप करें।</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span>जब आप 108 मनके पूरे करते हैं, तो यह स्वचालित रूप से राउंड गिनती बढ़ाता है और मनकों को 0 पर रीसेट करता है।</span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-5 border-2 border-green-200">
-                    <h3 className="text-lg font-bold text-green-600 mb-3 flex items-center gap-2">
-                      💾 सत्र सहेजना
-                    </h3>
-                    <p className="text-stone-700">
-                      अपनी जप प्रगति को इतिहास में सहेजने के लिए "Save Session" बटन पर क्लिक करें। अपने पिछले सत्र देखें और समय के साथ अपनी आध्यात्मिक यात्रा को ट्रैक करें!
-                    </p>
-                  </div>
-                </>
-              )}
-
-              {guideLanguage === 'te' && (
-                <>
-                  <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-5 border-2 border-orange-200">
-                    <h3 className="text-lg font-bold text-orange-600 mb-3 flex items-center gap-2">
-                      📿 పూసల కౌంటర్
-                    </h3>
-                    <ul className="space-y-2 text-stone-700">
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span><strong>వెబ్ (డెస్క్‌టాప్):</strong> సెట్టింగ్‌లను తెరవడానికి మరియు మీ స్థానాన్ని కాన్ఫిగర్ చేయడానికి ఒకసారి క్లిక్ చేయండి। పూసలను 0కి మరియు రౌండ్‌లను 0కి రీసెట్ చేయడానికి డబుల్-క్లిక్ చేయండి।</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span><strong>మొబైల్ (టచ్):</strong> సెట్టింగ్‌లను తెరవడానికి ఒకసారి టాప్ చేయండి। పూసలను 0కి మరియు రౌండ్‌లను 0కి రీసెట్ చేయడానికి ఎక్కువసేపు నొక్కి ఉంచండి।</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span><strong>సెట్టింగ్‌లు:</strong> పూర్తయిన రౌండ్‌లు (0+) మరియు ప్రస్తుత పూస స్థానం (0-107) సెట్ చేయండి। త్వరిత ఎంపిక కోసం పూస సంఖ్యలను స్క్రోల్ చేయండి।</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span><strong>ప్రదర్శన ఫార్మాట్:</strong> 000:000 (రౌండ్‌లు:పూసలు) గా చూపిస్తుంది। ఉదాహరణ: 002:025 అంటే 2 పూర్తి రౌండ్‌లు, ప్రస్తుతం 25వ పూసలో ఉన్నారు.</span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-5 border-2 border-orange-200">
-                    <h3 className="text-lg font-bold text-orange-600 mb-3 flex items-center gap-2">
-                      ⏱️ టైమర్
-                    </h3>
-                    <ul className="space-y-2 text-stone-700">
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span><strong>వెబ్ (డెస్క్‌టాప్):</strong> టైమర్‌ను ప్రారంభించడానికి/పాజ్ చేయడానికి ఒకసారి క్లిక్ చేయండి। టైమర్‌ను 00:00:00కి రీసెట్ చేయడానికి డబుల్-క్లిక్ చేయండి।</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span><strong>మొబైల్ (టచ్):</strong> టైమర్‌ను ప్రారంభించడానికి/పాజ్ చేయడానికి ఒకసారి టాప్ చేయండి। టైమర్‌ను 00:00:00కి రీసెట్ చేయడానికి ఎక్కువసేపు నొక్కి ఉంచండి।</span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-5 border-2 border-orange-200">
-                    <h3 className="text-lg font-bold text-orange-600 mb-3 flex items-center gap-2">
-                      🎯 టాప్ బటన్
-                    </h3>
-                    <ul className="space-y-2 text-stone-700">
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span>పూస లెక్కను పెంచడానికి మధ్యలో ఉన్న పెద్ద వృత్తాకార బటన్‌ను టాప్ చేయండి।</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-orange-600 font-bold">•</span>
-                        <span>మీరు 108 పూసలను పూర్తి చేసినప్పుడు, ఇది స్వయంచాలకంగా రౌండ్ లెక్కను పెంచుతుంది మరియు పూసలను 0కి రీసెట్ చేస్తుంది।</span>
-                      </li>
-                    </ul>
-                  </div>
-
-                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-5 border-2 border-green-200">
-                    <h3 className="text-lg font-bold text-green-600 mb-3 flex items-center gap-2">
-                      💾 సెషన్‌లను సేవ్ చేయడం
-                    </h3>
-                    <p className="text-stone-700">
-                      మీ జపం పురోగతిని చరిత్రలో సేవ్ చేయడానికి "Save Session" బటన్‌పై క్లిక్ చేయండి। మీ గత సెషన్‌లను చూడండి మరియు కాలక్రమేణా మీ ఆధ్యాత్మిక ప్రయాణాన్ని ట్రాక్ చేయండి!
-                    </p>
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="p-4 border-t-2 border-orange-100 bg-gradient-to-r from-orange-50 to-amber-50 text-center">
-              <button
-                onClick={() => setShowGuideModal(false)}
-                className="px-8 py-3 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 text-white rounded-xl font-bold transition-all shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
-              >
-                {guideLanguage === 'en' ? 'Got It! 🙏' : guideLanguage === 'hi' ? 'समझ गया! 🙏' : 'అర్థమైంది! 🙏'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* History Panel */}
-      {showHistory && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden shadow-2xl border-2 border-orange-200 animate-scale-in">
-            <div className="flex items-center justify-between p-6 border-b-2 border-orange-100 bg-gradient-to-r from-orange-50 to-amber-50">
-              <h2 className="text-xl sm:text-2xl font-bold text-stone-800 flex items-center gap-2">
-                📅 Session History
-              </h2>
-              <button
-                onClick={() => setShowHistory(false)}
-                className="p-2 hover:bg-orange-100 rounded-lg transition-colors"
-              >
-                <X size={24} className="text-stone-600" />
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto max-h-[calc(85vh-100px)]">
-              {sessions.length === 0 ? (
-                <div className="text-center py-16 text-stone-500">
-                  <Calendar size={64} className="mx-auto mb-4 opacity-30" />
-                  <p className="text-lg font-semibold mb-2">No sessions yet</p>
-                  <p className="text-sm">Complete a round and save your session!</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {sessions.map((session) => (
-                    <div
-                      key={session.id}
-                      className="bg-gradient-to-r from-orange-50 to-amber-50 rounded-xl p-4 sm:p-5 border-2 border-orange-200 hover:border-orange-300 hover:shadow-lg transition-all"
-                    >
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
-                        <div className="flex items-center gap-4">
-                          <div className="text-center">
-                            <div className="text-lg font-bold text-orange-600">{session.date}</div>
-                            <div className="text-xs text-stone-500">{session.startTime}</div>
-                          </div>
-                          <div className="h-12 w-px bg-orange-300" />
-                          <div>
-                            <div className="text-sm text-stone-500">Completed</div>
-                            <div className="text-xl font-bold text-stone-800">{session.rounds} rounds</div>
-                          </div>
-                        </div>
-                        <div className="text-left sm:text-right">
-                          <div className="text-sm text-stone-500">Duration</div>
-                          <div className="text-xl font-bold text-stone-800">{Math.floor(session.duration / 60)}m</div>
-                        </div>
-                      </div>
-                      
-                      {/* Progress Bar */}
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 bg-orange-200 rounded-full h-3 overflow-hidden">
-                          <div
-                            className="bg-gradient-to-r from-orange-500 to-amber-600 h-full rounded-full transition-all duration-500"
-                            style={{ width: `${Math.min(getCompletionPercentage(session), 100)}%` }}
-                          />
-                        </div>
-                        <span className="text-sm text-stone-600 font-bold min-w-[3.5rem] text-right">
-                          {getCompletionPercentage(session)}%
-                        </span>
-                      </div>
+                <div className="space-y-3 rounded-2xl bg-sandal-50 p-4">
+                  {[
+                    { key: 'vibrate' as const, label: 'Vibrate', Icon: Vibrate },
+                    { key: 'sound' as const, label: 'Bell after each round', Icon: Bell },
+                  ].map(({ key, label, Icon }) => (
+                    <div key={key} className="flex items-center justify-between gap-3">
+                      <span className="flex items-center gap-2.5 text-sm font-medium text-maroon-900/80">
+                        <Icon size={16} className="text-brand-500" /> {label}
+                      </span>
+                      <Switch on={settings[key]} onChange={(v) => updateSettings({ [key]: v })} label={label} />
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
-      <style>{`
-        @keyframes fade-in {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        @keyframes scale-in {
-          from { transform: scale(0.95); opacity: 0; }
-          to { transform: scale(1); opacity: 1; }
-        }
-        .animate-fade-in {
-          animation: fade-in 0.2s ease-out;
-        }
-        .animate-scale-in {
-          animation: scale-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-      `}</style>
+                <div className="space-y-2 rounded-2xl bg-sandal-50 p-4">
+                  <p className="text-sm font-semibold text-maroon-900">Change the count</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-maroon-900/70">Rounds</span>
+                    <MiniStepper value={live.rounds} max={200} onChange={(v) => setLive({ ...liveRef.current, rounds: v, laps: liveRef.current.laps.slice(0, v) })} />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-maroon-900/70">Beads</span>
+                    <MiniStepper value={live.beads} max={settings.perRound - 1} onChange={(v) => setLive({ ...liveRef.current, beads: v })} />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {confirmReset ? (
+                    <>
+                      <span className="flex-1 text-sm font-medium text-rose-700">Clear the count?</span>
+                      <button type="button" onClick={() => setConfirmReset(false)} className="btn-ghost btn-sm">
+                        No
+                      </button>
+                      <button type="button" onClick={reset} className="btn-sm inline-flex items-center gap-1.5 rounded-xl bg-rose-500 px-3 font-semibold text-white">
+                        Yes, clear
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" onClick={() => setConfirmReset(true)} disabled={!hasCount} className="btn-ghost btn-sm text-rose-600 disabled:opacity-30">
+                        <RotateCcw size={14} /> Start again
+                      </button>
+                      <div className="flex-1" />
+                      <button type="button" onClick={() => setShowSettings(false)} className="btn-primary btn-sm">
+                        Done
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

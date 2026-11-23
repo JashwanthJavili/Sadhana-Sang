@@ -300,23 +300,34 @@ export const reviewSlokaRequest = async (
       reviewedAt: Date.now(),
     });
 
-    // If approved, add to slokas collection
+    // If approved, publish it
     if (status === 'approved') {
-      const slokasRef = ref(db, 'slokas');
-      const newSlokaRef = push(slokasRef);
-      
-      await set(newSlokaRef, {
-        title: request.title,
-        sanskrit: request.sanskrit,
-        transliteration: request.transliteration,
-        translation: request.translation,
-        category: request.category,
-        purport: request.purport || '',
-        reference: request.reference || '',
-        contributedBy: request.requesterName,
-        contributorId: request.requesterId,
-        createdAt: Date.now(),
-      });
+      const translation = /^translation:(hi|te):(.+)$/.exec(request.reference || '');
+      if (translation) {
+        // a Hindi / Telugu version of an existing mantra
+        await set(ref(db, `slokas/${translation[2]}/translations/${translation[1]}`), {
+          mantra: request.sanskrit,
+          meaning: request.translation || '',
+          by: request.requesterName,
+          at: Date.now(),
+        });
+      } else {
+        // a new mantra — stored with the fields the Mantras page reads
+        const slokasRef = ref(db, 'slokas');
+        const newSlokaRef = push(slokasRef);
+        await set(newSlokaRef, {
+          id: newSlokaRef.key,
+          title: request.title,
+          mantra: request.sanskrit,
+          meaning: request.translation || '',
+          category: request.category || '',
+          addedBy: request.requesterId,
+          addedByName: request.requesterName,
+          timestamp: Date.now(),
+          likes: 0,
+          likedBy: [],
+        });
+      }
     }
 
     // Create user notification

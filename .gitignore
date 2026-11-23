@@ -32,3 +32,9 @@ firebase-debug.log
 *.njsproj
 *.sln
 *.sw?
+
+# Visual Studio
+.vs/
+
+# Playwright screenshots
+.playwright-mcp/

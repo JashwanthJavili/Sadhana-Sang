@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, Check, CheckCheck, Calendar, BookOpen, X, UserPlus } from 'lucide-react';
+import { Bell, CheckCheck, CalendarDays, Music2, UserPlus, Megaphone, X, CheckCircle2, XCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -9,217 +9,180 @@ import {
   UserNotification,
 } from '../services/notifications';
 
+const timeAgo = (ts: number) => {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return 'Just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `${d}d ago`;
+  return new Date(ts).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+};
+
+const iconFor = (n: UserNotification) => {
+  if (n.type === 'connection_request') return { Icon: UserPlus, tone: 'bg-sky-50 text-sky-600' };
+  if (n.type === 'broadcast') return { Icon: Megaphone, tone: 'bg-brand-50 text-brand-600' };
+  if (n.type.endsWith('approved')) return { Icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-600' };
+  if (n.type.endsWith('rejected')) return { Icon: XCircle, tone: 'bg-rose-50 text-rose-600' };
+  if (n.type.includes('festival')) return { Icon: CalendarDays, tone: 'bg-indigo-50 text-indigo-600' };
+  return { Icon: Music2, tone: 'bg-violet-50 text-violet-600' };
+};
+
 export default function NotificationBell() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<'all' | 'unread'>('all');
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!user || user.uid === 'guest') return;
-
-    const unsubscribe = getUserNotifications(user.uid, (notifs) => {
-      setNotifications(notifs);
-      const unread = notifs.filter((n) => !n.read).length;
-      setUnreadCount(unread);
-    });
-
+    const unsubscribe = getUserNotifications(user.uid, (notifs) => setNotifications(notifs));
     return unsubscribe;
   }, [user]);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowDropdown(false);
-      }
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setOpen(false);
     };
-
-    if (showDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
     };
-  }, [showDropdown]);
+  }, [open]);
 
-  const handleNotificationClick = async (notification: UserNotification) => {
-    if (!user) return;
-    
-    if (!notification.read) {
-      await markNotificationAsRead(user.uid, notification.id);
-    }
+  if (!user || user.uid === 'guest') return null;
 
-    // Navigate based on notification type
-    if (notification.type === 'connection_request') {
-      setShowDropdown(false);
+  const unreadCount = notifications.filter((n) => !n.read).length;
+  const list = tab === 'unread' ? notifications.filter((n) => !n.read) : notifications;
+
+  const handleClick = async (n: UserNotification) => {
+    if (!n.read) await markNotificationAsRead(user.uid, n.id);
+    if (n.type === 'connection_request') {
+      setOpen(false);
       navigate('/connection-requests');
     }
   };
 
-  const handleMarkAllAsRead = async () => {
-    if (!user) return;
-    await markAllNotificationsAsRead(user.uid);
-  };
-
-  const getNotificationIcon = (type: string) => {
-    if (type === 'connection_request') {
-      return <UserPlus className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />;
-    }
-    if (type === 'broadcast') {
-      return <Bell className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600" />;
-    }
-    if (type.includes('festival')) {
-      return <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />;
-    }
-    return <BookOpen className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />;
-  };
-
-  const getNotificationColor = (type: string) => {
-    if (type === 'connection_request') {
-      return 'bg-blue-100 border-2 border-blue-300';
-    }
-    if (type === 'broadcast') {
-      return 'bg-orange-100 border-2 border-orange-300';
-    }
-    if (type.includes('approved')) {
-      return 'bg-green-100 border-2 border-green-300';
-    }
-    return 'bg-red-100 border-2 border-red-300';
-  };
-
-  if (!user || user.uid === 'guest') return null;
-
   return (
     <div className="relative" ref={dropdownRef}>
-      {/* Bell Icon Button */}
       <button
-        onClick={() => setShowDropdown(!showDropdown)}
-        className="relative w-14 h-14 bg-gradient-to-r from-orange-600 to-orange-700 hover:shadow-xl rounded-full flex items-center justify-center transition-shadow duration-300 shadow-lg"
-        aria-label="Notifications"
+        onClick={() => setOpen((o) => !o)}
+        className={`header-icon-btn ${open ? 'bg-white text-maroon-900 shadow-sm ring-1 ring-sandal-300/70' : ''}`}
+        aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+        title="Notifications"
       >
-        <Bell size={24} className="text-white" />
+        <Bell size={19} />
         {unreadCount > 0 && (
-          <span className="absolute -top-1 -right-1 min-w-[22px] h-6 bg-red-600 text-white text-xs font-bold rounded-full flex items-center justify-center border-2 border-orange-600 shadow-lg">
+          <span className="absolute right-1.5 top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand-600 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-sandal-50">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
-      {/* Dropdown */}
-      {showDropdown && (
-        <>
-          {/* Backdrop - Desktop only */}
-          <div 
-            className="hidden md:block fixed inset-0 bg-black/50 backdrop-blur-sm z-[9998]"
-            onClick={() => setShowDropdown(false)}
-          />
-          
-          {/* Notification Panel - Unified with responsive positioning */}
-          <div className="absolute top-12 right-0 w-[95vw] sm:w-[500px] md:fixed md:top-1/2 md:left-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[750px] lg:w-[850px] md:right-auto bg-white rounded-xl shadow-2xl border-2 border-orange-200 z-[9999] max-h-[calc(100vh-80px)] md:max-h-[90vh] overflow-hidden flex flex-col">
-            {/* Header */}
-            <div className="p-4 md:p-6 border-b-2 border-orange-200 flex items-center justify-between bg-gradient-to-r from-orange-500 to-amber-500">
-              <div>
-                <h3 className="font-bold text-white text-base md:text-xl flex items-center gap-2">
-                  <Bell className="w-5 md:w-6 md:h-6 h-5" />
-                  Notifications
-                </h3>
-                <p className="text-xs md:text-sm text-orange-100 mt-0.5">
-                  {unreadCount} unread message{unreadCount !== 1 ? 's' : ''}
-                </p>
-              </div>
-              <div className="flex items-center gap-2 md:gap-3">
-                {unreadCount > 0 && (
-                  <button
-                    onClick={handleMarkAllAsRead}
-                    className="text-xs md:text-sm bg-white text-orange-600 hover:bg-orange-50 font-semibold px-3 md:px-4 py-1.5 md:py-2 rounded-lg flex items-center gap-1 md:gap-2 transition-all shadow-md"
-                  >
-                    <CheckCheck size={16} className="md:w-5 md:h-5" />
-                    <span className="hidden sm:inline">Mark all read</span>
-                  </button>
-                )}
-                <button
-                  onClick={() => setShowDropdown(false)}
-                  className="p-1.5 md:p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all"
-                >
-                  <X className="w-4 md:w-5 md:h-5 h-4 text-white" />
-                </button>
-              </div>
+      {open && (
+        <div className="fixed inset-x-3 top-[68px] z-50 flex max-h-[calc(100dvh-90px)] flex-col overflow-hidden rounded-3xl bg-white shadow-[0_24px_60px_-20px_rgba(67,27,17,0.4)] ring-1 ring-sandal-300/70 animate-scale-in sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:max-h-[min(560px,calc(100dvh-100px))] sm:w-[400px]">
+          {/* Header */}
+          <div className="flex items-center justify-between gap-3 px-5 pb-3 pt-4">
+            <div>
+              <h3 className="text-base font-semibold text-maroon-900">Notifications</h3>
+              <p className="text-xs text-maroon-900/50">{unreadCount ? `${unreadCount} unread` : 'You are all caught up'}</p>
             </div>
-
-            {/* Notifications List */}
-            <div className="overflow-y-auto max-h-[calc(100vh-200px)] md:max-h-[calc(90vh-130px)]">
-              {notifications.length === 0 ? (
-                <div className="p-12 md:p-16 text-center text-gray-500">
-                  <Bell className="w-16 md:w-20 md:h-20 h-16 mx-auto mb-3 md:mb-4 text-gray-300" />
-                  <p className="text-base md:text-lg font-semibold text-gray-700">No notifications yet</p>
-                  <p className="text-sm text-gray-500 mt-1 md:mt-2">You'll see updates here</p>
-                </div>
-              ) : (
-                <div className="divide-y-2 divide-gray-100">
-                  {notifications.map((notification) => (
-                    <div
-                      key={notification.id}
-                      onClick={() => handleNotificationClick(notification)}
-                      className={`p-4 md:p-6 hover:bg-orange-50 cursor-pointer transition-all ${
-                        !notification.read ? 'bg-blue-50 border-l-4 border-blue-500' : 'border-l-4 border-transparent'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3 md:gap-5">
-                        <div
-                          className={`p-2.5 md:p-3.5 rounded-xl flex-shrink-0 ${getNotificationColor(
-                            notification.type
-                          )}`}
-                        >
-                          {getNotificationIcon(notification.type)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start justify-between gap-2 md:gap-3">
-                            <h4
-                              className={`text-sm md:text-lg font-bold ${
-                                !notification.read ? 'text-gray-900' : 'text-gray-700'
-                              }`}
-                            >
-                              {notification.title}
-                            </h4>
-                            {!notification.read && (
-                              <div className="w-2.5 md:w-3 md:h-3 h-2.5 bg-blue-500 rounded-full flex-shrink-0 mt-1 md:mt-1.5 animate-pulse"></div>
-                            )}
-                          </div>
-                          <p className="text-sm md:text-base text-gray-700 mt-1.5 md:mt-2 leading-relaxed">
-                            {notification.message}
-                          </p>
-                          {notification.adminComment && (
-                            <div className="mt-3 md:mt-4 p-3 md:p-4 bg-amber-50 border-l-4 border-amber-400 rounded-lg">
-                              <p className="text-xs md:text-sm text-gray-800">
-                                <span className="font-bold text-amber-700">💬 Admin Note:</span>{' '}
-                                {notification.adminComment}
-                              </p>
-                            </div>
-                          )}
-                          <div className="flex items-center justify-between mt-3 md:mt-4">
-                            <p className="text-xs md:text-sm text-gray-500 flex items-center gap-1 md:gap-1.5">
-                              <Calendar className="w-3 md:w-4 md:h-4 h-3" />
-                              {new Date(notification.timestamp).toLocaleString()}
-                            </p>
-                            {!notification.read && (
-                              <span className="text-xs font-semibold text-blue-600 bg-blue-100 px-2 md:px-3 py-1 md:py-1.5 rounded-full">
-                                New
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+            <div className="flex items-center gap-1">
+              {unreadCount > 0 && (
+                <button
+                  onClick={() => markAllNotificationsAsRead(user.uid)}
+                  className="inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-brand-700 transition hover:bg-brand-50"
+                  style={{ minHeight: 0 }}
+                >
+                  <CheckCheck size={14} /> Mark all read
+                </button>
               )}
+              <button
+                onClick={() => setOpen(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-xl text-maroon-900/40 transition hover:bg-sandal-100 hover:text-maroon-900 sm:hidden"
+                aria-label="Close"
+                style={{ minHeight: 0 }}
+              >
+                <X size={17} />
+              </button>
             </div>
           </div>
-        </>
+
+          {/* Tabs */}
+          <div className="px-5 pb-3">
+            <div className="inline-flex rounded-xl bg-sandal-100 p-1">
+              {(['all', 'unread'] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTab(t)}
+                  className={`rounded-lg px-3 py-1 text-xs font-semibold capitalize transition ${
+                    tab === t ? 'bg-white text-maroon-900 shadow-sm' : 'text-maroon-900/50 hover:text-maroon-900'
+                  }`}
+                  style={{ minHeight: 0 }}
+                >
+                  {t}
+                  {t === 'unread' && unreadCount > 0 && <span className="ml-1 text-brand-600">{unreadCount}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* List */}
+          <div className="flex-1 overflow-y-auto border-t border-sandal-200/70">
+            {list.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 px-6 py-14 text-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sandal-100 text-maroon-900/35">
+                  <Bell size={22} />
+                </span>
+                <p className="text-sm font-medium text-maroon-900">{tab === 'unread' ? 'No unread notifications' : 'No notifications yet'}</p>
+                <p className="text-xs text-maroon-900/45">Updates from the community will appear here.</p>
+              </div>
+            ) : (
+              <ul className="divide-y divide-sandal-200/60">
+                {list.map((n) => {
+                  const { Icon, tone } = iconFor(n);
+                  return (
+                    <li key={n.id}>
+                      <button
+                        onClick={() => handleClick(n)}
+                        className={`flex w-full items-start gap-3 px-5 py-3.5 text-left transition hover:bg-sandal-50 ${!n.read ? 'bg-brand-50/40' : ''}`}
+                        style={{ minHeight: 0 }}
+                      >
+                        <span className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone}`}>
+                          <Icon size={17} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-start justify-between gap-2">
+                            <span className={`text-sm leading-snug ${n.read ? 'font-medium text-maroon-900/75' : 'font-semibold text-maroon-900'}`}>
+                              {n.title}
+                            </span>
+                            <span className="shrink-0 pt-0.5 text-[11px] text-maroon-900/40">{timeAgo(n.timestamp)}</span>
+                          </span>
+                          <span className="mt-0.5 block text-[13px] leading-relaxed text-maroon-900/60">{n.message}</span>
+                          {n.adminComment && (
+                            <span className="mt-2 block rounded-xl bg-sandal-100 px-3 py-2 text-xs text-maroon-900/70">
+                              <span className="font-semibold text-maroon-800">Note: </span>
+                              {n.adminComment}
+                            </span>
+                          )}
+                        </span>
+                        {!n.read && <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-brand-500" />}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

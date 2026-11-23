@@ -1,5 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import {
+  User,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
+  updateProfile,
+} from 'firebase/auth';
 import { auth, googleProvider, db } from '../services/firebase';
 import { ref, update } from 'firebase/database';
 import { setUserOnlineStatus } from '../services/chat';
@@ -9,6 +18,9 @@ interface AuthContextType {
   loading: boolean;
   isNewUser: boolean;
   signInWithGoogle: () => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (name: string, email: string, password: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   loginAsGuest: () => void;
   logout: () => Promise<void>;
 }
@@ -122,6 +134,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const clearGuestData = () => {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('sl_guest_')) keys.push(key);
+    }
+    keys.forEach((k) => localStorage.removeItem(k));
+  };
+
+  const signInWithEmail = async (email: string, password: string) => {
+    clearGuestData();
+    const result = await signInWithEmailAndPassword(auth, email.trim(), password);
+    setIsNewUser(false);
+    if (result.user.email) {
+      await update(ref(db, `users/${result.user.uid}`), { email: result.user.email });
+    }
+  };
+
+  const signUpWithEmail = async (name: string, email: string, password: string) => {
+    clearGuestData();
+    const result = await createUserWithEmailAndPassword(auth, email.trim(), password);
+    const displayName = name.trim();
+    if (displayName) {
+      await updateProfile(result.user, { displayName });
+    }
+    await update(ref(db, `users/${result.user.uid}`), {
+      email: result.user.email || email.trim(),
+      displayName,
+      photoURL: '',
+    });
+    setIsNewUser(true);
+  };
+
+  const resetPassword = async (email: string) => {
+    await sendPasswordResetEmail(auth, email.trim());
+  };
+
   const loginAsGuest = () => {
     // Create a mock user object for guest mode
     const guestUser = {
@@ -176,7 +225,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, isNewUser, signInWithGoogle, loginAsGuest, logout }}>
+    <AuthContext.Provider value={{ user, loading, isNewUser, signInWithGoogle, signInWithEmail, signUpWithEmail, resetPassword, loginAsGuest, logout }}>
       {children}
     </AuthContext.Provider>
   );

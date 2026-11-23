@@ -125,6 +125,15 @@
       ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
       ".indexOn": ["date"]
     },
+    "ekadashi": {
+      ".read": "auth != null",
+      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
+      "observances": {
+        "$locationId": {
+          ".indexOn": ["fastDate", "status"]
+        }
+      }
+    },
     "festivalRequests": {
       ".read": "auth != null",
       ".write": "auth != null",

@@ -15,18 +15,9 @@ import {
 } from '../services/chat';
 import { removeConnection } from '../services/connections';
 import { decryptMessage, isEncrypted } from '../services/encryption';
-import {
-  ArrowLeft,
-  Send,
-  Smile,
-  Image as ImageIcon,
-  MoreVertical,
-  Wifi,
-  WifiOff,
-  Quote,
-  Lock,
-  MessageCircle,
-} from 'lucide-react';
+import { ArrowLeft, Send, Smile, MoreVertical, Lock, MessageCircle, X, CornerUpLeft } from 'lucide-react';
+import Avatar from '../components/Avatar';
+import { PageLoader } from '../components/LoadingScreen';
 import UserProfileModal from '../components/UserProfileModal';
 import ChatOptionsMenu from '../components/ChatOptionsMenu';
 import { useToast } from '../contexts/ToastContext';
@@ -246,294 +237,189 @@ const ChatWindow: React.FC = () => {
 
   if (!user) return null;
 
+  const dayLabel = (ts: number) =>
+    new Date(ts).toDateString() === new Date().toDateString()
+      ? 'Today'
+      : new Date(ts).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)] max-w-5xl mx-auto bg-white rounded-2xl shadow-2xl border-2 border-stone-200 overflow-hidden">
-      {/* Chat Header */}
-      <div className="bg-gradient-to-r from-orange-600 to-amber-600 shadow-lg">
-        {/* Encryption Notice Banner */}
-        <div className="bg-green-600/20 backdrop-blur-sm px-4 py-1.5 flex items-center justify-center gap-2 border-b border-white/10">
-          <Lock size={12} className="text-green-100" />
-          <span className="text-xs text-green-50 font-semibold">End-to-end encrypted • Your messages are secure</span>
-        </div>
-        
-        <div className="p-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate('/chats')}
-            className="p-2 hover:bg-white/20 rounded-lg transition-all"
-          >
-            <ArrowLeft className="text-white" size={24} />
-          </button>
-
-          {otherUser ? (
-            <div 
-              onClick={() => setShowProfileModal(true)}
-              className="flex items-center gap-3 cursor-pointer hover:bg-white/10 p-2 rounded-lg transition-all"
-            >
-              <div className="relative">
-                <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
-                  {otherUser.photoURL ? (
-                    <img
-                      src={otherUser.photoURL}
-                      alt={otherUser.userName}
-                      className="w-full h-full rounded-full object-cover"
-                    />
-                  ) : (
-                    <span className="text-xl font-bold text-orange-600">
-                      {otherUser.userName?.charAt(0)?.toUpperCase() || '?'}
-                    </span>
-                  )}
-                </div>
-                <div
-                  className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
-                    otherUser.isOnline ? 'bg-green-500' : 'bg-stone-400'
-                  }`}
-                />
-              </div>
-
-              <div>
-                <h3 className="text-white font-bold text-lg">{otherUser.userName || 'Unknown User'}</h3>
-                <p className="text-orange-100 text-sm flex items-center gap-1">
-                  {otherUser.isOnline ? (
-                    <>
-                      <Wifi size={14} />
-                      Online
-                    </>
-                  ) : (
-                    <>
-                      <WifiOff size={14} />
-                      Offline
-                    </>
-                  )}
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-white/20 rounded-full animate-pulse" />
-              <div>
-                <div className="h-5 w-32 bg-white/20 rounded animate-pulse mb-1" />
-                <div className="h-4 w-20 bg-white/10 rounded animate-pulse" />
-              </div>
-            </div>
-          )}
-        </div>
-
-        <button 
-          onClick={() => setShowOptionsMenu(true)}
-          className="p-2 hover:bg-white/20 rounded-lg transition-all"
-        >
-          <MoreVertical className="text-white" size={24} />
+    <div className="mx-auto flex h-[calc(100dvh-4rem)] max-w-3xl flex-col overflow-hidden bg-sandal-50 sm:h-[calc(100dvh-72px-2rem)] sm:rounded-3xl sm:shadow-card sm:ring-1 sm:ring-sandal-200">
+      {/* Header */}
+      <div className="flex items-center gap-2 border-b border-sandal-200 bg-white px-3 py-2.5 sm:px-4">
+        <button onClick={() => navigate('/chats')} className="icon-btn" aria-label="Back to messages">
+          <ArrowLeft size={20} />
         </button>
-        </div>
-      </div>
 
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gradient-to-b from-orange-50/30 to-white">
-        {loading ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <div className="inline-block animate-spin rounded-full h-16 w-16 border-4 border-orange-600 border-t-transparent mb-4"></div>
-              <p className="text-stone-600 font-medium">Loading messages...</p>
+        {otherUser ? (
+          <button onClick={() => setShowProfileModal(true)} className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl px-1 py-1 text-left transition hover:bg-sandal-50" style={{ minHeight: 0 }}>
+            <span className="relative shrink-0">
+              <span className="block h-10 w-10 overflow-hidden rounded-full ring-2 ring-amber-100">
+                <Avatar src={otherUser.photoURL} name={otherUser.userName} className="h-full w-full" />
+              </span>
+              <span className={`absolute bottom-0 right-0 h-3 w-3 rounded-full ring-2 ring-white ${otherUser.isOnline ? 'bg-emerald-500' : 'bg-stone-300'}`} />
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate text-[15px] font-semibold text-maroon-900">{otherUser.userName || 'Devotee'}</span>
+              <span className={`block text-xs font-medium ${isOtherUserTyping ? 'text-brand-600' : otherUser.isOnline ? 'text-emerald-600' : 'text-maroon-900/45'}`}>
+                {isOtherUserTyping ? 'typing…' : otherUser.isOnline ? 'Online' : 'Offline'}
+              </span>
+            </span>
+          </button>
+        ) : (
+          <div className="flex flex-1 items-center gap-3 px-1">
+            <div className="h-10 w-10 animate-pulse rounded-full bg-sandal-200" />
+            <div className="space-y-1.5">
+              <div className="h-3.5 w-28 animate-pulse rounded bg-sandal-200" />
+              <div className="h-3 w-16 animate-pulse rounded bg-sandal-100" />
             </div>
           </div>
+        )}
+
+        <button onClick={() => setShowOptionsMenu(true)} className="icon-btn" aria-label="Chat options">
+          <MoreVertical size={20} />
+        </button>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 space-y-1.5 overflow-y-auto px-3 py-4 sm:px-6">
+        <div className="mb-3 flex justify-center">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-200">
+            <Lock size={11} /> Messages are private and encrypted
+          </span>
+        </div>
+
+        {loading ? (
+          <PageLoader label="Opening chat…" />
         ) : messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center max-w-md">
-              <div className="bg-gradient-to-br from-orange-100 to-amber-100 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-6 shadow-lg">
-                <MessageCircle size={48} className="text-orange-600" />
-              </div>
-              <h3 className="text-2xl font-bold text-stone-800 mb-3">No messages yet</h3>
-              <p className="text-lg text-orange-600 font-semibold mb-2">🙏 Chant Hare Krishna 🙏</p>
-              <p className="text-stone-600">Start a conversation with {otherUser?.userName || 'this devotee'}</p>
-            </div>
+          <div className="flex h-[55%] flex-col items-center justify-center text-center">
+            <span className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-brand-500">
+              <MessageCircle size={30} />
+            </span>
+            <p className="mt-4 text-base font-semibold text-maroon-900">Say Hare Krishna 🙏</p>
+            <p className="mt-1 text-sm text-maroon-900/55">Start your chat with {otherUser?.userName || 'this devotee'}</p>
           </div>
         ) : (
           <>
-        {messages.map((message, index) => {
-          const isOwnMessage = message.senderId === user.uid;
-          const showDateSeparator =
-            index === 0 ||
-            new Date(messages[index - 1].timestamp).toDateString() !==
-              new Date(message.timestamp).toDateString();
+            {messages.map((message, index) => {
+              const own = message.senderId === user.uid;
+              const newDay = index === 0 || new Date(messages[index - 1].timestamp).toDateString() !== new Date(message.timestamp).toDateString();
+              const grouped = !newDay && messages[index - 1].senderId === message.senderId;
+              return (
+                <div key={message.id}>
+                  {newDay && (
+                    <div className="my-4 flex justify-center">
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-maroon-900/55 ring-1 ring-sandal-200">{dayLabel(message.timestamp)}</span>
+                    </div>
+                  )}
 
-          return (
-            <div key={message.id}>
-              {/* Date Separator */}
-              {showDateSeparator && (
-                <div className="flex items-center justify-center my-6">
-                  <div className="bg-stone-200 text-stone-600 px-4 py-2 rounded-full text-sm font-semibold">
-                    {new Date(message.timestamp).toDateString() === new Date().toDateString()
-                      ? 'Today'
-                      : new Date(message.timestamp).toLocaleDateString('en-US', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: 'numeric',
-                        })}
-                  </div>
-                </div>
-              )}
-
-              {/* Message Bubble */}
-              <div className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
-                <div
-                  className={`max-w-[70%] ${
-                    isOwnMessage ? 'bg-gradient-to-r from-orange-600 to-amber-600 text-white' : 'bg-white border-2 border-stone-200'
-                  } rounded-2xl shadow-md hover:shadow-lg transition-all group`}
-                >
-                  {/* Reply Preview */}
-                  {message.replyTo && (
+                  <div className={`group flex items-end gap-1.5 ${own ? 'flex-row-reverse' : ''} ${grouped ? '' : 'mt-2'}`}>
                     <div
-                      className={`p-3 border-l-4 ${
-                        isOwnMessage ? 'border-white/40 bg-white/10' : 'border-orange-400 bg-orange-50'
-                      } rounded-t-2xl`}
+                      className={`max-w-[80%] overflow-hidden rounded-2xl px-3.5 py-2 shadow-sm sm:max-w-[70%] ${
+                        own ? 'rounded-br-md bg-gradient-to-br from-marigold-400 to-brand-500 text-white' : 'rounded-bl-md bg-white text-maroon-900 ring-1 ring-sandal-200'
+                      }`}
                     >
-                      <p className={`text-xs font-bold ${isOwnMessage ? 'text-white/80' : 'text-orange-600'}`}>
-                        {message.replyTo.senderName}
-                      </p>
-                      <p className={`text-sm ${isOwnMessage ? 'text-white/90' : 'text-stone-600'} truncate`}>
-                        {message.replyTo.text}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Message Content */}
-                  <div className="p-4">
-                    {!isOwnMessage && (
-                      <p className="text-xs font-bold text-orange-600 mb-1">{message.senderName}</p>
-                    )}
-                    <p className={`text-base leading-relaxed whitespace-pre-wrap break-words ${isOwnMessage ? 'text-white' : 'text-stone-900'}`}>
-                      {decryptedMessages.get(message.id) || '🔄 Decrypting...'}
-                    </p>
-                    <div className="flex items-center justify-end gap-2 mt-2">
-                      {/* End-to-End Encryption Indicator */}
-                      <div className={`flex items-center gap-1 ${isOwnMessage ? 'text-white/60' : 'text-stone-400'}`} title="End-to-end encrypted">
-                        <Lock size={10} />
-                      </div>
-                      <span className={`text-xs ${isOwnMessage ? 'text-white/80' : 'text-stone-500'}`}>
-                        {formatTime(message.timestamp)}
-                      </span>
-                      {isOwnMessage && (
-                        <span className="text-xs text-white/80">
-                          {message.read ? '✓✓' : '✓'}
-                        </span>
+                      {message.replyTo && (
+                        <div className={`mb-1.5 rounded-lg border-l-4 px-2.5 py-1.5 ${own ? 'border-white/60 bg-white/20' : 'border-brand-400 bg-amber-50'}`}>
+                          <p className={`text-[11px] font-semibold ${own ? 'text-white' : 'text-brand-600'}`}>{message.replyTo.senderName}</p>
+                          <p className={`truncate text-xs ${own ? 'text-white/90' : 'text-maroon-900/60'}`}>{message.replyTo.text}</p>
+                        </div>
                       )}
+                      <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">{decryptedMessages.get(message.id) || '…'}</p>
+                      <div className={`mt-0.5 flex items-center justify-end gap-1.5 text-[11px] ${own ? 'text-white/85' : 'text-maroon-900/40'}`}>
+                        <span>{new Date(message.timestamp).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</span>
+                        {own && <span aria-label={message.read ? 'Seen' : 'Sent'}>{message.read ? '✓✓' : '✓'}</span>}
+                      </div>
                     </div>
-                  </div>
-
-                  {/* Quick Actions */}
-                  {!isOwnMessage && (
                     <button
-                      onClick={() => setReplyingTo(message)}
-                      className="opacity-0 group-hover:opacity-100 absolute -top-2 right-2 bg-orange-600 text-white p-1 rounded-full shadow-lg hover:bg-orange-700 transition-all"
+                      onClick={() => {
+                        setReplyingTo(message);
+                        messageInputRef.current?.focus();
+                      }}
+                      className="mb-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-maroon-900/40 opacity-0 transition hover:bg-white hover:text-brand-600 group-hover:opacity-100 [@media(hover:none)]:opacity-50"
+                      aria-label="Reply"
+                      style={{ minHeight: 0 }}
                     >
-                      <Quote size={16} />
+                      <CornerUpLeft size={15} />
                     </button>
-                  )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {isOtherUserTyping && (
+              <div className="flex justify-start">
+                <div className="mt-2 rounded-2xl rounded-bl-md bg-white px-4 py-3 shadow-sm ring-1 ring-sandal-200">
+                  <div className="flex gap-1.5">
+                    {[0, 150, 300].map((d) => (
+                      <span key={d} className="h-2 w-2 animate-bounce rounded-full bg-brand-400" style={{ animationDelay: `${d}ms` }} />
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-
-        {/* Typing Indicator */}
-        {isOtherUserTyping && (
-          <div className="flex justify-start">
-            <div className="bg-white border-2 border-stone-200 rounded-2xl px-6 py-4 shadow-md">
-              <div className="flex gap-2">
-                <div className="w-2 h-2 bg-orange-600 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 bg-orange-600 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 bg-orange-600 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
-            </div>
-          </div>
+            )}
+          </>
         )}
-
         <div ref={messagesEndRef} />
-        </>
-        )}
       </div>
 
-      {/* Reply Preview */}
+      {/* Reply preview */}
       {replyingTo && (
-        <div className="px-6 py-3 bg-orange-50 border-t border-orange-200 flex items-center justify-between">
-          <div className="flex-1">
-            <p className="text-xs font-bold text-orange-600">Replying to {replyingTo.senderName}</p>
-            <p className="text-sm text-stone-600 truncate">{replyingTo.text}</p>
+        <div className="flex items-center gap-3 border-t border-sandal-200 bg-white px-4 py-2.5">
+          <div className="min-w-0 flex-1 rounded-lg border-l-4 border-brand-400 bg-amber-50 px-3 py-1.5">
+            <p className="text-[11px] font-semibold text-brand-600">Replying to {replyingTo.senderName}</p>
+            <p className="truncate text-xs text-maroon-900/60">{decryptedMessages.get(replyingTo.id) || replyingTo.text}</p>
           </div>
-          <button
-            onClick={() => setReplyingTo(null)}
-            className="text-stone-400 hover:text-stone-600 p-2"
-          >
-            ✕
+          <button onClick={() => setReplyingTo(null)} className="icon-btn" aria-label="Cancel reply">
+            <X size={17} />
           </button>
         </div>
       )}
 
-      {/* Emoji Picker */}
+      {/* Emoji row */}
       {showEmojiPicker && (
-        <div className="px-6 py-3 bg-white border-t border-stone-200">
-          <div className="flex flex-wrap gap-2">
-            {quickEmojis.map((emoji) => (
-              <button
-                key={emoji}
-                onClick={() => addEmoji(emoji)}
-                className="text-2xl hover:scale-125 transition-transform p-2 hover:bg-orange-50 rounded-lg"
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
+        <div className="flex gap-1 overflow-x-auto border-t border-sandal-200 bg-white px-3 py-2 scrollbar-none">
+          {quickEmojis.map((emoji) => (
+            <button key={emoji} onClick={() => addEmoji(emoji)} className="shrink-0 rounded-xl p-2 text-2xl transition hover:bg-amber-50 active:scale-90" style={{ minHeight: 0 }}>
+              {emoji}
+            </button>
+          ))}
         </div>
       )}
 
-      {/* Message Input */}
-      <div className="p-4 bg-white border-t-2 border-stone-200">
-        <div className="flex items-end gap-3">
-          <button
-            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            className={`p-3 rounded-lg transition-all ${
-              showEmojiPicker ? 'bg-orange-600 text-white' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
-            }`}
-          >
-            <Smile size={24} />
-          </button>
-
-          <div className="flex-1">
-            <textarea
-              ref={messageInputRef}
-              value={messageText}
-              onChange={(e) => {
-                setMessageText(e.target.value);
-                handleTyping();
-              }}
-              onKeyPress={handleKeyPress}
-              placeholder="Type your message..."
-              className="w-full p-3 border-2 border-stone-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none resize-none font-medium"
-              rows={1}
-              style={{ minHeight: '48px', maxHeight: '120px' }}
-            />
-          </div>
-
-          <button
-            onClick={handleSendMessage}
-            disabled={!messageText.trim()}
-            className="bg-gradient-to-r from-orange-600 to-amber-600 text-white p-3 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:from-orange-700 hover:to-amber-700 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
-          >
-            <Send size={24} />
-          </button>
-        </div>
+      {/* Composer */}
+      <div className="flex items-end gap-2 border-t border-sandal-200 bg-white px-3 py-3" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+        <button
+          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+          className={`icon-btn shrink-0 ${showEmojiPicker ? 'bg-amber-100 text-brand-600' : ''}`}
+          aria-label="Emoji"
+        >
+          <Smile size={22} />
+        </button>
+        <textarea
+          ref={messageInputRef}
+          value={messageText}
+          onChange={(e) => {
+            setMessageText(e.target.value);
+            handleTyping();
+          }}
+          onKeyDown={handleKeyPress}
+          placeholder="Type a message"
+          rows={1}
+          className="max-h-32 min-h-[44px] flex-1 resize-none rounded-2xl border border-sandal-300 bg-sandal-50 px-4 py-2.5 text-[15px] text-maroon-900 outline-none transition placeholder:text-maroon-900/35 focus:border-marigold-400 focus:bg-white focus:ring-4 focus:ring-marigold-400/20"
+        />
+        <button
+          onClick={handleSendMessage}
+          disabled={!messageText.trim()}
+          aria-label="Send"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-marigold-400 to-brand-500 text-white shadow-[0_8px_18px_-8px_rgba(238,154,30,0.9)] transition hover:brightness-105 active:scale-95 disabled:from-sandal-200 disabled:to-sandal-200 disabled:text-maroon-900/30 disabled:shadow-none"
+          style={{ minHeight: 0 }}
+        >
+          <Send size={19} />
+        </button>
       </div>
 
-      {/* User Profile Modal */}
-      <UserProfileModal
-        profile={otherUser}
-        isOpen={showProfileModal}
-        onClose={() => setShowProfileModal(false)}
-        showChatButton={false}
-      />
+      <UserProfileModal profile={otherUser} isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} showChatButton={false} />
 
-      {/* Chat Options Menu */}
       {otherUser && chatId && (
         <ChatOptionsMenu
           chatId={chatId}

@@ -1,7 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 import { getDatabase } from "firebase/database";
-import { getAnalytics, isSupported } from "firebase/analytics";
 
 // Fallback configuration for production builds
 const fallbackConfig = {
@@ -32,12 +31,12 @@ const db = getDatabase(app);
 const database = db; // Alias for chat service
 const googleProvider = new GoogleAuthProvider();
 
-// Initialize analytics only if supported (prevents errors in some environments)
-let analytics = null;
-isSupported().then(yes => {
-  if (yes) {
-    analytics = getAnalytics(app);
-  }
-}).catch(err => console.warn("Analytics not supported:", err));
+// Analytics is not needed to render the app — load it after startup, in the background
+let analytics: unknown = null;
+setTimeout(() => {
+  import('firebase/analytics')
+    .then(({ getAnalytics, isSupported }) => isSupported().then((yes) => { if (yes) analytics = getAnalytics(app); }))
+    .catch((err) => console.warn('Analytics not supported:', err));
+}, 4000);
 
 export { auth, db, database, googleProvider, analytics };

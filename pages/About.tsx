@@ -7,8 +7,6 @@ import versionData from '../version.json';
 import guruMaharajImage from '../utils/Radhanath-Swami-Bhakti-Yoga.jpg';
 // @ts-ignore
 import guruImage from '../utils/Images/HGPranavanandaDas Prabhuji.jpg';
-// @ts-ignore
-import iskconLogo from '../utils/Images/Iscon_LOgo-removebg-preview.png';
 
 const About: React.FC = () => {
   const [showFlowersParamGuru, setShowFlowersParamGuru] = useState(false);
@@ -51,13 +49,7 @@ const About: React.FC = () => {
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold">About Sadhana Sang</h1>
           </div>
-          <div className="bg-white/95 p-2 rounded-xl shadow-lg">
-            <img 
-              src={iskconLogo} 
-              alt="ISKCON Logo" 
-              className="w-12 h-12 sm:w-14 sm:h-14 object-contain"
-            />
-          </div>
+          
         </div>
         <p className="text-orange-50 text-sm sm:text-base leading-relaxed">
           A humble attempt to serve devotees in their spiritual journey, created by the causeless mercy of my spiritual masters.
@@ -613,11 +605,11 @@ const About: React.FC = () => {
             },
             {
               question: 'Is my spiritual data private?',
-              answer: 'Absolutely! Your daily planner, journal, chanting counter, and analytics are completely private. Only your community profile and posts are visible to others. See Settings → Privacy & Data Control for details.'
+              answer: 'Absolutely! Your weekly planner, journal, chanting counter, and analytics are completely private. Only your community profile and posts are visible to others. See Settings → Privacy & Data Control for details.'
             },
             {
-              question: 'How do I use the Daily Planner?',
-              answer: 'Set your daily commitments (chanting, reading, service) at the start of the day, track them throughout, and reflect in the evening. The app calculates your discipline score and shows your progress.'
+              question: 'How do I use the Weekly Planner?',
+              answer: 'Open the Planner and tap any box for a day to fill it in: wake-up time, japa rounds, exercise, reading, seva and more. It saves by itself. At the end of the week you can send the card to your mentor.'
             },
             {
               question: 'Can I export my data?',

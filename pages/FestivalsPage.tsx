@@ -1,14 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
-import { ref, set, get, push, remove } from 'firebase/database';
-import { Calendar, Plus, X, Search, Heart, ExternalLink, Users, Trash2, Languages, Send } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { translateText, SUPPORTED_LANGUAGES } from '../services/translator';
+import { ref, get, push } from 'firebase/database';
+import { Plus, X, Search, Moon, Sparkles, ChevronRight, ChevronDown, CalendarHeart } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { isAdmin } from '../services/admin';
 import FestivalRequestForm from '../components/FestivalRequestForm';
 import { getUserFestivalRequests, FestivalRequest } from '../services/requests';
-import LoadingSpinner from '../components/LoadingSpinner';
+import { PageLoader } from '../components/LoadingScreen';
+import { localDateKey, daysUntil, parseDateKey } from '../utils/date';
+
+const EkadashiSection = lazy(() => import('../components/ekadashi/EkadashiSection'));
 
 interface Festival {
   id: string;
@@ -26,64 +28,43 @@ interface Festival {
   likedBy: string[];
 }
 
+const whenText = (date: string) => {
+  const d = daysUntil(date);
+  if (d === 0) return 'Today';
+  if (d === 1) return 'Tomorrow';
+  if (d > 1 && d < 31) return `In ${d} days`;
+  return '';
+};
+
+const fieldCls =
+  'block w-full rounded-xl border border-sandal-300 bg-white px-3.5 py-2.5 text-sm text-maroon-900 placeholder:text-maroon-900/30 focus:border-marigold-400 focus:outline-none focus:ring-4 focus:ring-marigold-400/20';
+
+const EMPTY_FORM = { name: '', date: '', shortDescription: '', fullDescription: '', significance: '', offerings: '', observances: '' };
+
 const FestivalsPage: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Ekadashi is the default view; festivals open with ?tab=festivals
+  const activeTab: 'festivals' | 'ekadashi' = searchParams.get('tab') === 'festivals' ? 'festivals' : 'ekadashi';
   const [festivals, setFestivals] = useState<Festival[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [showPast, setShowPast] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [translating, setTranslating] = useState<{ [key: string]: boolean }>({});
-  const [translations, setTranslations] = useState<{ [key: string]: { name: string; description: string } }>({});
-  const [selectedLang, setSelectedLang] = useState<{ [key: string]: string }>({});
-  const [showTranslateModal, setShowTranslateModal] = useState<{ [key: string]: boolean }>({});
-  const [expandedFestivals, setExpandedFestivals] = useState<{ [key: string]: boolean }>({});
   const [userIsAdmin, setUserIsAdmin] = useState(false);
   const [userRequests, setUserRequests] = useState<FestivalRequest[]>([]);
-  const [newFestival, setNewFestival] = useState({
-    name: '',
-    date: '',
-    shortDescription: '',
-    fullDescription: '',
-    significance: '',
-    offerings: '',
-    observances: ''
-  });
-
-  useEffect(() => {
-    loadFestivals();
-    checkAdminStatus();
-  }, []);
-
-  useEffect(() => {
-    if (user && user.uid !== 'guest') {
-      const unsubscribe = getUserFestivalRequests(user.uid, (requests) => {
-        setUserRequests(requests);
-      });
-      return unsubscribe;
-    }
-  }, [user]);
-
-  const checkAdminStatus = async () => {
-    const adminStatus = await isAdmin();
-    setUserIsAdmin(adminStatus);
-  };
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
 
   const loadFestivals = async () => {
     try {
       setLoading(true);
-      const festivalsRef = ref(db, 'festivals');
-      const snapshot = await get(festivalsRef);
-      if (snapshot.exists()) {
-        const festivalsData: Festival[] = [];
-        snapshot.forEach((child) => {
-          festivalsData.push({ id: child.key!, ...child.val() });
-        });
-        setFestivals(festivalsData.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
-      } else {
-        setFestivals([]);
-      }
+      const snapshot = await get(ref(db, 'festivals'));
+      const list: Festival[] = [];
+      if (snapshot.exists()) snapshot.forEach((child) => void list.push({ id: child.key!, ...child.val() }));
+      setFestivals(list.sort((a, b) => a.date.localeCompare(b.date)));
     } catch (error) {
       console.error('Error loading festivals:', error);
     } finally {
@@ -91,572 +72,281 @@ const FestivalsPage: React.FC = () => {
     }
   };
 
-  const handleAddFestival = async () => {
-    if (!user || user.uid === 'guest') {
-      alert('Please sign in to add festivals');
+  useEffect(() => {
+    loadFestivals();
+    isAdmin().then(setUserIsAdmin);
+  }, []);
+
+  useEffect(() => {
+    if (user && user.uid !== 'guest') return getUserFestivalRequests(user.uid, setUserRequests);
+  }, [user]);
+
+  const handleAdd = async () => {
+    if (!user || user.uid === 'guest') return;
+    if (!form.name || !form.date || !form.shortDescription) {
+      alert('Please fill in the name, date and a short description.');
       return;
     }
-
-    if (!newFestival.name || !newFestival.date || !newFestival.shortDescription) {
-      alert('Please fill in required fields: Name, Date, and Short Description');
-      return;
-    }
-
+    setSaving(true);
     try {
-      const festival: Omit<Festival, 'id'> = {
-        name: newFestival.name,
-        date: newFestival.date,
-        shortDescription: newFestival.shortDescription,
-        fullDescription: newFestival.fullDescription || '',
-        significance: newFestival.significance || '',
-        offerings: newFestival.offerings ? newFestival.offerings.split(',').map(s => s.trim()) : [],
-        observances: newFestival.observances ? newFestival.observances.split(',').map(s => s.trim()) : [],
+      await push(ref(db, 'festivals'), {
+        name: form.name,
+        date: form.date,
+        shortDescription: form.shortDescription,
+        fullDescription: form.fullDescription,
+        significance: form.significance,
+        offerings: form.offerings ? form.offerings.split(',').map((s) => s.trim()) : [],
+        observances: form.observances ? form.observances.split(',').map((s) => s.trim()) : [],
         addedBy: user.uid,
-        addedByName: user.displayName || 'Anonymous Devotee',
+        addedByName: user.displayName || 'Devotee',
         timestamp: Date.now(),
         likes: 0,
-        likedBy: []
-      };
-
-      const festivalsRef = ref(db, 'festivals');
-      await push(festivalsRef, festival);
-
-      setNewFestival({
-        name: '',
-        date: '',
-        shortDescription: '',
-        fullDescription: '',
-        significance: '',
-        offerings: '',
-        observances: ''
+        likedBy: [],
       });
+      setForm(EMPTY_FORM);
       setShowAddModal(false);
       loadFestivals();
-      alert('Festival added successfully! 🎉');
     } catch (error) {
       console.error('Error adding festival:', error);
-      alert('Failed to add festival');
-    }
-  };
-
-  const handleLike = async (festivalId: string) => {
-    if (!user || user.uid === 'guest') return;
-
-    try {
-      const festival = festivals.find(f => f.id === festivalId);
-      if (!festival) return;
-
-      const isLiked = festival.likedBy?.includes(user.uid);
-      const festivalRef = ref(db, `festivals/${festivalId}`);
-
-      if (isLiked) {
-        await set(festivalRef, {
-          ...festival,
-          likes: Math.max(0, festival.likes - 1),
-          likedBy: festival.likedBy.filter(uid => uid !== user.uid)
-        });
-      } else {
-        await set(festivalRef, {
-          ...festival,
-          likes: festival.likes + 1,
-          likedBy: [...(festival.likedBy || []), user.uid]
-        });
-      }
-
-      loadFestivals();
-    } catch (error) {
-      console.error('Error liking festival:', error);
-    }
-  };
-
-  const handleDelete = async (festivalId: string) => {
-    if (!user || user.uid === 'guest') return;
-
-    const festival = festivals.find(f => f.id === festivalId);
-    if (!festival || festival.addedBy !== user.uid) {
-      alert('You can only delete festivals you added');
-      return;
-    }
-
-    if (!confirm('Are you sure you want to delete this festival?')) return;
-
-    try {
-      const festivalRef = ref(db, `festivals/${festivalId}`);
-      await remove(festivalRef);
-      loadFestivals();
-      alert('Festival deleted successfully');
-    } catch (error) {
-      console.error('Error deleting festival:', error);
-      alert('Failed to delete festival');
-    }
-  };
-
-  const handleViewDetails = (festivalId: string) => {
-    navigate(`/festival/${festivalId}`);
-  };
-
-  const handleTranslate = async (festivalId: string, name: string, description: string) => {
-    const lang = selectedLang[festivalId];
-    if (!lang) {
-      alert('Please select a language first');
-      return;
-    }
-
-    setTranslating({ ...translating, [festivalId]: true });
-
-    try {
-      const translatedName = await translateText(name, lang);
-      const translatedDescription = await translateText(description, lang);
-
-      setTranslations({
-        ...translations,
-        [festivalId]: {
-          name: translatedName,
-          description: translatedDescription
-        }
-      });
-    } catch (error) {
-      console.error('Translation error:', error);
-      alert('Failed to translate. Please try again.');
+      alert('Could not add the festival. Please try again.');
     } finally {
-      setTranslating({ ...translating, [festivalId]: false });
+      setSaving(false);
     }
   };
 
-  const clearTranslation = (festivalId: string) => {
-    const newTranslations = { ...translations };
-    delete newTranslations[festivalId];
-    setTranslations(newTranslations);
-  };
+  const today = localDateKey();
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return q ? festivals.filter((f) => f.name.toLowerCase().includes(q) || f.shortDescription?.toLowerCase().includes(q)) : festivals;
+  }, [festivals, search]);
+  const upcoming = filtered.filter((f) => f.date >= today);
+  const past = filtered.filter((f) => f.date < today).reverse();
+  const next = upcoming[0];
 
-  const filteredFestivals = festivals.filter(festival =>
-    festival.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    festival.shortDescription.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    festival.date.includes(searchTerm)
+  // group upcoming festivals by month
+  const byMonth = useMemo(() => {
+    const groups: { label: string; items: Festival[] }[] = [];
+    upcoming.slice(next ? 1 : 0).forEach((f) => {
+      const label = parseDateKey(f.date).toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+      const g = groups[groups.length - 1];
+      if (g && g.label === label) g.items.push(f);
+      else groups.push({ label, items: [f] });
+    });
+    return groups;
+  }, [upcoming, next]);
+
+  const tabs = (
+    <div className="inline-grid grid-cols-2 rounded-2xl bg-sandal-200/60 p-1 ring-1 ring-sandal-300/50" role="tablist" aria-label="Calendar">
+      {(
+        [
+          { id: 'ekadashi', label: 'Ekadashi', Icon: Moon },
+          { id: 'festivals', label: 'Festivals', Icon: Sparkles },
+        ] as const
+      ).map(({ id, label, Icon }) => (
+        <button
+          key={id}
+          role="tab"
+          aria-selected={activeTab === id}
+          onClick={() => setSearchParams(id === 'festivals' ? { tab: 'festivals' } : {}, { replace: true })}
+          className={`inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2 text-sm font-semibold transition ${
+            activeTab === id ? 'bg-white text-maroon-900 shadow-sm' : 'text-maroon-900/50 hover:text-maroon-900'
+          }`}
+          style={{ minHeight: 0 }}
+        >
+          <Icon size={15} className={activeTab === id ? 'text-brand-500' : ''} />
+          {label}
+        </button>
+      ))}
+    </div>
   );
 
-  const upcomingFestivals = filteredFestivals.filter(f => new Date(f.date) >= new Date());
-  const pastFestivals = filteredFestivals.filter(f => new Date(f.date) < new Date());
+  const Row = ({ f }: { f: Festival }) => {
+    const d = parseDateKey(f.date);
+    const when = whenText(f.date);
+    return (
+      <button
+        onClick={() => navigate(`/festival/${f.id}`)}
+        className="flex w-full items-center gap-3 rounded-2xl bg-white p-3 text-left ring-1 ring-sandal-200 transition hover:-translate-y-px hover:shadow-soft hover:ring-marigold-400/60"
+      >
+        <span className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-xl bg-amber-100 text-brand-700">
+          <span className="text-[10px] font-semibold uppercase leading-none">{d.toLocaleDateString('en-IN', { month: 'short' })}</span>
+          <span className="text-lg font-bold leading-tight">{d.getDate()}</span>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-semibold text-maroon-900">{f.name}</span>
+          <span className="block truncate text-xs text-maroon-900/55">{f.shortDescription}</span>
+        </span>
+        {when && <span className="hidden shrink-0 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-semibold text-brand-700 sm:inline">{when}</span>}
+        <ChevronRight size={16} className="shrink-0 text-maroon-900/30" />
+      </button>
+    );
+  };
 
   return (
-    <div className="space-y-6 sm:space-y-8 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-purple-600 via-pink-600 to-purple-600 rounded-lg sm:rounded-xl md:rounded-2xl p-4 sm:p-6 shadow-2xl border-2 border-purple-300">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-0">
-          <div>
-            <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-white mb-1 sm:mb-2 flex items-center gap-2">
-              <Calendar size={20} />
-              Vaishnava Festivals Calendar
-            </h1>
-            <p className="text-purple-100 text-xs sm:text-sm md:text-base">
-              Sacred celebrations and appearance days of the Supreme Lord and His devotees
-            </p>
-          </div>
-          <div className="flex gap-2">
-            {userIsAdmin && (
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="flex items-center gap-1 px-3 py-1.5 bg-white text-purple-600 rounded-lg text-xs font-semibold hover:bg-purple-50 transition-all shadow-md whitespace-nowrap border border-purple-200"
-              >
-                <Plus size={14} />
-                <span>Admin Add</span>
-              </button>
-            )}
+    <div className="mx-auto max-w-4xl space-y-5">
+      <div className="flex justify-center sm:justify-start">{tabs}</div>
+
+      {activeTab === 'ekadashi' ? (
+        <Suspense fallback={<PageLoader label="Opening Ekadashi dates…" />}>
+          <EkadashiSection />
+        </Suspense>
+      ) : loading ? (
+        <PageLoader label="Opening the calendar…" />
+      ) : (
+        <>
+          {/* Next festival */}
+          {next && !search && (
             <button
-              onClick={() => setShowRequestModal(true)}
-              className="flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-lg text-xs font-semibold hover:from-orange-600 hover:to-pink-600 transition-all shadow-md whitespace-nowrap"
+              onClick={() => navigate(`/festival/${next.id}`)}
+              className="block w-full overflow-hidden rounded-3xl bg-gradient-to-br from-amber-50 via-white to-orange-50 p-5 text-left shadow-card ring-1 ring-amber-200/70 transition hover:-translate-y-px sm:p-7"
             >
-              <Plus size={14} />
-              <span>Add Festival</span>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-500 px-3 py-1 text-xs font-semibold text-white">
+                <CalendarHeart size={13} /> Next festival
+              </span>
+              <h2 className="mt-3 text-2xl font-semibold text-maroon-900 sm:text-3xl">{next.name}</h2>
+              <p className="mt-1 text-sm font-medium text-brand-600">
+                {parseDateKey(next.date).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
+                {whenText(next.date) && ` · ${whenText(next.date)}`}
+              </p>
+              <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-maroon-900/70">{next.shortDescription}</p>
+              <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-brand-600">
+                Read more <ChevronRight size={15} />
+              </span>
             </button>
-          </div>
-        </div>
-      </div>
+          )}
 
-      {/* Search */}
-      <div className="bg-white rounded-lg sm:rounded-xl p-3 sm:p-4 shadow-lg border-2 border-stone-200">
-        <div className="flex items-center gap-2 sm:gap-3">
-          <Search className="text-stone-400" size={20} />
-          <input
-            type="text"
-            placeholder="Search festivals by name, date, or description..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-1 p-3 border-0 focus:outline-none text-lg"
-          />
-        </div>
-      </div>
-
-      {/* Add Festival Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl p-4 sm:p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-stone-800">Add New Festival</h2>
-              <button onClick={() => setShowAddModal(false)}>
-                <X size={24} className="text-stone-500 hover:text-stone-700" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block font-bold mb-2 text-stone-700">Festival Name *</label>
-                <input
-                  type="text"
-                  value={newFestival.name}
-                  onChange={(e) => setNewFestival({ ...newFestival, name: e.target.value })}
-                  placeholder="e.g., Janmashtami, Gaura Purnima"
-                  className="w-full p-3 border-2 border-stone-300 rounded-xl focus:outline-none focus:border-purple-500"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold mb-2 text-stone-700">Date *</label>
-                <input
-                  type="date"
-                  value={newFestival.date}
-                  onChange={(e) => setNewFestival({ ...newFestival, date: e.target.value })}
-                  className="w-full p-3 border-2 border-stone-300 rounded-xl focus:outline-none focus:border-purple-500"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold mb-2 text-stone-700">Short Description *</label>
-                <input
-                  type="text"
-                  value={newFestival.shortDescription}
-                  onChange={(e) => setNewFestival({ ...newFestival, shortDescription: e.target.value })}
-                  placeholder="Brief description (1-2 sentences)"
-                  className="w-full p-3 border-2 border-stone-300 rounded-xl focus:outline-none focus:border-purple-500"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold mb-2 text-stone-700">Full Description</label>
-                <textarea
-                  value={newFestival.fullDescription}
-                  onChange={(e) => setNewFestival({ ...newFestival, fullDescription: e.target.value })}
-                  placeholder="Detailed description of the festival"
-                  rows={4}
-                  className="w-full p-3 border-2 border-stone-300 rounded-xl focus:outline-none focus:border-purple-500"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold mb-2 text-stone-700">Spiritual Significance</label>
-                <textarea
-                  value={newFestival.significance}
-                  onChange={(e) => setNewFestival({ ...newFestival, significance: e.target.value })}
-                  placeholder="Why this festival is celebrated"
-                  rows={3}
-                  className="w-full p-3 border-2 border-stone-300 rounded-xl focus:outline-none focus:border-purple-500"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold mb-2 text-stone-700">Traditional Offerings</label>
-                <input
-                  type="text"
-                  value={newFestival.offerings}
-                  onChange={(e) => setNewFestival({ ...newFestival, offerings: e.target.value })}
-                  placeholder="Comma-separated: Panchamrita, Fruits, Flowers"
-                  className="w-full p-3 border-2 border-stone-300 rounded-xl focus:outline-none focus:border-purple-500"
-                />
-              </div>
-
-              <div>
-                <label className="block font-bold mb-2 text-stone-700">Observances</label>
-                <input
-                  type="text"
-                  value={newFestival.observances}
-                  onChange={(e) => setNewFestival({ ...newFestival, observances: e.target.value })}
-                  placeholder="Comma-separated: Fasting, Kirtan, Abhishek"
-                  className="w-full p-3 border-2 border-stone-300 rounded-xl focus:outline-none focus:border-purple-500"
-                />
-              </div>
-
-              <button
-                onClick={handleAddFestival}
-                className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all"
-              >
-                Add Festival
-              </button>
+          {/* Search + actions */}
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <label className="flex flex-1 items-center gap-2 rounded-2xl bg-white px-4 ring-1 ring-sandal-200 focus-within:ring-marigold-400">
+              <Search size={17} className="text-maroon-900/35" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search festivals"
+                className="w-full bg-transparent py-3 text-sm text-maroon-900 outline-none placeholder:text-maroon-900/35"
+              />
+            </label>
+            <div className="flex gap-2">
+              {user && user.uid !== 'guest' && (
+                <button onClick={() => setShowRequestModal(true)} className="btn-secondary flex-1 sm:flex-none">
+                  <Plus size={15} /> Suggest a festival
+                </button>
+              )}
+              {userIsAdmin && (
+                <button onClick={() => setShowAddModal(true)} className="btn-primary flex-1 sm:flex-none">
+                  <Plus size={15} /> Add
+                </button>
+              )}
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Upcoming Festivals */}
-      {upcomingFestivals.length > 0 && (
-        <div>
-          <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-stone-800 mb-4 sm:mb-6">Upcoming Festivals</h2>
-          <div className="space-y-6">
-            {upcomingFestivals.map((festival) => (
-              <div
-                key={festival.id}
-                className="bg-white hover-lift rounded-xl border border-purple-200 shadow-md hover:shadow-xl transition-all overflow-hidden"
-              >
-                {/* Festival Header */}
-                <div className="p-4 sm:p-6">
-                  <h3 className="text-lg sm:text-2xl font-bold text-purple-900 mb-2">
-                    {translations[festival.id] ? translations[festival.id].name : festival.name}
-                  </h3>
-                  <p className="text-sm sm:text-base text-purple-700 font-semibold mb-3">
-                    {new Date(festival.date).toLocaleDateString('en-US', { 
-                      weekday: 'long', 
-                      year: 'numeric', 
-                      month: 'long', 
-                      day: 'numeric' 
-                    })}
-                  </p>
-                  <p className="text-sm sm:text-base text-stone-700 mb-4">
-                    {translations[festival.id] ? translations[festival.id].description : festival.shortDescription}
-                  </p>
+          {/* Upcoming by month */}
+          {byMonth.map((g) => (
+            <section key={g.label}>
+              <h3 className="mb-2 px-1 text-sm font-semibold text-maroon-900/60">{g.label}</h3>
+              <div className="space-y-2">
+                {g.items.map((f) => (
+                  <Row key={f.id} f={f} />
+                ))}
+              </div>
+            </section>
+          ))}
+
+          {search && upcoming.length > 0 && byMonth.length === 0 && next && <Row f={next} />}
+
+          {filtered.length === 0 && (
+            <div className="rounded-3xl bg-white p-10 text-center ring-1 ring-sandal-200">
+              <CalendarHeart size={36} className="mx-auto text-maroon-900/25" />
+              <p className="mt-3 text-sm text-maroon-900/55">{search ? 'No festival found with that name.' : 'No festivals added yet.'}</p>
+            </div>
+          )}
+
+          {/* Past */}
+          {past.length > 0 && (
+            <section>
+              <button onClick={() => setShowPast((s) => !s)} className="flex items-center gap-1.5 px-1 text-sm font-semibold text-maroon-900/60 hover:text-maroon-900" style={{ minHeight: 0 }}>
+                <ChevronDown size={16} className={`transition-transform ${showPast ? 'rotate-180' : ''}`} />
+                {showPast ? 'Hide past festivals' : `Show past festivals (${past.length})`}
+              </button>
+              {showPast && (
+                <div className="mt-2 space-y-2 opacity-80">
+                  {past.map((f) => (
+                    <Row key={f.id} f={f} />
+                  ))}
                 </div>
+              )}
+            </section>
+          )}
 
-                {/* Controls Section */}
-                <div className="px-4 sm:px-6 pb-4 sm:pb-6">
-                  <div className="flex flex-wrap items-center gap-2 mb-4">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleLike(festival.id);
-                    }}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all ${
-                      festival.likedBy?.includes(user?.uid || '') 
-                        ? 'bg-red-500 text-white' 
-                        : 'bg-white text-red-500 border-2 border-red-500'
-                    }`}
-                  >
-                    <Heart size={16} fill={festival.likedBy?.includes(user?.uid || '') ? 'white' : 'none'} />
-                    {festival.likes}
-                  </button>
-
-                  {/* Translation Controls */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowTranslateModal({ ...showTranslateModal, [festival.id]: !showTranslateModal[festival.id] });
-                    }}
-                    className="flex items-center gap-2 px-3 py-1.5 text-sm bg-green-100 text-green-700 border-2 border-green-300 rounded-lg font-bold hover:bg-green-200 transition-all"
-                    title="Translate"
-                  >
-                    <Languages size={16} />
-                    {translations[festival.id] ? 'Change' : 'Translate'}
-                  </button>
-                  {translations[festival.id] && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        clearTranslation(festival.id);
-                      }}
-                      className="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 border-2 border-gray-300 rounded-lg font-bold hover:bg-gray-200 transition-all"
-                    >
-                      Original
-                    </button>
-                  )}
-
-                  {/* View Details Button */}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleViewDetails(festival.id);
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-all"
-                    title="View full details"
-                  >
-                    <ExternalLink size={16} />
-                    Details
-                  </button>
-
-                  {festival.addedBy === user?.uid && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(festival.id);
-                      }}
-                      className="p-2 bg-red-100 text-red-600 rounded-xl hover:bg-red-200 transition-all"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  )}
-                </div>
-
-                {/* Quick Language Selector - Modern Pills UI */}
-                {showTranslateModal[festival.id] && (
-                  <div 
-                    className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 mb-3 border-2 border-green-200 shadow-lg"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-sm font-bold text-green-700">Choose Language</span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setShowTranslateModal({ ...showTranslateModal, [festival.id]: false });
-                        }}
-                        className="text-stone-400 hover:text-stone-600 transition-colors"
+          {/* My suggestions */}
+          {userRequests.length > 0 && (
+            <section className="rounded-3xl bg-white p-4 ring-1 ring-sandal-200 sm:p-5">
+              <h3 className="mb-3 text-sm font-semibold text-maroon-900">Your suggestions</h3>
+              <ul className="space-y-2">
+                {userRequests.map((r) => (
+                  <li key={r.id} className="rounded-2xl bg-sandal-50 p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="text-sm font-semibold text-maroon-900">{r.name}</span>
+                      <span
+                        className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                          r.status === 'pending' ? 'bg-amber-100 text-amber-800' : r.status === 'approved' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-700'
+                        }`}
                       >
-                        <X size={18} />
-                      </button>
+                        {r.status === 'pending' ? 'Waiting' : r.status === 'approved' ? 'Added' : 'Not added'}
+                      </span>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                      {SUPPORTED_LANGUAGES.slice(0, 9).map(lang => (
-                        <button
-                          key={lang.code}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedLang({ ...selectedLang, [festival.id]: lang.code });
-                            handleTranslate(festival.id, festival.name, festival.shortDescription);
-                            setTimeout(() => {
-                              setShowTranslateModal({ ...showTranslateModal, [festival.id]: false });
-                            }, 300);
-                          }}
-                          disabled={translating[festival.id]}
-                          className={`
-                            px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all
-                            ${translating[festival.id] && selectedLang[festival.id] === lang.code
-                              ? 'bg-green-600 text-white animate-pulse'
-                              : 'bg-white text-green-700 border-2 border-green-300 hover:border-green-500 hover:bg-green-50 active:scale-95'
-                            }
-                          `}
-                        >
-{lang.name}
-                        </button>
-                      ))}
-                    </div>
-                    {SUPPORTED_LANGUAGES.length > 9 && (
-                      <details className="mt-2">
-                        <summary className="text-xs text-green-600 cursor-pointer hover:text-green-700 font-semibold">
-                          + {SUPPORTED_LANGUAGES.length - 9} more languages
-                        </summary>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
-                          {SUPPORTED_LANGUAGES.slice(9).map(lang => (
-                            <button
-                              key={lang.code}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedLang({ ...selectedLang, [festival.id]: lang.code });
-                                handleTranslate(festival.id, festival.name, festival.shortDescription);
-                                setTimeout(() => {
-                                  setShowTranslateModal({ ...showTranslateModal, [festival.id]: false });
-                                }, 300);
-                              }}
-                              disabled={translating[festival.id]}
-                              className={`
-                                px-3 py-2 rounded-lg text-xs sm:text-sm font-semibold transition-all
-                                ${translating[festival.id] && selectedLang[festival.id] === lang.code
-                                  ? 'bg-green-600 text-white animate-pulse'
-                                  : 'bg-white text-green-700 border-2 border-green-300 hover:border-green-500 hover:bg-green-50 active:scale-95'
-                                }
-                              `}
-                            >
-    {lang.name}
-                            </button>
-                          ))}
-                        </div>
-                      </details>
-                    )}
-                  </div>
-                )}
+                    <p className="text-xs text-maroon-900/55">{parseDateKey(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                    {r.adminComment && <p className="mt-1.5 text-xs text-maroon-900/70">Note: {r.adminComment}</p>}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
+      )}
 
-                {/* Added By Info */}
-                <div className="flex items-center gap-2 text-sm text-stone-600">
-                  <Users size={16} />
-                  <span>Added by {festival.addedByName}</span>
-                </div>
-                </div>
-              </div>
-            ))}
+      {/* Admin: add festival */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="Add festival">
+          <div className="absolute inset-0 bg-maroon-900/25 backdrop-blur-[2px]" onClick={() => setShowAddModal(false)} />
+          <div className="relative max-h-[90dvh] w-full overflow-y-auto rounded-t-[28px] bg-white p-5 sm:max-w-lg sm:rounded-[28px] sm:p-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-maroon-900">Add festival</h3>
+              <button onClick={() => setShowAddModal(false)} className="icon-btn" aria-label="Close">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              {(
+                [
+                  { k: 'name', label: 'Name *', ph: 'e.g. Janmashtami' },
+                  { k: 'date', label: 'Date *', type: 'date' },
+                  { k: 'shortDescription', label: 'Short description *', ph: 'One or two lines' },
+                  { k: 'fullDescription', label: 'More about it', area: true },
+                  { k: 'significance', label: 'Why we celebrate', area: true },
+                  { k: 'offerings', label: 'What to offer', ph: 'Separate with commas' },
+                  { k: 'observances', label: 'What to do', ph: 'Separate with commas' },
+                ] as { k: keyof typeof EMPTY_FORM; label: string; ph?: string; type?: string; area?: boolean }[]
+              ).map((f) => (
+                <label key={f.k} className="block">
+                  <span className="mb-1 block text-xs font-semibold text-maroon-900/70">{f.label}</span>
+                  {f.area ? (
+                    <textarea rows={3} value={form[f.k]} onChange={(e) => setForm({ ...form, [f.k]: e.target.value })} className={`${fieldCls} resize-none`} />
+                  ) : (
+                    <input type={f.type || 'text'} value={form[f.k]} placeholder={f.ph} onChange={(e) => setForm({ ...form, [f.k]: e.target.value })} className={fieldCls} />
+                  )}
+                </label>
+              ))}
+              <button onClick={handleAdd} disabled={saving} className="btn-primary w-full">
+                {saving ? 'Adding…' : 'Add festival'}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* Past Festivals */}
-      {pastFestivals.length > 0 && (
-        <div>
-          <h2 className="text-2xl font-bold text-stone-800 mb-4">Past Festivals</h2>
-          <div className="grid md:grid-cols-2 gap-4">
-            {pastFestivals.map((festival) => (
-              <div
-                key={festival.id}
-                className="bg-white rounded-xl p-4 border-2 border-stone-200 hover:border-purple-300 transition-all cursor-pointer opacity-75 hover:opacity-100"
-                onClick={() => handleViewDetails(festival.id)}
-              >
-                <h3 className="text-lg font-bold text-stone-800 mb-1">{festival.name}</h3>
-                <p className="text-sm text-stone-600 mb-2">
-                  {new Date(festival.date).toLocaleDateString()}
-                </p>
-                <p className="text-sm text-stone-700">{festival.shortDescription}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {loading ? (
-        <div className="text-center py-16 bg-white rounded-xl border-2 border-dashed border-stone-300">
-          <LoadingSpinner message="Loading festivals..." size="lg" />
-        </div>
-      ) : filteredFestivals.length === 0 && (
-        <div className="text-center py-12 bg-white rounded-xl border-2 border-dashed border-stone-300">
-          <Calendar size={48} className="mx-auto text-stone-400 mb-4" />
-          <p className="text-stone-500 text-lg">No festivals found. Add the first one!</p>
-        </div>
-      )}
-
-      {/* User's Pending Requests */}
-      {userRequests.length > 0 && (
-        <div className="bg-gradient-to-r from-orange-50 to-pink-50 rounded-xl p-6 border-2 border-orange-200">
-          <h2 className="text-xl font-bold text-orange-900 mb-4 flex items-center gap-2">
-            <Send size={20} />
-            Your Festival Requests ({userRequests.length})
-          </h2>
-          <div className="space-y-3">
-            {userRequests.map((request) => (
-              <div
-                key={request.id}
-                className="bg-white rounded-lg p-4 border-2 border-orange-200"
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-bold text-stone-800">{request.name}</h3>
-                  <span
-                    className={`px-3 py-1 rounded-full text-xs font-bold ${
-                      request.status === 'pending'
-                        ? 'bg-yellow-100 text-yellow-800'
-                        : request.status === 'approved'
-                        ? 'bg-green-100 text-green-800'
-                        : 'bg-red-100 text-red-800'
-                    }`}
-                  >
-                    {request.status.toUpperCase()}
-                  </span>
-                </div>
-                <p className="text-sm text-stone-600 mb-1">
-                  {new Date(request.date).toLocaleDateString()}
-                </p>
-                <p className="text-sm text-stone-700">{request.description}</p>
-                {request.adminComment && (
-                  <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <p className="text-xs font-bold text-blue-900 mb-1">Admin Comment:</p>
-                    <p className="text-sm text-blue-800">{request.adminComment}</p>
-                    {request.reviewedBy && (
-                      <p className="text-xs text-blue-600 mt-1">
-                        Reviewed by {request.reviewedBy}
-                      </p>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Festival Request Modal */}
-      {showRequestModal && (
-        <FestivalRequestForm onClose={() => setShowRequestModal(false)} />
-      )}
+      {showRequestModal && <FestivalRequestForm onClose={() => setShowRequestModal(false)} />}
     </div>
   );
 };

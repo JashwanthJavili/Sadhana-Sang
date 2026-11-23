@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { PageLoader } from './LoadingScreen';
 import { MessageCircle, Star, Filter, Search, Calendar, User, Mail, MapPin, Award, CheckCircle, Clock, AlertCircle, Download, X } from 'lucide-react';
 import { ref, onValue, update } from 'firebase/database';
 import { db } from '../services/firebase';
@@ -148,13 +149,7 @@ const FeedbackViewer: React.FC = () => {
       : '0.0',
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <LoadingSpinner message="Loading feedback..." size="lg" />
-      </div>
-    );
-  }
+  if (loading) return <PageLoader label="Loading feedback…" />;
 
   return (
     <div className="space-y-6">

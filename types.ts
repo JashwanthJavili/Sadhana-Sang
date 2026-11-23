@@ -30,6 +30,27 @@ export interface DailyMetrics {
   foodDiscipline: number; // 0-10
   energyLevel: number; // 1-10
   mood: number; // 1-10
+  // Weekly sadhana card fields (optional; older entries won't have them)
+  chantingTime?: string; // HH:MM when rounds were finished
+  exerciseMinutes?: number;
+  classAttended?: '' | 'yes' | 'no';
+  daySleepMinutes?: number;
+  readingMinutes?: number;
+}
+
+/** Weekly notes that sit alongside seven daily entries */
+export interface WeeklyCardNotes {
+  weekStart: string; // Monday, YYYY-MM-DD
+  nicePoints: string;
+  realizations: string;
+  concerns: string;
+  updatedAt: number;
+}
+
+/** Details printed on the shared sadhana card */
+export interface SadhanaCardProfile {
+  mentor: string;
+  phone: string;
 }
 
 export interface Reflections {

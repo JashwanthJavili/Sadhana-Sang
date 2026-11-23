@@ -36,17 +36,26 @@ export const updateUserProfile = async (uid: string, updates: Partial<UserProfil
   await update(ref(database, `users/${uid}`), updates);
 };
 
+// Profile fields live directly under users/{uid}, next to large sub-trees
+// (entries, chantingSessions, feedbacks…). Fetch only the fields we need
+// instead of downloading the whole user node.
+const PROFILE_FIELDS = [
+  'uid', 'userName', 'guruName', 'iskconCenter', 'photoURL', 'isOnline', 'lastSeen', 'bio',
+  'joinedDate', 'createdAt', 'email', 'showGuruName', 'showIskconCenter', 'showLastSeen',
+  'showEmail', 'messagingPrivacy', 'connections', 'connectionCount',
+] as const;
+
 export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
   try {
-    const snapshot = await get(ref(database, `users/${uid}`));
-    if (!snapshot.exists()) return null;
-    
-    const data = snapshot.val();
-    // Check if it's a valid UserProfile (has userName field)
-    // This prevents returning objects with only child nodes (entries, settings, etc.)
+    const snaps = await Promise.all(PROFILE_FIELDS.map((f) => get(ref(database, `users/${uid}/${f}`))));
+    const data: Record<string, unknown> = {};
+    snaps.forEach((snap, i) => {
+      if (snap.exists()) data[PROFILE_FIELDS[i]] = snap.val();
+    });
+    // A valid profile must have a userName (the node may only contain entries/settings)
     if (!data.userName) return null;
-    
-    return data;
+    if (!data.uid) data.uid = uid;
+    return data as unknown as UserProfile;
   } catch (error) {
     console.error('Error fetching user profile:', error);
     return null;
@@ -119,6 +128,29 @@ export const setUserOnlineStatus = async (uid: string, isOnline: boolean) => {
     console.warn('Unable to update online status:', error);
     // Don't throw - online status is not critical
   }
+};
+
+/**
+ * Live total of unread messages for a user. One realtime listener replaces
+ * repeated full downloads of /chats; returns an unsubscribe function.
+ */
+export const subscribeToUnreadCount = (userId: string, callback: (count: number) => void) => {
+  const chatsRef = ref(database, 'chats');
+  const unsubscribe = onValue(
+    chatsRef,
+    (snapshot) => {
+      let total = 0;
+      snapshot.forEach((child) => {
+        const chat = child.val() as Chat;
+        if (chat?.participants && Array.isArray(chat.participants) && chat.participants.includes(userId)) {
+          total += chat.unreadCount?.[userId] || 0;
+        }
+      });
+      callback(total);
+    },
+    () => callback(0)
+  );
+  return unsubscribe;
 };
 
 // ============= CHAT MANAGEMENT =============
@@ -433,29 +465,6 @@ export const searchUsers = async (
     
     return matchesSearch && matchesGuru && matchesCenter && matchesOnline;
   });
-};
-
-export const getTotalUnreadCount = async (userId: string): Promise<number> => {
-  try {
-    const chatsRef = ref(database, 'chats');
-    const snapshot = await get(chatsRef);
-    
-    if (!snapshot.exists()) return 0;
-    
-    let totalUnread = 0;
-    snapshot.forEach((childSnapshot) => {
-      const chat = childSnapshot.val() as Chat;
-      // Check if participants array exists and includes userId
-      if (chat && chat.participants && Array.isArray(chat.participants) && chat.participants.includes(userId)) {
-        totalUnread += chat.unreadCount?.[userId] || 0;
-      }
-    });
-    
-    return totalUnread;
-  } catch (error) {
-    console.warn('Unable to fetch unread count:', error);
-    return 0; // Return 0 instead of throwing
-  }
 };
 
 // ============= CHAT MANAGEMENT =============

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { PageLoader } from '../components/LoadingScreen';
 import { useParams, useNavigate } from 'react-router-dom';
-import LoadingSpinner from '../components/LoadingSpinner';
 import { useAuth } from '../contexts/AuthContext';
 import { Question, Answer } from '../types/questions';
 import {
@@ -13,17 +14,50 @@ import {
   addReply,
   incrementViewCount,
 } from '../services/questions';
-import {
-  ArrowLeft,
-  ThumbsUp,
-  MessageCircle,
-  Eye,
-  Send,
-  CheckCircle2,
-  Reply,
-  Clock,
-  Flag,
-} from 'lucide-react';
+import { ArrowLeft, ThumbsUp, MessageCircle, Eye, Send, CheckCircle2, Reply, Flag, X, Loader2, HelpCircle } from 'lucide-react';
+
+const CATEGORY_LABELS: Record<Question['category'], string> = {
+  spiritual: 'Spiritual guidance',
+  sadhana: 'Daily practice',
+  scripture: 'Scriptures',
+  lifestyle: 'Devotional life',
+  general: 'General',
+};
+
+const FLAG_REASONS = [
+  'Spam or promotional content',
+  'Offensive or inappropriate language',
+  'Misinformation or incorrect facts',
+  'Off-topic or not relevant',
+  'Other',
+];
+
+const formatTimeAgo = (timestamp: number) => {
+  const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  if (seconds < 60) return 'just now';
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)} hr ago`;
+  if (seconds < 604800) {
+    const d = Math.floor(seconds / 86400);
+    return `${d} ${d === 1 ? 'day' : 'days'} ago`;
+  }
+  return new Date(timestamp).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+const Avatar: React.FC<{ name: string; photo?: string; size?: 'xs' | 'sm' | 'md' }> = ({ name, photo, size = 'sm' }) => {
+  const cls = size === 'md' ? 'h-10 w-10 text-sm' : size === 'xs' ? 'h-6 w-6 text-[10px]' : 'h-8 w-8 text-xs';
+  if (photo) return <img src={photo} alt="" className={`${cls} shrink-0 rounded-full object-cover ring-1 ring-sandal-200`} />;
+  return (
+    <span className={`${cls} flex shrink-0 items-center justify-center rounded-full bg-amber-100 font-semibold text-brand-700`}>
+      {(name || '?').trim().charAt(0).toUpperCase()}
+    </span>
+  );
+};
+
+const fieldCls =
+  'block w-full rounded-xl border border-sandal-300 bg-white px-3.5 py-3 text-base text-maroon-900 placeholder:text-maroon-900/30 focus:border-marigold-400 focus:outline-none focus:ring-4 focus:ring-marigold-400/20 sm:text-sm';
+
+type FlagTarget = { contentType: 'question' | 'answer'; contentId: string; content: any };
 
 const QuestionDetailPage: React.FC = () => {
   const { questionId } = useParams<{ questionId: string }>();
@@ -36,6 +70,8 @@ const QuestionDetailPage: React.FC = () => {
   const [replyText, setReplyText] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [flagTarget, setFlagTarget] = useState<FlagTarget | null>(null);
+  const [flagging, setFlagging] = useState(false);
 
   useEffect(() => {
     if (!questionId) return;
@@ -75,13 +111,7 @@ const QuestionDetailPage: React.FC = () => {
 
     setSubmitting(true);
     try {
-      await createAnswer(
-        questionId,
-        user.uid,
-        user.displayName || 'Anonymous',
-        newAnswer.trim(),
-        user.photoURL || undefined
-      );
+      await createAnswer(questionId, user.uid, user.displayName || 'Anonymous', newAnswer.trim(), user.photoURL || undefined);
       setNewAnswer('');
     } catch (error) {
       console.error('Error submitting answer:', error);
@@ -104,14 +134,7 @@ const QuestionDetailPage: React.FC = () => {
     if (!user || !questionId || !replyText.trim()) return;
 
     try {
-      await addReply(
-        questionId,
-        answerId,
-        user.uid,
-        user.displayName || 'Anonymous',
-        replyText.trim(),
-        user.photoURL || undefined
-      );
+      await addReply(questionId, answerId, user.uid, user.displayName || 'Anonymous', replyText.trim(), user.photoURL || undefined);
       setReplyText('');
       setReplyTo(null);
     } catch (error) {
@@ -120,363 +143,306 @@ const QuestionDetailPage: React.FC = () => {
     }
   };
 
-  const handleFlagContent = async (contentType: 'question' | 'answer', contentId: string, content: any) => {
+  const handleFlagContent = (contentType: 'question' | 'answer', contentId: string, content: any) => {
     if (!user) {
       alert('Please sign in to flag content');
       return;
     }
+    setFlagTarget({ contentType, contentId, content });
+  };
 
-    const reasons = [
-      'Spam or promotional content',
-      'Offensive or inappropriate language',
-      'Misinformation or incorrect facts',
-      'Off-topic or not relevant',
-      'Other'
-    ];
-
-    const reason = await new Promise<string | null>((resolve) => {
-      const modal = document.createElement('div');
-      modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4';
-      modal.innerHTML = `
-        <div class="bg-white rounded-xl p-6 max-w-md w-full">
-          <h3 class="text-xl font-bold mb-4">Report ${contentType === 'question' ? 'Question' : 'Answer'}</h3>
-          <p class="text-stone-600 mb-4">Please select a reason for flagging this content:</p>
-          <div class="space-y-2">
-            ${reasons.map((r, i) => `
-              <button data-reason="${r}" class="w-full text-left px-4 py-3 rounded-lg hover:bg-orange-50 border-2 border-stone-200 hover:border-orange-500 transition-all">
-                ${r}
-              </button>
-            `).join('')}
-          </div>
-          <button data-cancel class="w-full mt-4 px-4 py-2 bg-stone-200 rounded-lg hover:bg-stone-300">Cancel</button>
-        </div>
-      `;
-
-      modal.querySelectorAll('[data-reason]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const selectedReason = btn.getAttribute('data-reason');
-          document.body.removeChild(modal);
-          resolve(selectedReason);
-        });
-      });
-
-      modal.querySelector('[data-cancel]')?.addEventListener('click', () => {
-        document.body.removeChild(modal);
-        resolve(null);
-      });
-
-      document.body.appendChild(modal);
-    });
-
-    if (!reason) return;
-
+  const submitFlag = async (reason: string) => {
+    if (!user || !flagTarget) return;
+    setFlagging(true);
     try {
       const { ref, push, set } = await import('firebase/database');
       const { db } = await import('../services/firebase');
-      
+
       const flagRef = push(ref(db, 'flaggedContent'));
       await set(flagRef, {
-        contentId,
-        contentType,
-        content,
+        contentId: flagTarget.contentId,
+        contentType: flagTarget.contentType,
+        content: flagTarget.content,
         flaggedBy: user.uid,
         flaggedAt: Date.now(),
         reason,
-        status: 'pending'
+        status: 'pending',
       });
 
+      setFlagTarget(null);
       alert('Thank you for reporting. Our team will review this content shortly.');
     } catch (error) {
       console.error('Error flagging content:', error);
       alert('Failed to flag content. Please try again.');
+    } finally {
+      setFlagging(false);
     }
   };
 
-  const formatTimeAgo = (timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
-    if (seconds < 60) return 'just now';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-    if (seconds < 604800) return `${Math.floor(seconds / 86400)}d ago`;
-    return new Date(timestamp).toLocaleDateString();
-  };
-
-  const getCategoryColor = (category: Question['category']) => {
-    const colors = {
-      spiritual: 'bg-purple-100 text-purple-700 border-purple-300',
-      sadhana: 'bg-orange-100 text-orange-700 border-orange-300',
-      scripture: 'bg-blue-100 text-blue-700 border-blue-300',
-      lifestyle: 'bg-green-100 text-green-700 border-green-300',
-      general: 'bg-stone-100 text-stone-700 border-stone-300',
-    };
-    return colors[category];
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <LoadingSpinner message="Loading question..." size="lg" />
-      </div>
-    );
-  }
+  if (loading) return <PageLoader label="Loading question…" />;
 
   if (!question) {
     return (
-      <div className="text-center py-16">
-        <p className="text-stone-600 text-lg font-medium">Question not found</p>
-        <button
-          onClick={() => navigate('/questions')}
-          className="mt-4 text-orange-600 hover:text-orange-700 font-semibold"
-        >
-          ← Back to Questions
+      <div className="mx-auto max-w-md rounded-3xl bg-white p-10 text-center ring-1 ring-sandal-200 animate-fadeIn">
+        <HelpCircle size={36} className="mx-auto text-maroon-900/25" />
+        <p className="mt-3 text-sm font-semibold text-maroon-900">This question could not be found</p>
+        <p className="mt-1 text-sm text-maroon-900/55">It may have been removed.</p>
+        <button onClick={() => navigate('/questions')} className="btn-primary mt-5">
+          <ArrowLeft size={16} /> Back to questions
         </button>
       </div>
     );
   }
 
+  const questionLiked = !!user && !!question.upvotes?.includes(user.uid);
+  const isOwner = !!user && question.userId === user.uid;
+
   return (
-    <div className="min-h-full max-w-5xl mx-auto animate-fadeIn space-y-4 sm:space-y-6">
-      {/* Back Button */}
+    <div className="mx-auto max-w-3xl space-y-4 animate-fadeIn sm:space-y-5">
       <button
         onClick={() => navigate('/questions')}
-        className="flex items-center gap-1.5 sm:gap-2 text-stone-600 hover:text-orange-600 font-semibold transition-colors text-sm sm:text-base"
+        className="inline-flex items-center gap-1.5 rounded-xl px-2 py-2 text-sm font-semibold text-maroon-900/60 transition hover:bg-amber-50 hover:text-maroon-900"
       >
-        <ArrowLeft size={18} className="sm:w-5 sm:h-5" />
-        Back to Questions
+        <ArrowLeft size={17} /> All questions
       </button>
 
-      {/* Question Card */}
-      <div className="bg-white rounded-lg sm:rounded-xl shadow-lg border-2 border-stone-200 p-3 sm:p-6">
-        <div className="flex gap-3 sm:gap-6">
-          {/* Voting */}
-          <div className="flex flex-col items-center gap-1.5 sm:gap-3 flex-shrink-0">
-            <button
-              onClick={handleUpvoteQuestion}
-              className={`p-2 sm:p-3 rounded-lg transition-all ${
-                user && question.upvotes?.includes(user.uid)
-                  ? 'bg-orange-600 text-white'
-                  : 'bg-stone-100 text-stone-600 hover:bg-orange-50'
-              }`}
-            >
-              <ThumbsUp size={18} className="sm:w-6 sm:h-6" />
-            </button>
-            <span className="font-bold text-lg sm:text-2xl text-stone-900">{question.upvotes?.length || 0}</span>
-            <span className="text-xs text-stone-500 hidden sm:block">votes</span>
-          </div>
-
-          {/* Content */}
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 mb-3 sm:mb-4">
-              <h1 className="text-lg sm:text-2xl md:text-3xl font-bold text-stone-900 break-words">{question.title}</h1>
-              <span className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold border ${getCategoryColor(question.category)} self-start flex-shrink-0`}>
-                {question.category}
-              </span>
-            </div>
-
-            <p className="text-sm sm:text-base md:text-lg text-stone-700 leading-relaxed mb-4 sm:mb-6 whitespace-pre-wrap break-words">{question.content}</p>
-
-            {/* Tags */}
-            {question.tags && question.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-4 sm:mb-6">
-                {question.tags.map((tag, idx) => (
-                  <span
-                    key={idx}
-                    className="px-2 sm:px-3 py-0.5 sm:py-1 bg-orange-100 text-orange-700 rounded-full text-xs sm:text-sm font-semibold"
-                  >
-                    #{tag}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {/* Meta */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-t border-stone-200 pt-3 sm:pt-4 gap-2">
-              <div className="flex flex-wrap items-center gap-x-2 sm:gap-x-4 gap-y-1 text-xs sm:text-sm text-stone-500">
-                <span className="flex items-center gap-1 flex-shrink-0">
-                  <Eye size={14} className="sm:w-4 sm:h-4" />
-                  {question.viewCount} views
-                </span>
-                <span className="hidden sm:inline">•</span>
-                <span className="truncate">
-                  asked by <span className="font-semibold text-stone-700">{question.userName}</span>
-                </span>
-                <span className="hidden sm:inline">•</span>
-                <span className="flex items-center gap-1 flex-shrink-0">
-                  <Clock size={14} className="sm:w-4 sm:h-4" />
-                  {formatTimeAgo(question.timestamp)}
-                </span>
-              </div>
-              {user && user.uid !== question.userId && (
-                <button
-                  onClick={() => handleFlagContent('question', question.id, question)}
-                  className="flex items-center gap-1 px-3 py-1.5 text-stone-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all text-xs sm:text-sm font-medium self-start"
-                  title="Report inappropriate content"
-                >
-                  <Flag size={14} className="sm:w-4 sm:h-4" />
-                  Report
-                </button>
-              )}
+      {/* Question */}
+      <article className="overflow-hidden rounded-3xl bg-white shadow-card ring-1 ring-sandal-200">
+        <div className="bg-gradient-to-br from-amber-100 via-orange-50 to-white px-5 pb-5 pt-5 sm:px-7 sm:pt-6">
+          <span className="inline-block rounded-full bg-white/80 px-2.5 py-0.5 text-[11px] font-semibold text-brand-700 ring-1 ring-amber-200/70">
+            {CATEGORY_LABELS[question.category] ?? question.category}
+          </span>
+          <h1 className="mt-3 break-words text-xl font-semibold leading-snug text-maroon-900 sm:text-2xl">{question.title}</h1>
+          <div className="mt-3 flex items-center gap-2.5">
+            <Avatar name={question.userName} photo={question.userPhoto} />
+            <div className="min-w-0 leading-tight">
+              <p className="truncate text-sm font-semibold text-maroon-900/85">{question.userName}</p>
+              <p className="text-xs text-maroon-900/50">Asked {formatTimeAgo(question.timestamp)}</p>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Answers Section */}
-      <div className="bg-white rounded-lg sm:rounded-xl shadow-lg border-2 border-stone-200 p-4 sm:p-8">
-        <h2 className="text-xl sm:text-2xl font-bold text-stone-900 mb-4 sm:mb-6 flex items-center gap-2">
-          <MessageCircle size={22} className="sm:w-7 sm:h-7" />
-          {answers.length} {answers.length === 1 ? 'Answer' : 'Answers'}
-        </h2>
+        <div className="px-5 py-5 sm:px-7">
+          <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-maroon-900/80">{question.content}</p>
 
-        {/* Answers List */}
-        <div className="space-y-4 sm:space-y-6 mb-6 sm:mb-8">
-          {answers.map((answer) => (
-            <div
-              key={answer.id}
-              className={`p-3 sm:p-6 rounded-lg sm:rounded-xl border-2 ${
-                answer.isAccepted
-                  ? 'bg-green-50 border-green-300'
-                  : 'bg-stone-50 border-stone-200'
+          {question.tags && question.tags.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-1.5">
+              {question.tags.map((tag, idx) => (
+                <span key={idx} className="rounded-full bg-sandal-100 px-2.5 py-1 text-xs font-medium text-maroon-900/65">
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-sandal-100 pt-4">
+            <button
+              onClick={handleUpvoteQuestion}
+              aria-pressed={questionLiked}
+              className={`inline-flex h-10 items-center gap-1.5 rounded-full px-4 text-sm font-semibold transition ${
+                questionLiked ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200' : 'text-maroon-900/65 ring-1 ring-sandal-200 hover:bg-amber-50'
               }`}
             >
-              <div className="flex gap-2 sm:gap-4">
-                {/* Voting */}
-                <div className="flex flex-col items-center gap-1 sm:gap-2 flex-shrink-0">
-                  <button
-                    onClick={() => handleUpvoteAnswer(answer.id)}
-                    className={`p-1.5 sm:p-2 rounded-lg transition-all ${
-                      user && answer.upvotes?.includes(user.uid)
-                        ? 'bg-orange-600 text-white'
-                        : 'bg-white text-stone-600 hover:bg-orange-50 border border-stone-200'
-                    }`}
-                  >
-                    <ThumbsUp size={16} className="sm:w-[18px] sm:h-[18px]" />
-                  </button>
-                  <span className="font-bold text-sm sm:text-lg">{answer.upvotes?.length || 0}</span>
+              <ThumbsUp size={16} /> Helpful · {question.upvotes?.length || 0}
+            </button>
+            <span className="inline-flex items-center gap-1 px-2 text-xs text-maroon-900/50">
+              <Eye size={14} /> {question.viewCount} views
+            </span>
+            {user && !isOwner && (
+              <button
+                onClick={() => handleFlagContent('question', question.id, question)}
+                className="ml-auto inline-flex h-10 items-center gap-1.5 rounded-full px-3 text-xs font-medium text-maroon-900/45 transition hover:bg-rose-50 hover:text-rose-600"
+              >
+                <Flag size={14} /> Report
+              </button>
+            )}
+          </div>
+        </div>
+      </article>
+
+      {/* Answers */}
+      <section>
+        <h2 className="mb-3 flex items-center gap-2 px-1 text-base font-semibold text-maroon-900">
+          <MessageCircle size={18} className="text-brand-500" />
+          {answers.length} {answers.length === 1 ? 'answer' : 'answers'}
+        </h2>
+
+        {answers.length === 0 ? (
+          <div className="rounded-3xl bg-white p-8 text-center ring-1 ring-sandal-200">
+            <MessageCircle size={32} className="mx-auto text-maroon-900/25" />
+            <p className="mt-3 text-sm font-semibold text-maroon-900">No answers yet</p>
+            <p className="mt-1 text-sm text-maroon-900/55">If you know something that may help, share it below.</p>
+          </div>
+        ) : (
+          <ul className="space-y-3">
+            {answers.map((answer) => {
+              const liked = !!user && !!answer.upvotes?.includes(user.uid);
+              return (
+                <li
+                  key={answer.id}
+                  className={`rounded-2xl bg-white p-4 shadow-soft sm:p-5 ${answer.isAccepted ? 'ring-2 ring-emerald-300' : 'ring-1 ring-sandal-200'}`}
+                >
                   {answer.isAccepted && (
-                    <CheckCircle2 className="text-green-600" size={20} />
-                  )}
-                </div>
-
-                {/* Answer Content */}
-                <div className="flex-1 min-w-0">
-                  {answer.isAccepted && (
-                    <div className="bg-green-600 text-white px-2 sm:px-3 py-1 rounded-lg inline-flex items-center gap-1 mb-2 sm:mb-3 text-xs sm:text-sm font-bold">
-                      <CheckCircle2 size={14} className="sm:w-4 sm:h-4" />
-                      Accepted Answer
-                    </div>
+                    <span className="mb-3 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                      <CheckCircle2 size={14} /> Chosen as best answer
+                    </span>
                   )}
 
-                  <p className="text-stone-800 text-sm sm:text-base leading-relaxed mb-3 sm:mb-4 whitespace-pre-wrap break-words">
-                    {answer.content}
-                  </p>
-
-                  {/* Answer Meta */}
-                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                    <div className="text-xs sm:text-sm text-stone-500">
-                      answered by <span className="font-semibold text-stone-700">{answer.userName}</span> •{' '}
-                      {formatTimeAgo(answer.timestamp)}
+                  <div className="flex items-center gap-2.5">
+                    <Avatar name={answer.userName} photo={answer.userPhoto} />
+                    <div className="min-w-0 leading-tight">
+                      <p className="truncate text-sm font-semibold text-maroon-900/85">{answer.userName}</p>
+                      <p className="text-xs text-maroon-900/50">{formatTimeAgo(answer.timestamp)}</p>
                     </div>
+                  </div>
 
-                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                      {user && question.userId === user.uid && !answer.isAccepted && (
-                        <button
-                          onClick={() => handleAcceptAnswer(answer.id)}
-                          className="flex items-center gap-1 px-2 sm:px-3 py-1 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-all text-xs sm:text-sm font-semibold"
-                        >
-                          <CheckCircle2 size={14} className="sm:w-4 sm:h-4" />
-                          Accept
-                        </button>
-                      )}
+                  <p className="mt-3 whitespace-pre-wrap break-words text-[15px] leading-relaxed text-maroon-900/80">{answer.content}</p>
+
+                  {/* Actions */}
+                  <div className="mt-4 flex flex-wrap items-center gap-2">
+                    <button
+                      onClick={() => handleUpvoteAnswer(answer.id)}
+                      aria-pressed={liked}
+                      className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition ${
+                        liked ? 'bg-brand-50 text-brand-700 ring-1 ring-brand-200' : 'text-maroon-900/65 ring-1 ring-sandal-200 hover:bg-amber-50'
+                      }`}
+                    >
+                      <ThumbsUp size={14} /> {answer.upvotes?.length || 0}
+                    </button>
+                    <button
+                      onClick={() => setReplyTo(replyTo === answer.id ? null : answer.id)}
+                      className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold transition ${
+                        replyTo === answer.id ? 'bg-amber-50 text-maroon-900' : 'text-maroon-900/65 hover:bg-amber-50'
+                      }`}
+                    >
+                      <Reply size={14} /> Reply
+                    </button>
+                    {isOwner && !answer.isAccepted && (
                       <button
-                        onClick={() => setReplyTo(replyTo === answer.id ? null : answer.id)}
-                        className="flex items-center gap-1 px-2 sm:px-3 py-1 bg-stone-100 text-stone-700 rounded-lg hover:bg-stone-200 transition-all text-xs sm:text-sm font-semibold"
+                        onClick={() => handleAcceptAnswer(answer.id)}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-full px-3 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200 transition hover:bg-emerald-50"
                       >
-                        <Reply size={14} className="sm:w-4 sm:h-4" />
-                        Reply
+                        <CheckCircle2 size={14} /> Mark as best
                       </button>
-                      {user && user.uid !== answer.userId && (
-                        <button
-                          onClick={() => handleFlagContent('answer', answer.id, { ...answer, questionId })}
-                          className="flex items-center gap-1 px-2 sm:px-3 py-1 text-stone-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all text-xs sm:text-sm font-medium"
-                          title="Report inappropriate answer"
-                        >
-                          <Flag size={14} className="sm:w-4 sm:h-4" />
-                        </button>
-                      )}
-                    </div>
+                    )}
+                    {user && user.uid !== answer.userId && (
+                      <button
+                        onClick={() => handleFlagContent('answer', answer.id, { ...answer, questionId })}
+                        className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-full text-maroon-900/40 transition hover:bg-rose-50 hover:text-rose-600"
+                        aria-label="Report this answer"
+                        title="Report this answer"
+                      >
+                        <Flag size={14} />
+                      </button>
+                    )}
                   </div>
 
                   {/* Replies */}
                   {answer.replies && answer.replies.length > 0 && (
-                    <div className="mt-3 sm:mt-4 space-y-2 sm:space-y-3 pl-2 sm:pl-4 border-l-2 border-stone-300">
+                    <ul className="mt-4 space-y-2 border-l-2 border-amber-200 pl-3 sm:pl-4">
                       {answer.replies.map((reply) => (
-                        <div key={reply.id} className="bg-white p-3 sm:p-4 rounded-lg">
-                          <p className="text-stone-700 text-xs sm:text-sm mb-2 break-words">{reply.content}</p>
-                          <div className="text-xs text-stone-500">
-                            <span className="font-semibold text-stone-600">{reply.userName}</span> •{' '}
-                            {formatTimeAgo(reply.timestamp)}
+                        <li key={reply.id} className="rounded-xl bg-sandal-50 p-3">
+                          <div className="flex items-center gap-2">
+                            <Avatar name={reply.userName} photo={reply.userPhoto} size="xs" />
+                            <span className="min-w-0 truncate text-xs font-semibold text-maroon-900/80">{reply.userName}</span>
+                            <span className="shrink-0 text-[11px] text-maroon-900/45">{formatTimeAgo(reply.timestamp)}</span>
                           </div>
-                        </div>
+                          <p className="mt-1.5 break-words text-sm leading-relaxed text-maroon-900/75">{reply.content}</p>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   )}
 
-                  {/* Reply Input */}
+                  {/* Reply input */}
                   {replyTo === answer.id && (
-                    <div className="mt-3 sm:mt-4 flex gap-2">
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        handleSubmitReply(answer.id);
+                      }}
+                      className="mt-3 flex gap-2"
+                    >
                       <input
                         type="text"
                         value={replyText}
                         onChange={(e) => setReplyText(e.target.value)}
-                        placeholder="Write a reply..."
-                        className="flex-1 p-2 sm:p-3 border-2 border-stone-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none text-sm sm:text-base"
+                        placeholder="Write a reply"
+                        autoFocus
+                        className={`${fieldCls} min-w-0 flex-1 py-2.5`}
                       />
-                      <button
-                        onClick={() => handleSubmitReply(answer.id)}
-                        disabled={!replyText.trim()}
-                        className="px-3 sm:px-4 py-2 bg-orange-600 text-white rounded-lg font-semibold hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <Send size={16} className="sm:w-[18px] sm:h-[18px]" />
+                      <button type="submit" disabled={!replyText.trim()} className="btn-primary shrink-0 px-3.5" aria-label="Send reply">
+                        <Send size={16} />
                       </button>
-                    </div>
+                    </form>
                   )}
-                </div>
-              </div>
-            </div>
-          ))}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
-          {answers.length === 0 && (
-            <div className="text-center py-8 sm:py-12 bg-stone-50 rounded-lg sm:rounded-xl border-2 border-dashed border-stone-300">
-              <MessageCircle className="mx-auto mb-3 sm:mb-4 text-stone-400" size={40} />
-              <p className="text-stone-600 font-medium text-sm sm:text-base">No answers yet</p>
-              <p className="text-stone-500 text-xs sm:text-sm">Be the first to answer this question!</p>
-            </div>
-          )}
-        </div>
-
-        {/* Answer Form */}
-        <div className="border-t-2 border-stone-200 pt-4 sm:pt-6">
-          <h3 className="text-lg sm:text-xl font-bold text-stone-900 mb-3 sm:mb-4">Your Answer</h3>
-          <form onSubmit={handleSubmitAnswer}>
-            <textarea
-              value={newAnswer}
-              onChange={(e) => setNewAnswer(e.target.value)}
-              placeholder="Share your knowledge and help others..."
-              rows={6}
-              className="w-full p-3 sm:p-4 border-2 border-stone-300 rounded-lg sm:rounded-xl focus:ring-4 focus:ring-orange-300 focus:border-orange-500 outline-none text-sm sm:text-base resize-none mb-3 sm:mb-4"
-            />
-            <button
-              type="submit"
-              disabled={submitting || !newAnswer.trim()}
-              className="flex items-center gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-orange-600 to-amber-600 text-white rounded-lg font-bold hover:from-orange-700 hover:to-amber-700 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
-            >
-              <Send size={18} className="sm:w-5 sm:h-5" />
-              {submitting ? 'Posting...' : 'Post Answer'}
+      {/* Composer */}
+      <section className="rounded-3xl bg-white p-4 shadow-card ring-1 ring-sandal-200 sm:p-6">
+        <h3 className="text-base font-semibold text-maroon-900">Your answer</h3>
+        <p className="mt-0.5 text-xs text-maroon-900/50">Share what you know, kindly and simply.</p>
+        <form onSubmit={handleSubmitAnswer} className="mt-3">
+          <textarea
+            value={newAnswer}
+            onChange={(e) => setNewAnswer(e.target.value)}
+            placeholder="Write your answer here"
+            rows={5}
+            className={`${fieldCls} resize-none leading-relaxed`}
+          />
+          <div className="mt-3 flex justify-end">
+            <button type="submit" disabled={submitting || !newAnswer.trim()} className="btn-primary w-full sm:w-auto">
+              {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+              {submitting ? 'Posting…' : 'Post answer'}
             </button>
-          </form>
-        </div>
-      </div>
+          </div>
+        </form>
+      </section>
+
+      {/* Report sheet */}
+      {flagTarget &&
+        createPortal(
+          <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="Report">
+            <div className="absolute inset-0 animate-fadeIn bg-maroon-900/25 backdrop-blur-[2px]" onClick={flagging ? undefined : () => setFlagTarget(null)} />
+            <div
+              style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
+              className="relative max-h-[90dvh] w-full animate-rise-in overflow-y-auto rounded-t-[28px] bg-white px-5 pt-5 sm:max-w-md sm:rounded-[28px] sm:px-6"
+            >
+              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-sandal-300 sm:hidden" />
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-lg font-semibold text-maroon-900">Report this {flagTarget.contentType}</h3>
+                  <p className="mt-0.5 text-sm text-maroon-900/55">What is wrong with it?</p>
+                </div>
+                <button onClick={() => setFlagTarget(null)} disabled={flagging} className="icon-btn -mr-2 shrink-0" aria-label="Close">
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="mt-4 space-y-2">
+                {FLAG_REASONS.map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => submitFlag(r)}
+                    disabled={flagging}
+                    className="flex w-full items-center rounded-2xl bg-white px-4 py-3.5 text-left text-sm font-medium text-maroon-900/80 ring-1 ring-sandal-200 transition hover:bg-amber-50 hover:ring-marigold-400/60 disabled:opacity-50"
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+              {flagging && (
+                <p className="mt-3 flex items-center justify-center gap-2 text-sm text-maroon-900/55">
+                  <Loader2 size={15} className="animate-spin" /> Sending…
+                </p>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

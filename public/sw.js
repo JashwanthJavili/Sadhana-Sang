@@ -68,6 +68,25 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Never intercept in local development (Vite serves un-hashed modules)
+  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
+    return;
+  }
+
+  // Network-first for page navigations so new deployments show up immediately
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy));
+          return response;
+        })
+        .catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
   // Cache-first strategy for static assets
   event.respondWith(
     caches.match(request)

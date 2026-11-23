@@ -1,6 +1,8 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import './src/index.css';
+import './i18n';
 import { ErrorBoundary, initializeErrorHandling } from './utils/error-handling';
 
 // Suppress Recharts defaultProps warnings (library issue with React 19, harmless)

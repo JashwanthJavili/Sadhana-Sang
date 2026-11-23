@@ -5,8 +5,7 @@ import Login from './components/Login';
 import OnboardingModal from './components/OnboardingModal';
 import GenderSelectionModal from './components/GenderSelectionModal';
 import FeedbackPrompt from './components/FeedbackPrompt';
-import LoadingScreen from './components/LoadingScreen';
-import BackgroundMusic from './components/BackgroundMusic';
+import LoadingScreen, { PageLoader } from './components/LoadingScreen';
 import VersionChecker from './components/VersionChecker';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { LanguageProvider } from './contexts/LanguageContext';
@@ -14,7 +13,7 @@ import { UserDataProvider, useUserData } from './contexts/UserDataContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { getSettings, saveSettings, cleanupFakeSeedData } from './services/storage';
 import { createUserProfile, setUserOnlineStatus, getUserProfile } from './services/chat';
-import { ref, get } from 'firebase/database';
+import { ref, get, set } from 'firebase/database';
 import { db } from './services/firebase';
 import { checkForUpdates, markVersionSeen, VERSION_HISTORY } from './utils/version';
 import { X, Sparkles } from 'lucide-react';
@@ -37,6 +36,7 @@ const ChantingCounter = lazy(() => import('./pages/ChantingCounter'));
 const SlokasLibrary = lazy(() => import('./pages/SlokasLibrary'));
 const FestivalsPage = lazy(() => import('./pages/FestivalsPage'));
 const FestivalDetailPage = lazy(() => import('./pages/FestivalDetailPage'));
+const EkadashiDetailPage = lazy(() => import('./pages/EkadashiDetailPage'));
 const ConnectionRequests = lazy(() => import('./pages/ConnectionRequests'));
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -149,65 +149,53 @@ function AppContent() {
     checkFirstTime();
   }, [user]);
 
-  // Check if user is eligible for feedback (once per week if not submitted)
-  const checkFeedbackEligibility = async (userId: string, settings: any) => {
+  // Feedback prompt: at most once every 30 days, counted from when it was last
+  // SHOWN — so closing it (or refreshing) never brings it back early.
+  const FEEDBACK_INTERVAL_MS = 30 * 24 * 60 * 60 * 1000;
+  const feedbackChecked = React.useRef<string | null>(null);
+
+  const checkFeedbackEligibility = async (userId: string, _settings: any) => {
+    if (feedbackChecked.current === userId) return; // avoid double-run (StrictMode / re-renders)
+    feedbackChecked.current = userId;
+
+    const localKey = `ss_feedback_prompted_${userId}`;
+    const now = Date.now();
     try {
-      // Check if user dismissed today
-      const dismissedRef = ref(db, `users/${userId}/lastFeedbackDismissed`);
-      const dismissedSnapshot = await get(dismissedRef);
+      const localTs = Number(localStorage.getItem(localKey) || 0);
+      if (now - localTs < FEEDBACK_INTERVAL_MS) return;
+    } catch {
+      /* storage unavailable — fall back to the database */
+    }
 
-      if (dismissedSnapshot.exists()) {
-        const lastDismissedTime = dismissedSnapshot.val().timestamp;
-        const currentTime = Date.now();
-        const hoursSinceDismissed = Math.floor((currentTime - lastDismissedTime) / (1000 * 60 * 60));
-
-        // If dismissed in last 24 hours, don't show
-        if (hoursSinceDismissed < 24) {
-          console.log(`✓ Feedback dismissed ${Math.floor(hoursSinceDismissed)} hour(s) ago. Will prompt tomorrow.`);
-          return;
-        }
-      }
-
-      // Check last feedback submission time
-      const feedbackRef = ref(db, `users/${userId}/lastFeedback`);
-      const feedbackSnapshot = await get(feedbackRef);
-
-      if (feedbackSnapshot.exists()) {
-        const lastFeedbackTime = feedbackSnapshot.val().timestamp;
-        const currentTime = Date.now();
-        const hoursSinceLastFeedback = Math.floor((currentTime - lastFeedbackTime) / (1000 * 60 * 60));
-
-        // If submitted in last 14 days (336 hours), don't show
-        if (hoursSinceLastFeedback < 336) {
-          const daysRemaining = Math.ceil((336 - hoursSinceLastFeedback) / 24);
-          console.log(`✓ Feedback already submitted ${Math.floor(hoursSinceLastFeedback / 24)} day(s) ago. Next prompt in ${daysRemaining} day(s).`);
-          return;
-        }
-      }
-
-      // Get user creation time (registration date)
-      const userCreatedAt = user?.metadata?.creationTime;
-      if (!userCreatedAt) {
-        console.log('⚠️ Cannot determine user creation time');
+    try {
+      const [shownSnap, submittedSnap, dismissedSnap] = await Promise.all([
+        get(ref(db, `users/${userId}/feedbackPrompt/lastShown`)),
+        get(ref(db, `users/${userId}/lastFeedback/timestamp`)),
+        get(ref(db, `users/${userId}/lastFeedbackDismissed/timestamp`)),
+      ]);
+      const lastTouch = Math.max(
+        Number(shownSnap.val()) || 0,
+        Number(submittedSnap.val()) || 0,
+        Number(dismissedSnap.val()) || 0
+      );
+      if (now - lastTouch < FEEDBACK_INTERVAL_MS) {
+        try { localStorage.setItem(localKey, String(lastTouch)); } catch { /* ignore */ }
         return;
       }
 
-      const createdDate = new Date(userCreatedAt);
-      const currentDate = new Date();
-      const daysSinceRegistration = Math.floor((currentDate.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24));
+      // Give new devotees a couple of days before asking
+      const createdAt = user?.metadata?.creationTime ? new Date(user.metadata.creationTime).getTime() : now;
+      if (now - createdAt < 2 * 24 * 60 * 60 * 1000) return;
 
-      console.log(`📅 Days since registration: ${daysSinceRegistration}`);
-
-      // Show feedback after 2+ days
-      if (daysSinceRegistration >= 2) {
-        console.log('✅ User eligible for feedback prompt');
-        // Delay showing by 5 seconds to let app load
-        setTimeout(() => {
-          setShowFeedback(true);
-        }, 5000);
-      } else {
-        console.log(`⏳ User needs ${2 - daysSinceRegistration} more day(s) before feedback`);
-      }
+      setTimeout(async () => {
+        setShowFeedback(true);
+        try { localStorage.setItem(localKey, String(Date.now())); } catch { /* ignore */ }
+        try {
+          await set(ref(db, `users/${userId}/feedbackPrompt/lastShown`), Date.now());
+        } catch (err) {
+          console.warn('Could not record feedback prompt time:', err);
+        }
+      }, 8000);
     } catch (error) {
       console.error('Error checking feedback eligibility:', error);
     }
@@ -282,7 +270,7 @@ function AppContent() {
       <VersionChecker />
       
       <Layout>
-        <Suspense fallback={<LoadingScreen />}>
+        <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/login" element={<PublicOnlyRoute><Login /></PublicOnlyRoute>} />
 
@@ -304,6 +292,7 @@ function AppContent() {
             <Route path="/slokas" element={<PrivateRoute><SlokasLibrary /></PrivateRoute>} />
             <Route path="/festivals" element={<PrivateRoute><FestivalsPage /></PrivateRoute>} />
             <Route path="/festival/:festivalId" element={<PrivateRoute><FestivalDetailPage /></PrivateRoute>} />
+            <Route path="/ekadashi/:slug" element={<PrivateRoute><EkadashiDetailPage /></PrivateRoute>} />
             <Route path="/admin" element={<PrivateRoute><AdminPanel /></PrivateRoute>} />
 
             {/* Catch-all: redirect to dashboard if logged in, login if not */}
@@ -318,88 +307,60 @@ function AppContent() {
       {/* Feedback Prompt - Shows after 2+ days */}
       {showFeedback && <FeedbackPrompt onClose={() => setShowFeedback(false)} />}
 
-      {/* Background Music - Hare Krishna Mantra */}
-      {user && <BackgroundMusic autoPlay={true} />}
 
       {/* Version Update Modal */}
       {showVersionUpdate && versionInfo && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-lg w-full max-h-[85vh] shadow-2xl border-4 border-green-400 animate-scale-in overflow-hidden flex flex-col">
-            {/* Header - Fixed */}
-            <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-4 sm:p-6 text-white relative overflow-hidden flex-shrink-0">
-              <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -mr-20 -mt-20"></div>
-              <div className="absolute bottom-0 left-0 w-32 h-32 bg-white/10 rounded-full -ml-16 -mb-16"></div>
-              <div className="relative flex items-start justify-between">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <Sparkles size={28} className="text-yellow-300 flex-shrink-0" />
-                  <div>
-                    <h2 className="text-xl sm:text-2xl font-bold">New Version Available!</h2>
-                    <p className="text-green-100 text-sm sm:text-base mt-0.5">Version {versionInfo.latestVersion} is here</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    markVersionSeen();
-                    setShowVersionUpdate(false);
-                  }}
-                  className="p-2 hover:bg-white/20 rounded-lg transition-all flex-shrink-0"
-                >
-                  <X size={22} />
-                </button>
-              </div>
+        <div className="fixed inset-0 z-[90] flex items-end justify-center p-0 sm:items-center sm:p-4">
+          <div
+            className="absolute inset-0 bg-stone-900/50 backdrop-blur-sm animate-fadeIn"
+            onClick={() => { markVersionSeen(); setShowVersionUpdate(false); }}
+          />
+          <div className="relative flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl animate-scale-in sm:rounded-3xl">
+            <div className="relative overflow-hidden bg-gradient-to-br from-brand-500 via-brand-600 to-amber-600 px-6 pb-6 pt-7 text-white">
+              <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
+              <button
+                onClick={() => { markVersionSeen(); setShowVersionUpdate(false); }}
+                className="absolute right-4 top-4 rounded-lg p-1.5 text-white/80 transition hover:bg-white/15 hover:text-white"
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-1 text-xs font-semibold backdrop-blur">
+                <Sparkles size={13} /> What's new
+              </span>
+              <h2 className="mt-3 text-2xl font-bold text-white">Version {versionInfo.latestVersion}</h2>
+              <p className="mt-1 text-sm text-white/80">Here's what we've improved for your sadhana.</p>
             </div>
 
-            {/* Content - Scrollable */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-              <h3 className="text-base sm:text-lg font-bold text-stone-800 mb-3 flex items-center gap-2 sticky top-0 bg-white pb-2 z-10">
-                🎉 What's New
-              </h3>
-              <ul className="space-y-2 mb-6">
+            <div className="flex-1 overflow-y-auto px-6 py-5">
+              <ul className="space-y-2.5">
                 {versionInfo.latestFeatures.map((feature: string, idx: number) => (
-                  <li key={idx} className="flex items-start gap-3 text-stone-700 text-sm sm:text-base">
-                    <span className="text-green-600 font-bold mt-0.5 flex-shrink-0">✓</span>
+                  <li key={idx} className="flex items-start gap-3 text-sm text-stone-700">
+                    <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-[11px] font-bold text-emerald-600">✓</span>
                     <span>{feature}</span>
                   </li>
                 ))}
               </ul>
 
-              {/* Version History */}
-              <details className="mb-4">
-                <summary className="cursor-pointer text-sm font-bold text-stone-600 hover:text-green-600 transition-colors py-2">
-                  📜 View Full Version History
+              <details className="group mt-6 rounded-xl border border-stone-200">
+                <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold text-stone-700 hover:text-brand-700">
+                  Full version history
                 </summary>
-                <div className="mt-3 space-y-3 pl-2 sm:pl-4">
+                <div className="space-y-4 border-t border-stone-100 px-4 py-4">
                   {VERSION_HISTORY.slice(1).map((version) => {
-                    // Filter features based on user role - hide ANY mention of admin
-                    const filteredFeatures = version.features.filter(feature => {
-                      // If user is not admin, hide admin-related features
-                      const isUserAdmin = user?.email === 'jashwanthjavili7@gmail.com';
-                      if (!isUserAdmin) {
-                        const lowerFeature = feature.toLowerCase();
-                        if (
-                          lowerFeature.includes('admin') ||
-                          lowerFeature.includes('permission') ||
-                          lowerFeature.includes('security') ||
-                          lowerFeature.includes('database') ||
-                          lowerFeature.includes('rule') ||
-                          lowerFeature.includes('deploy') ||
-                          lowerFeature.includes('backend')
-                        ) {
-                          return false;
-                        }
-                      }
-                      return true;
+                    const isUserAdmin = user?.email === 'jashwanthjavili7@gmail.com';
+                    const filteredFeatures = version.features.filter((feature) => {
+                      if (isUserAdmin) return true;
+                      const f = feature.toLowerCase();
+                      return !['admin', 'permission', 'security', 'database', 'rule', 'deploy', 'backend'].some((w) => f.includes(w));
                     });
-
-                    // Only show version if it has features for this user type
                     if (filteredFeatures.length === 0) return null;
-
                     return (
-                      <div key={version.version} className="border-l-2 border-stone-200 pl-3 sm:pl-4 py-2">
-                        <p className="font-bold text-stone-700 text-sm sm:text-base">
-                          Version {version.version} <span className="text-xs text-stone-500">({version.date})</span>
+                      <div key={version.version} className="border-l-2 border-stone-200 pl-3">
+                        <p className="text-sm font-semibold text-stone-800">
+                          v{version.version} <span className="font-normal text-stone-400">· {version.date}</span>
                         </p>
-                        <ul className="text-xs sm:text-sm text-stone-600 mt-1 space-y-1">
+                        <ul className="mt-1 space-y-0.5 text-xs text-stone-600">
                           {filteredFeatures.map((feature, idx) => (
                             <li key={idx}>• {feature}</li>
                           ))}
@@ -411,16 +372,12 @@ function AppContent() {
               </details>
             </div>
 
-            {/* Footer - Fixed */}
-            <div className="p-4 sm:p-6 border-t border-stone-200 bg-gradient-to-br from-green-50 to-emerald-50 flex-shrink-0">
+            <div className="border-t border-stone-100 p-4 sm:px-6">
               <button
-                onClick={() => {
-                  markVersionSeen();
-                  setShowVersionUpdate(false);
-                }}
-                className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-xl font-bold text-base sm:text-lg shadow-lg transition-all transform hover:scale-105 active:scale-95"
+                onClick={() => { markVersionSeen(); setShowVersionUpdate(false); }}
+                className="btn-primary btn-lg w-full"
               >
-                Got it, Thanks! 🙏
+                Got it, thanks 🙏
               </button>
             </div>
           </div>

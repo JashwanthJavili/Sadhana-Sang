@@ -23,6 +23,11 @@ export default defineConfig(({ mode }) => {
         // Cache busting - add hash to filenames
         rollupOptions: {
           output: {
+            // Vendor libraries change rarely — split them so browsers cache them across releases
+            manualChunks: {
+              react: ['react', 'react-dom', 'react-router-dom'],
+              firebase: ['firebase/app', 'firebase/auth', 'firebase/database'],
+            },
             entryFileNames: 'assets/[name].[hash].js',
             chunkFileNames: 'assets/[name].[hash].js',
             assetFileNames: 'assets/[name].[hash].[ext]'

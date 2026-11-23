@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
+import { PageLoader } from '../components/LoadingScreen';
 import { UserProfile, ConnectionStatus } from '../types/chat';
 import { getAllUsers, searchUsers, createOrGetChat } from '../services/chat';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserData } from '../contexts/UserDataContext';
-import { Users, Search, MessageCircle, Wifi, WifiOff, Filter, X, UserPlus, Clock, Bell } from 'lucide-react';
+import { Users, Search, MessageCircle, X, UserPlus, UserMinus, Check, HelpCircle, MapPin, BookOpen } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import UserProfileModal from '../components/UserProfileModal';
-import iskconLogo from '../utils/Images/Iscon_LOgo-removebg-preview.png';
+import Avatar from '../components/Avatar';
 import { 
   getConnectionStatus, 
   sendConnectionRequest, 
@@ -268,24 +269,32 @@ const Community: React.FC = () => {
 
   const renderConnectionButton = (profile: UserProfile) => {
     const status = connectionStatuses[profile.uid];
+    const canMessageDirectly = profile.messagingPrivacy === 'everyone';
+    const sideMessageBtn = canMessageDirectly ? (
+      <button
+        onClick={() => handleStartChat(profile.uid)}
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-brand-700 ring-1 ring-amber-200 transition hover:bg-amber-100"
+        title="Send a message"
+        aria-label="Send a message"
+      >
+        <MessageCircle size={17} />
+      </button>
+    ) : null;
 
     if (status === 'connected') {
       return (
         <div className="flex gap-2">
-          <button
-            onClick={() => handleStartChat(profile.uid)}
-            className="flex-1 px-3 sm:px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all flex items-center justify-center gap-2 shadow-md text-sm"
-          >
-            <MessageCircle className="w-4 h-4" />
-            <span className="hidden sm:inline">Message</span>
+          <button onClick={() => handleStartChat(profile.uid)} className="btn-primary h-10 flex-1">
+            <MessageCircle size={16} /> Message
           </button>
           <button
             onClick={() => handleRemoveConnection(profile.uid, profile.userName)}
             disabled={removingConnection === profile.uid}
-            className="px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-all flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-            title="Remove Connection"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-maroon-900/40 ring-1 ring-sandal-200 transition hover:bg-sandal-100 hover:text-maroon-700 disabled:opacity-40"
+            title="Remove connection"
+            aria-label="Remove connection"
           >
-            <X className="w-4 h-4" />
+            <UserMinus size={16} />
           </button>
         </div>
       );
@@ -294,349 +303,253 @@ const Community: React.FC = () => {
     if (status === 'pending') {
       return (
         <div className="flex gap-2">
-          <button
-            disabled
-            className="flex-1 px-4 py-2 bg-yellow-100 text-yellow-800 rounded-lg cursor-not-allowed flex items-center gap-2 text-sm"
-          >
-            <Clock className="w-4 h-4" />
-            Pending
-          </button>
-          {/* Show message button if user allows messages from everyone */}
-          {profile.messagingPrivacy === 'everyone' && (
-            <button
-              onClick={() => handleStartChat(profile.uid)}
-              className="px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all flex items-center justify-center gap-2 shadow-md text-sm"
-              title="Send Message"
-            >
-              <MessageCircle className="w-4 h-4" />
-            </button>
-          )}
+          <span className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-sandal-100 text-sm font-semibold text-maroon-700 ring-1 ring-sandal-200">
+            <Check size={16} /> Request sent
+          </span>
+          {sideMessageBtn}
         </div>
       );
     }
 
-    // status === 'none' or 'rejected' - show Connect button and Message if allowed
     return (
       <div className="flex gap-2">
-        <button
-          onClick={() => handleConnect(profile.uid, profile.userName, profile.photoURL)}
-          className="flex-1 px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 transition-all flex items-center gap-2 shadow-md text-sm"
-        >
-          <UserPlus className="w-4 h-4" />
-          Connect
+        <button onClick={() => handleConnect(profile.uid, profile.userName, profile.photoURL)} className="btn-primary h-10 flex-1">
+          <UserPlus size={16} /> Connect
         </button>
-        {/* Show message button if user allows messages from everyone */}
-        {profile.messagingPrivacy === 'everyone' && (
-          <button
-            onClick={() => handleStartChat(profile.uid)}
-            className="px-3 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all flex items-center justify-center gap-2 shadow-md text-sm"
-            title="Send Message"
-          >
-            <MessageCircle className="w-4 h-4" />
-          </button>
-        )}
+        {sideMessageBtn}
       </div>
     );
   };
 
-  // ACID-compliant display:
-  // filteredUsers already contains the correct users for the current view (Connected or Explore)
-  // with search/filters applied. This ensures:
-  // - Atomicity: Each user in exactly ONE tab
-  // - Consistency: connectedUsers + exploreUsers = all users
-  // - Isolation: Filters don't affect tab membership
-  // - Durability: Real-time updates preserved
-  const connectedUsers = users.filter(u => connectedUserIds.includes(u.uid));
-  const exploreUsers = users.filter(u => !connectedUserIds.includes(u.uid));
-  
-  const displayUsers = filteredUsers; // Already filtered for current view
+  const connectedUsers = users.filter((u) => connectedUserIds.includes(u.uid));
+  const exploreUsers = users.filter((u) => !connectedUserIds.includes(u.uid));
+  const displayUsers = filteredUsers; // already filtered for the current tab
+  const activeFilters = (filters.onlineOnly ? 1 : 0) + (filters.guruName !== 'All' ? 1 : 0) + (filters.iskconCenter !== 'All' ? 1 : 0);
+  const known = (v?: string) => (v && v.toLowerCase() !== 'n/a' && v !== 'Not Specified' ? v : '');
+  const onlineCount = users.filter((u) => u.isOnline).length;
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="inline-block w-16 h-16 border-4 border-orange-200 border-t-orange-600 rounded-full animate-spin mb-4"></div>
-          <p className="text-stone-600 font-medium text-lg">Loading community...</p>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <PageLoader label="Finding devotees…" />;
+
+  const chipCls = (active: boolean) =>
+    `inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition ${
+      active ? 'bg-amber-100 text-maroon-900 ring-1 ring-marigold-400' : 'bg-white text-maroon-800 ring-1 ring-sandal-300 hover:bg-sandal-100'
+    }`;
+  const selectChipCls = (active: boolean) =>
+    `h-9 max-w-[11rem] shrink-0 cursor-pointer truncate rounded-full border-0 py-0 pl-4 pr-8 text-sm font-medium outline-none ring-1 transition focus:ring-2 focus:ring-marigold-400 ${
+      active ? 'bg-amber-100 text-maroon-900 ring-marigold-400' : 'bg-white text-maroon-800 ring-sandal-300'
+    }`;
+
+  const quickLinks = [
+    { label: 'Messages', icon: MessageCircle, to: '/chats', count: 0 },
+    { label: 'Requests', icon: UserPlus, to: '/connection-requests', count: pendingRequestCount },
+    { label: 'Forum', icon: HelpCircle, to: '/questions', count: 0 },
+  ];
 
   return (
-    <div className="min-h-full space-y-4 sm:space-y-5 max-w-6xl mx-auto animate-fadeIn">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-orange-600 via-amber-600 to-orange-600 rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-xl border-2 border-orange-400">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex-1">
-            <h2 className="text-lg sm:text-xl md:text-2xl font-serif font-bold text-white mb-1 sm:mb-2 flex items-center gap-2">
-              <div className="bg-white/20 p-2 sm:p-2.5 rounded-lg sm:rounded-xl">
-                <Users className="text-white" size={24} />
-              </div>
-              Devotee Community
-            </h2>
-            <p className="text-orange-100 text-sm sm:text-base font-medium">
-              {users.length} fellow devotees • {connectedUserIds.length} connected • {getOnlineCount()} online
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            {/* Pending Requests Badge */}
-            {pendingRequestCount > 0 && (
-              <button
-                onClick={() => navigate('/connection-requests')}
-                className="relative flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg transition-all shadow-lg hover:shadow-xl hover:scale-105 active:scale-95"
-                title="Connection Requests"
-              >
-                <UserPlus size={18} />
-                <span className="hidden sm:inline text-sm font-semibold">Requests</span>
-                <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-md animate-pulse">
-                  {pendingRequestCount}
-                </span>
-              </button>
-            )}
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg sm:rounded-xl text-sm sm:text-base font-bold transition-all shadow-lg transform hover:scale-105 active:scale-95 ${
-                showFilters ? 'bg-white text-orange-600' : 'bg-white/20 text-white hover:bg-white/30'
-              }`}
-            >
-              <Filter size={18} />
-              <span className="hidden sm:inline">Filters</span>
-            </button>
-          </div>
-        </div>
+    <div className="mx-auto w-full max-w-5xl animate-rise-in">
+      {/* Title */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-maroon-900">Community</h1>
+        <p className="mt-0.5 text-sm text-maroon-900/60">Meet devotees, make friends and grow together in Krishna consciousness.</p>
       </div>
 
-      {/* Search and Filters */}
-      <div className="space-y-3 sm:space-y-4">
-        {/* Search Bar */}
-        <div className="relative">
-          <Search className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-stone-400" size={20} />
-          <input
-            type="text"
-            placeholder="Search by name, guru, or center..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-11 sm:pl-12 pr-3 sm:pr-4 py-2.5 sm:py-3 border-2 border-stone-300 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-orange-300 focus:border-orange-500 outline-none text-sm sm:text-base font-medium shadow-md"
-          />
-        </div>
-
-        {/* Filter Panel */}
-        {showFilters && (
-          <div className="bg-white rounded-xl shadow-lg border-2 border-stone-200 p-6 space-y-4 animate-slideDown">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-xl font-bold text-stone-900">Filter Devotees</h3>
-                <p className="text-sm text-stone-600 mt-1">
-                  Showing {displayUsers.length} of {users.length} devotees
-                </p>
-              </div>
-              <button
-                onClick={() => setShowFilters(false)}
-                className="text-stone-400 hover:text-stone-600 transition-colors"
-              >
-                <X size={24} />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Online Status Filter */}
-              <label className="flex items-center gap-3 p-4 border-2 border-stone-200 rounded-lg hover:bg-orange-50 cursor-pointer transition-all">
-                <input
-                  type="checkbox"
-                  checked={filters.onlineOnly}
-                  onChange={(e) => setFilters({ ...filters, onlineOnly: e.target.checked })}
-                  className="w-5 h-5 text-orange-600 rounded focus:ring-2 focus:ring-orange-500"
-                />
-                <Wifi className="text-green-600" size={20} />
-                <span className="font-semibold text-stone-700">Online Only</span>
-              </label>
-
-              {/* Spiritual Guide Filter */}
-              <select
-                value={filters.guruName}
-                onChange={(e) => setFilters({ ...filters, guruName: e.target.value })}
-                className="p-4 border-2 border-stone-200 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none font-semibold"
-              >
-                <option value="All">All Spiritual Guides</option>
-                {uniqueGurus.map(guru => (
-                  <option key={guru} value={guru}>{guru}</option>
-                ))}
-                {hasUsersWithoutGuru && (
-                  <option value="Not Specified">Not Specified</option>
-                )}
-              </select>
-
-              {/* ISKCON Center Filter */}
-              <select
-                value={filters.iskconCenter}
-                onChange={(e) => setFilters({ ...filters, iskconCenter: e.target.value })}
-                className="p-4 border-2 border-stone-200 rounded-lg focus:ring-2 focus:ring-orange-500 outline-none font-semibold"
-              >
-                <option value="All">All ISKCON Centers</option>
-                {uniqueCenters.map(center => (
-                  <option key={center} value={center}>{center}</option>
-                ))}
-                {hasUsersWithoutCenter && (
-                  <option value="Not Specified">Not Specified</option>
-                )}
-              </select>
-            </div>
-
-            {/* Clear Filters */}
-            {(filters.onlineOnly || (filters.guruName && filters.guruName !== 'All') || (filters.iskconCenter && filters.iskconCenter !== 'All')) && (
-              <button
-                onClick={() => setFilters({ onlineOnly: false, guruName: 'All', iskconCenter: 'All' })}
-                className="text-orange-600 hover:text-orange-700 font-semibold text-sm transition-colors"
-              >
-                Clear all filters
-              </button>
+      {/* Quick links */}
+      <div className="mt-4 grid grid-cols-3 gap-2 sm:max-w-md sm:gap-3">
+        {quickLinks.map(({ label, icon: Icon, to, count }) => (
+          <button
+            key={label}
+            onClick={() => navigate(to)}
+            className="relative flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-white px-2 py-3 shadow-soft ring-1 ring-sandal-200 transition hover:-translate-y-0.5 hover:shadow-card hover:ring-amber-200"
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-50 text-brand-600">
+              <Icon size={18} />
+            </span>
+            <span className="text-[13px] font-semibold text-maroon-900">{label}</span>
+            {count > 0 && (
+              <span className="absolute right-2 top-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-600 px-1.5 text-[11px] font-bold text-white">
+                {count}
+              </span>
             )}
-          </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Search */}
+      <label className="mt-5 flex h-12 items-center gap-2.5 rounded-2xl bg-white px-4 shadow-soft ring-1 ring-sandal-200 focus-within:ring-2 focus-within:ring-marigold-400">
+        <Search size={18} className="shrink-0 text-maroon-900/40" />
+        <input
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          placeholder="Search by name, teacher or temple"
+          className="w-full min-w-0 bg-transparent text-[15px] text-maroon-900 outline-none placeholder:text-maroon-900/40"
+        />
+        {searchTerm && (
+          <button
+            onClick={() => setSearchTerm('')}
+            className="-mr-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-maroon-900/40 hover:bg-sandal-100"
+            aria-label="Clear search"
+          >
+            <X size={16} />
+          </button>
+        )}
+      </label>
+
+      {/* Tabs */}
+      <div className="mt-4 grid grid-cols-2 rounded-2xl bg-sandal-100 p-1 ring-1 ring-sandal-200 sm:inline-grid" role="tablist">
+        {(
+          [
+            { id: 'connected', label: 'My connections', count: connectedUsers.length },
+            { id: 'explore', label: 'Find devotees', count: exploreUsers.length },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={view === t.id}
+            onClick={() => setView(t.id)}
+            className={`flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold transition sm:px-5 ${
+              view === t.id ? 'bg-white text-maroon-900 shadow-soft' : 'text-maroon-900/55 hover:text-maroon-900'
+            }`}
+          >
+            <span className="truncate">{t.label}</span>
+            <span className={`text-xs font-medium ${view === t.id ? 'text-brand-600' : 'text-maroon-900/40'}`}>{t.count}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Filter chips */}
+      <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-none sm:mx-0 sm:flex-wrap sm:px-0">
+        <button
+          onClick={() => setFilters({ ...filters, onlineOnly: !filters.onlineOnly })}
+          className={chipCls(filters.onlineOnly)}
+          aria-pressed={filters.onlineOnly}
+        >
+          <span className="h-2 w-2 rounded-full bg-emerald-500" />
+          Online now
+          {onlineCount > 0 && <span className="text-xs text-maroon-900/45">{onlineCount}</span>}
+        </button>
+        {(uniqueGurus.length > 0 || hasUsersWithoutGuru) && (
+          <select
+            aria-label="Filter by teacher"
+            value={filters.guruName}
+            onChange={(e) => setFilters({ ...filters, guruName: e.target.value })}
+            className={selectChipCls(filters.guruName !== 'All')}
+          >
+            <option value="All">Any teacher</option>
+            {uniqueGurus.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+            {hasUsersWithoutGuru && <option value="Not Specified">Not specified</option>}
+          </select>
+        )}
+        {(uniqueCenters.length > 0 || hasUsersWithoutCenter) && (
+          <select
+            aria-label="Filter by temple"
+            value={filters.iskconCenter}
+            onChange={(e) => setFilters({ ...filters, iskconCenter: e.target.value })}
+            className={selectChipCls(filters.iskconCenter !== 'All')}
+          >
+            <option value="All">Any temple</option>
+            {uniqueCenters.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+            {hasUsersWithoutCenter && <option value="Not Specified">Not specified</option>}
+          </select>
+        )}
+        {activeFilters > 0 && (
+          <button
+            onClick={() => setFilters({ onlineOnly: false, guruName: 'All', iskconCenter: 'All' })}
+            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full px-3 text-sm font-medium text-brand-700 hover:bg-amber-50"
+          >
+            <X size={14} /> Clear
+          </button>
         )}
       </div>
 
-      {/* View Toggle */}
-      <div className="flex gap-3 bg-white rounded-xl p-2 shadow-md w-full sm:w-auto">
-        <button
-          onClick={() => setView('connected')}
-          className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg font-semibold transition-all ${
-            view === 'connected'
-              ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          Connected ({connectedUsers.length})
-        </button>
-        <button
-          onClick={() => setView('explore')}
-          className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg font-semibold transition-all ${
-            view === 'explore'
-              ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-md'
-              : 'text-gray-600 hover:bg-gray-100'
-          }`}
-        >
-          Explore ({exploreUsers.length})
-        </button>
-      </div>
-
-      {/* Users Grid */}
+      {/* Devotees */}
       {displayUsers.length === 0 ? (
-        <div className="text-center py-12 sm:py-16 bg-white rounded-lg sm:rounded-xl border-2 border-dashed border-stone-300">
-          <Users className="mx-auto mb-3 sm:mb-4 text-stone-400" size={48} />
-          {view === 'connected' ? (
+        <div className="mt-4 rounded-3xl bg-white px-6 py-12 text-center shadow-soft ring-1 ring-sandal-200">
+          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-brand-600 ring-1 ring-amber-200">
+            <Users size={24} />
+          </span>
+          {view === 'connected' && !searchTerm && activeFilters === 0 ? (
             <>
-              <p className="text-stone-600 text-base sm:text-lg font-medium mb-4">Not connected with any devotees yet</p>
-              <button
-                onClick={() => setView('explore')}
-                className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 transition-all shadow-md"
-              >
-                Explore Devotees
+              <h2 className="mt-4 text-base font-semibold text-maroon-900">No connections yet</h2>
+              <p className="mx-auto mt-1 max-w-xs text-sm text-maroon-900/60">Find devotees near you or from your temple and send them a request.</p>
+              <button onClick={() => setView('explore')} className="btn-primary mt-5 h-11 px-5">
+                <UserPlus size={17} /> Find devotees
               </button>
             </>
           ) : (
             <>
-              <p className="text-stone-600 text-base sm:text-lg font-medium">No devotees found matching your filters</p>
-              <p className="text-stone-400 text-sm mt-2">Try adjusting your search or filters</p>
+              <h2 className="mt-4 text-base font-semibold text-maroon-900">No devotees found</h2>
+              <p className="mt-1 text-sm text-maroon-900/60">Try a different search or clear the filters.</p>
+              {activeFilters > 0 && (
+                <button onClick={() => setFilters({ onlineOnly: false, guruName: 'All', iskconCenter: 'All' })} className="btn-secondary mt-5 h-10">
+                  Clear filters
+                </button>
+              )}
             </>
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-          {displayUsers.map((profile) => (
-            <div
-              key={profile.uid}
-              onClick={() => {
-                setSelectedProfile(profile);
-                setShowProfileModal(true);
-              }}
-              className="bg-white rounded-xl border border-orange-200 shadow-md hover:shadow-xl transition-all duration-300 hover:border-orange-300 overflow-hidden group transform hover:scale-[1.02] cursor-pointer"
-            >
-              {/* User Header */}
-              <div className="bg-gradient-to-r from-orange-500 to-amber-500 p-4 sm:p-6 relative">
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {displayUsers.map((profile) => {
+            const temple = known(profile.iskconCenter);
+            const teacher = known(profile.guruName);
+            return (
+              <div
+                key={profile.uid}
+                onClick={() => {
+                  setSelectedProfile(profile);
+                  setShowProfileModal(true);
+                }}
+                className="flex cursor-pointer flex-col rounded-3xl bg-white p-4 shadow-soft ring-1 ring-sandal-200 transition hover:-translate-y-0.5 hover:shadow-card hover:ring-amber-200"
+              >
                 <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <div className="w-12 h-12 sm:w-14 sm:h-14 bg-white rounded-full flex items-center justify-center shadow-md overflow-hidden">
-                      {profile.photoURL ? (
-                        <img
-                          src={profile.photoURL}
-                          alt={profile.userName || 'User'}
-                          className="w-full h-full rounded-full object-cover"
-                          onError={(e) => {
-                            e.currentTarget.src = iskconLogo;
-                            e.currentTarget.classList.remove('rounded-full');
-                            e.currentTarget.classList.add('rounded-full', 'p-1');
-                          }}
-                        />
-                      ) : (
-                        <img
-                          src={iskconLogo}
-                          alt="ISKCON"
-                          className="w-full h-full object-contain p-1"
-                        />
-                      )}
-                    </div>
-                    {/* Online Indicator */}
-                    <div
-                      className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-white ${
-                        profile.isOnline ? 'bg-green-500' : 'bg-stone-400'
-                      }`}
-                    />
+                  <div className="relative shrink-0">
+                    <Avatar src={profile.photoURL} name={profile.userName} className="h-14 w-14 ring-2 ring-amber-100" textClassName="text-lg" />
+                    {profile.isOnline && <span className="absolute bottom-0.5 right-0.5 h-3.5 w-3.5 rounded-full bg-emerald-500 ring-2 ring-white" />}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-base sm:text-lg font-bold text-white truncate">{profile.userName || 'Unknown User'}</h3>
-                    <p className="text-orange-100 text-xs sm:text-sm font-medium flex items-center gap-1">
-                      {profile.isOnline ? (
-                        <>
-                          <Wifi size={12} />
-                          Online
-                        </>
-                      ) : (
-                        <>
-                          <WifiOff size={12} />
-                          {getTimeAgo(profile.lastSeen)}
-                        </>
-                      )}
+                  <div className="min-w-0 flex-1">
+                    <h3 className="truncate text-[15px] font-semibold text-maroon-900">{profile.userName || 'Devotee'}</h3>
+                    <p className={`text-xs ${profile.isOnline ? 'font-medium text-emerald-700' : 'text-maroon-900/45'}`}>
+                      {profile.isOnline ? 'Online now' : profile.lastSeen ? `Active ${getTimeAgo(profile.lastSeen)}` : 'Devotee'}
                     </p>
                   </div>
                 </div>
-              </div>
 
-              {/* User Details */}
-              <div className="p-4 sm:p-6 space-y-3 sm:space-y-4">
-                <div>
-                  <p className="text-[0.65rem] sm:text-xs font-bold text-stone-500 uppercase tracking-wide mb-0.5">
-                    Spiritual Guide
-                  </p>
-                  <p className="text-sm sm:text-base font-semibold text-stone-900 truncate">{profile.guruName && profile.guruName.toLowerCase() !== 'n/a' ? profile.guruName : 'N/A'}</p>
-                </div>
-
-                <div>
-                  <p className="text-[0.65rem] sm:text-xs font-bold text-stone-500 uppercase tracking-wide mb-0.5">
-                    ISKCON Center
-                  </p>
-                  <p className="text-sm sm:text-base font-semibold text-stone-900 truncate">{profile.iskconCenter && profile.iskconCenter.toLowerCase() !== 'n/a' ? profile.iskconCenter : 'N/A'}</p>
-                </div>
-
-                {profile.bio && (
-                  <div>
-                    <p className="text-[0.65rem] sm:text-xs font-bold text-stone-500 uppercase tracking-wide mb-0.5">
-                      About
-                    </p>
-                    <p className="text-xs sm:text-sm text-stone-700 italic line-clamp-2">{profile.bio}</p>
+                {(temple || teacher) && (
+                  <div className="mt-3 space-y-1.5 text-[13px] text-maroon-900/70">
+                    {temple && (
+                      <p className="flex items-center gap-2">
+                        <MapPin size={14} className="shrink-0 text-marigold-500" />
+                        <span className="truncate">{temple}</span>
+                      </p>
+                    )}
+                    {teacher && (
+                      <p className="flex items-center gap-2">
+                        <BookOpen size={14} className="shrink-0 text-marigold-500" />
+                        <span className="truncate">{teacher}</span>
+                      </p>
+                    )}
                   </div>
                 )}
+                {profile.bio && <p className="mt-2 line-clamp-2 text-[13px] text-maroon-900/55">{profile.bio}</p>}
 
-                {/* Connection Action Button */}
-                <div className="mt-2 sm:mt-3" onClick={(e) => e.stopPropagation()}>
+                <div className="mt-auto pt-4" onClick={(e) => e.stopPropagation()}>
                   {renderConnectionButton(profile)}
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
-      {/* User Profile Modal */}
       {selectedProfile && (
         <UserProfileModal
           profile={selectedProfile}
@@ -646,10 +559,14 @@ const Community: React.FC = () => {
             setSelectedProfile(null);
           }}
           showChatButton={connectionStatuses[selectedProfile.uid] === 'connected'}
-          onStartChat={connectionStatuses[selectedProfile.uid] === 'connected' ? () => {
-            handleStartChat(selectedProfile.uid);
-            setShowProfileModal(false);
-          } : undefined}
+          onStartChat={
+            connectionStatuses[selectedProfile.uid] === 'connected'
+              ? () => {
+                  handleStartChat(selectedProfile.uid);
+                  setShowProfileModal(false);
+                }
+              : undefined
+          }
         />
       )}
     </div>

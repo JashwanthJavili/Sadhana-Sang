@@ -94,6 +94,13 @@ export const UserDataProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     refreshUserData();
   }, [refreshUserData]);
 
+  // Refresh when other parts of the app announce a settings change
+  useEffect(() => {
+    const handler = () => refreshUserData();
+    window.addEventListener('userDataUpdated', handler);
+    return () => window.removeEventListener('userDataUpdated', handler);
+  }, [refreshUserData]);
+
   // Listen for storage events (cross-tab sync)
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {

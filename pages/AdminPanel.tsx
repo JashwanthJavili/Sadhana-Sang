@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
+import { PageLoader } from '../components/LoadingScreen';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { 
   Users, Trash2, RefreshCw, BarChart3, MessageSquare, 
   HelpCircle, Shield, UserX, Calendar, Activity, UserPlus, UserMinus,
   Download, Bell, Flag, CheckCircle, XCircle, Search, Filter,
-  TrendingUp, Database, Zap, FileText, Eye, EyeOff, AlertTriangle, MoreVertical, MessageCircle, Send
+  TrendingUp, Database, Zap, FileText, Eye, EyeOff, AlertTriangle, MoreVertical, MessageCircle, Send, Moon
 } from 'lucide-react';
 import { 
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
@@ -25,6 +26,7 @@ import { ref, set, push, get, remove, update } from 'firebase/database';
 import { db } from '../services/firebase';
 import FeedbackViewer from '../components/FeedbackViewer';
 import AdminRequestsPanel from '../components/AdminRequestsPanel';
+import EkadashiAdmin from '../components/ekadashi/EkadashiAdmin';
 
 interface UserInfo {
   uid: string;
@@ -64,7 +66,7 @@ const AdminPanel: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [migrationStatus, setMigrationStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'admins' | 'content' | 'feedback' | 'requests' | 'announcements' | 'system' | 'logs' | 'reports' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'admins' | 'content' | 'ekadashi' | 'feedback' | 'requests' | 'announcements' | 'system' | 'logs' | 'reports' | 'settings'>('overview');
   
   // Announcements State
   const [announcementTitle, setAnnouncementTitle] = useState('');
@@ -658,16 +660,7 @@ const AdminPanel: React.FC = () => {
     );
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <RefreshCw className="animate-spin mx-auto mb-4 text-orange-600" size={48} />
-          <p className="text-xl font-bold">Loading Admin Panel...</p>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <PageLoader label="Loading admin panel…" />;
 
   return (
     <div className="min-h-full space-y-4 sm:space-y-6 max-w-7xl mx-auto animate-fadeIn">
@@ -809,6 +802,17 @@ const AdminPanel: React.FC = () => {
             User Feedback
           </button>
           <button
+            onClick={() => setActiveTab('ekadashi')}
+            className={`px-6 py-3 rounded-xl font-bold transition-all ${
+              activeTab === 'ekadashi'
+                ? 'bg-gradient-to-r from-brand-500 to-amber-500 text-white shadow-lg'
+                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+            }`}
+          >
+            <Moon className="inline mr-2" size={20} />
+            Ekadashi
+          </button>
+          <button
             onClick={() => setActiveTab('requests')}
             className={`px-6 py-3 rounded-xl font-bold transition-all ${
               activeTab === 'requests'
@@ -860,6 +864,8 @@ const AdminPanel: React.FC = () => {
       </div>
 
       {/* Tab Content */}
+      {activeTab === 'ekadashi' && <EkadashiAdmin />}
+
       {activeTab === 'overview' && (
         <div className="space-y-6">
           {/* Analytics Charts */}

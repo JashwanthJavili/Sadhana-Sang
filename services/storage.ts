@@ -1,6 +1,6 @@
 import { ref, get, set, child } from 'firebase/database';
 import { db } from './firebase';
-import { DailyEntry, UserSettings, INITIAL_METRICS, INITIAL_REFLECTIONS, DEFAULT_SETTINGS } from '../types';
+import { DailyEntry, UserSettings, INITIAL_METRICS, INITIAL_REFLECTIONS, DEFAULT_SETTINGS, WeeklyCardNotes, SadhanaCardProfile } from '../types';
 
 // Helper to generate default slots
 export const generateTimeSlots = () => {
@@ -48,7 +48,7 @@ const validateGuestOnly = (userId: string, operation: string) => {
 };
 
 // Create a default empty entry structure
-const createDefaultEntry = (dateStr: string): DailyEntry => ({
+export const createDefaultEntry = (dateStr: string): DailyEntry => ({
   id: dateStr,
   date: dateStr,
   commitments: Array(5).fill(null).map((_, i) => ({ id: i + 1, text: '', done: false })),
@@ -130,6 +130,61 @@ export const getAllEntries = async (userId: string): Promise<DailyEntry[]> => {
     console.error("Error fetching history:", error);
     return [];
   }
+};
+
+/* ----------------------------- Weekly sadhana card ----------------------------- */
+
+export const emptyWeeklyNotes = (weekStart: string): WeeklyCardNotes => ({
+  weekStart,
+  nicePoints: '',
+  realizations: '',
+  concerns: '',
+  updatedAt: 0,
+});
+
+export const getWeeklyNotes = async (userId: string, weekStart: string): Promise<WeeklyCardNotes> => {
+  if (isGuest(userId)) {
+    const raw = localStorage.getItem(`sl_${userId}_week_${weekStart}`);
+    return raw ? { ...emptyWeeklyNotes(weekStart), ...JSON.parse(raw) } : emptyWeeklyNotes(weekStart);
+  }
+  try {
+    const snap = await get(ref(db, `users/${userId}/sadhanaCard/weeks/${weekStart}`));
+    return snap.exists() ? { ...emptyWeeklyNotes(weekStart), ...snap.val() } : emptyWeeklyNotes(weekStart);
+  } catch (error) {
+    console.error('Error getting weekly notes:', error);
+    return emptyWeeklyNotes(weekStart);
+  }
+};
+
+export const saveWeeklyNotes = async (userId: string, notes: WeeklyCardNotes): Promise<void> => {
+  const data = { ...notes, updatedAt: Date.now() };
+  if (isGuest(userId)) {
+    localStorage.setItem(`sl_${userId}_week_${notes.weekStart}`, JSON.stringify(data));
+    return;
+  }
+  await set(ref(db, `users/${userId}/sadhanaCard/weeks/${notes.weekStart}`), data);
+};
+
+export const getCardProfile = async (userId: string): Promise<SadhanaCardProfile> => {
+  const empty = { mentor: '', phone: '' };
+  if (isGuest(userId)) {
+    const raw = localStorage.getItem(`sl_${userId}_card_profile`);
+    return raw ? { ...empty, ...JSON.parse(raw) } : empty;
+  }
+  try {
+    const snap = await get(ref(db, `users/${userId}/sadhanaCard/profile`));
+    return snap.exists() ? { ...empty, ...snap.val() } : empty;
+  } catch {
+    return empty;
+  }
+};
+
+export const saveCardProfile = async (userId: string, profile: SadhanaCardProfile): Promise<void> => {
+  if (isGuest(userId)) {
+    localStorage.setItem(`sl_${userId}_card_profile`, JSON.stringify(profile));
+    return;
+  }
+  await set(ref(db, `users/${userId}/sadhanaCard/profile`), profile);
 };
 
 export const getSettings = async (userId: string): Promise<UserSettings> => {
@@ -301,86 +356,6 @@ export const trackUsage = async (userId: string, userEmail?: string): Promise<vo
   }
 };
 
-export const shouldShowFeedback = async (userId: string): Promise<boolean> => {
-  if (isGuest(userId)) return false;
-
-  try {
-    const dbRef = ref(db);
-    const snapshot = await get(child(dbRef, `users/${userId}/usage`));
-    
-    if (!snapshot.exists()) return false;
-
-    const usage = snapshot.val();
-    const now = Date.now();
-    const today = new Date().toDateString();
-    
-    // Check if already shown today
-    const lastPromptDate = usage.lastFeedbackPrompt ? new Date(usage.lastFeedbackPrompt).toDateString() : null;
-    const promptsToday = (usage.feedbackPromptsToday || 0);
-    const lastPromptDay = usage.lastFeedbackDay || '';
-
-    // Reset counter if it's a new day
-    if (lastPromptDay !== today) {
-      usage.feedbackPromptsToday = 0;
-      usage.lastFeedbackDay = today;
-    }
-
-    // Only show max 2 times per day
-    if (lastPromptDate === today && promptsToday >= 2) {
-      return false;
-    }
-
-    const daysSinceFirst = Math.floor((now - usage.firstLogin) / (1000 * 60 * 60 * 24));
-    const hoursSinceLastPrompt = usage.lastFeedbackPrompt 
-      ? Math.floor((now - usage.lastFeedbackPrompt) / (1000 * 60 * 60))
-      : 999;
-
-    // Show feedback after 3 days of use OR 10 logins, and at least 4 hours since last prompt
-    return (daysSinceFirst >= 3 || usage.loginCount >= 10) && hoursSinceLastPrompt >= 4;
-  } catch (error) {
-    console.error("Error checking feedback status:", error);
-    return false;
-  }
-};
-
-export const markFeedbackShown = async (userId: string, rating?: number): Promise<void> => {
-  if (isGuest(userId)) return;
-
-  try {
-    const dbRef = ref(db);
-    const usageSnapshot = await get(child(dbRef, `users/${userId}/usage`));
-    
-    if (usageSnapshot.exists()) {
-      const usage = usageSnapshot.val();
-      const today = new Date().toDateString();
-      
-      usage.lastFeedbackPrompt = Date.now();
-      
-      // Increment prompts counter for today
-      if (usage.lastFeedbackDay === today) {
-        usage.feedbackPromptsToday = (usage.feedbackPromptsToday || 0) + 1;
-      } else {
-        usage.feedbackPromptsToday = 1;
-        usage.lastFeedbackDay = today;
-      }
-      
-      await set(ref(db, `users/${userId}/usage`), usage);
-    }
-
-    // Save the star rating if provided
-    if (rating) {
-      const feedbackData = {
-        rating,
-        timestamp: Date.now(),
-        userId,
-        type: 'quick-star-rating'
-      };
-      await set(ref(db, `users/${userId}/quickFeedback/${Date.now()}`), feedbackData);
-    }
-  } catch (error) {
-    console.error("Error marking feedback shown:", error);
-  }
-};
 
 // Removed seedDataIfEmpty - new users should start with empty data, not fake history
 

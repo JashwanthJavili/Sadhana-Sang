@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Trash2, Archive, Bell, BellOff, UserX, Download, MoreVertical, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Trash2, Eraser, UserX, Download, X } from 'lucide-react';
 
 interface ChatOptionsMenuProps {
   chatId: string;
@@ -13,203 +14,81 @@ interface ChatOptionsMenuProps {
   onExportChat: () => void;
 }
 
-const ChatOptionsMenu: React.FC<ChatOptionsMenuProps> = ({
-  chatId,
-  otherUserId,
-  otherUserName,
-  isOpen,
-  onClose,
-  onClearChat,
-  onDeleteChat,
-  onRemoveConnection,
-  onExportChat,
-}) => {
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [showRemoveConfirm, setShowRemoveConfirm] = useState(false);
+type Confirm = null | 'clear' | 'delete' | 'remove';
+
+const ChatOptionsMenu: React.FC<ChatOptionsMenuProps> = ({ otherUserName, isOpen, onClose, onClearChat, onDeleteChat, onRemoveConnection, onExportChat }) => {
+  const [confirm, setConfirm] = useState<Confirm>(null);
 
   if (!isOpen) return null;
 
-  const handleClearChat = () => {
-    if (confirm(`Clear all messages with ${otherUserName}? This cannot be undone.`)) {
-      onClearChat();
-      onClose();
-    }
+  const items = [
+    { id: 'export', label: 'Save chat as a file', hint: 'Download this conversation', Icon: Download, tone: 'bg-emerald-50 text-emerald-600', run: () => (onExportChat(), onClose()) },
+    { id: 'clear', label: 'Clear messages', hint: 'Remove all messages, keep the chat', Icon: Eraser, tone: 'bg-amber-100 text-amber-700', run: () => setConfirm('clear') },
+    { id: 'remove', label: 'Remove connection', hint: `Disconnect from ${otherUserName}`, Icon: UserX, tone: 'bg-orange-100 text-orange-600', run: () => setConfirm('remove') },
+    { id: 'delete', label: 'Delete chat', hint: 'Delete this conversation for good', Icon: Trash2, tone: 'bg-rose-100 text-rose-600', run: () => setConfirm('delete') },
+  ];
+
+  const confirms: Record<Exclude<Confirm, null>, { title: string; text: string; action: string; run: () => void }> = {
+    clear: { title: 'Clear messages?', text: `All messages with ${otherUserName} will be removed.`, action: 'Clear', run: onClearChat },
+    delete: { title: 'Delete this chat?', text: `Your conversation with ${otherUserName} will be deleted for good.`, action: 'Delete', run: onDeleteChat },
+    remove: { title: 'Remove connection?', text: `${otherUserName} will be removed from your connections. You can connect again later.`, action: 'Remove', run: onRemoveConnection },
   };
 
-  const handleDeleteChat = () => {
-    setShowDeleteConfirm(true);
-  };
+  return createPortal(
+    <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="Chat options">
+      <div className="absolute inset-0 animate-fadeIn bg-maroon-900/25 backdrop-blur-[2px]" onClick={confirm ? () => setConfirm(null) : onClose} />
 
-  const confirmDelete = () => {
-    onDeleteChat();
-    setShowDeleteConfirm(false);
-    onClose();
-  };
-
-  const handleRemoveConnection = () => {
-    setShowRemoveConfirm(true);
-  };
-
-  const confirmRemove = () => {
-    onRemoveConnection();
-    setShowRemoveConfirm(false);
-    onClose();
-  };
-
-  return (
-    <>
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50"
-        onClick={onClose}
-      />
-
-      {/* Menu */}
-      <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-white rounded-2xl shadow-2xl border-2 border-stone-200 w-[90vw] max-w-md animate-scale-in">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-orange-600 to-amber-600 p-4 rounded-t-xl flex items-center justify-between">
-          <h3 className="text-white font-bold text-lg flex items-center gap-2">
-            <MoreVertical size={20} />
-            Chat Options
-          </h3>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-white/20 rounded-lg transition-all"
-          >
-            <X size={20} className="text-white" />
-          </button>
-        </div>
-
-        {/* Options List */}
-        <div className="p-2">
-          {/* Export Chat */}
-          <button
-            onClick={() => {
-              onExportChat();
-              onClose();
-            }}
-            className="w-full flex items-center gap-3 p-4 hover:bg-green-50 rounded-xl transition-all text-left group"
-          >
-            <div className="p-2 bg-green-100 rounded-lg group-hover:bg-green-200 transition-all">
-              <Download size={20} className="text-green-600" />
-            </div>
-            <div>
-              <p className="font-bold text-stone-800">Export Chat</p>
-              <p className="text-xs text-stone-600">Download chat history as text file</p>
-            </div>
-          </button>
-
-          {/* Clear Chat */}
-          <button
-            onClick={handleClearChat}
-            className="w-full flex items-center gap-3 p-4 hover:bg-yellow-50 rounded-xl transition-all text-left group"
-          >
-            <div className="p-2 bg-yellow-100 rounded-lg group-hover:bg-yellow-200 transition-all">
-              <Archive size={20} className="text-yellow-600" />
-            </div>
-            <div>
-              <p className="font-bold text-stone-800">Clear Messages</p>
-              <p className="text-xs text-stone-600">Delete all messages in this chat</p>
-            </div>
-          </button>
-
-          {/* Remove Connection */}
-          <button
-            onClick={handleRemoveConnection}
-            className="w-full flex items-center gap-3 p-4 hover:bg-orange-50 rounded-xl transition-all text-left group"
-          >
-            <div className="p-2 bg-orange-100 rounded-lg group-hover:bg-orange-200 transition-all">
-              <UserX size={20} className="text-orange-600" />
-            </div>
-            <div>
-              <p className="font-bold text-stone-800">Remove Connection</p>
-              <p className="text-xs text-stone-600">Disconnect from {otherUserName}</p>
-            </div>
-          </button>
-
-          {/* Delete Chat */}
-          <button
-            onClick={handleDeleteChat}
-            className="w-full flex items-center gap-3 p-4 hover:bg-red-50 rounded-xl transition-all text-left group"
-          >
-            <div className="p-2 bg-red-100 rounded-lg group-hover:bg-red-200 transition-all">
-              <Trash2 size={20} className="text-red-600" />
-            </div>
-            <div>
-              <p className="font-bold text-stone-800">Delete Chat</p>
-              <p className="text-xs text-stone-600">Permanently delete this conversation</p>
-            </div>
-          </button>
-        </div>
-      </div>
-
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border-2 border-red-400 animate-scale-in">
-            <div className="bg-gradient-to-r from-red-600 to-rose-600 p-4 rounded-t-xl">
-              <h3 className="text-white font-bold text-lg flex items-center gap-2">
-                <Trash2 size={20} />
-                Delete Chat?
-              </h3>
-            </div>
-            <div className="p-6">
-              <p className="text-stone-700 mb-4">
-                Are you sure you want to permanently delete this chat with <strong>{otherUserName}</strong>?
-                This action cannot be undone.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={confirmDelete}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3 rounded-xl transition-all"
-                >
-                  Delete
+      {!confirm ? (
+        <div
+          style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
+          className="relative w-full animate-rise-in rounded-t-[28px] bg-white p-4 sm:max-w-sm sm:rounded-[28px] sm:p-5"
+        >
+          <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-sandal-300 sm:hidden" />
+          <div className="mb-2 flex items-center justify-between px-1">
+            <h3 className="text-base font-semibold text-maroon-900">Chat options</h3>
+            <button onClick={onClose} className="icon-btn" aria-label="Close">
+              <X size={18} />
+            </button>
+          </div>
+          <ul>
+            {items.map(({ id, label, hint, Icon, tone, run }) => (
+              <li key={id}>
+                <button onClick={run} className="flex w-full items-center gap-3 rounded-2xl p-3 text-left transition hover:bg-sandal-50" style={{ minHeight: 0 }}>
+                  <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${tone}`}>
+                    <Icon size={18} />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-semibold text-maroon-900">{label}</span>
+                    <span className="block text-xs text-maroon-900/50">{hint}</span>
+                  </span>
                 </button>
-                <button
-                  onClick={() => setShowDeleteConfirm(false)}
-                  className="flex-1 bg-stone-300 hover:bg-stone-400 text-stone-800 font-bold py-3 rounded-xl transition-all"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <div className="relative m-4 w-full max-w-sm animate-scale-in rounded-[28px] bg-white p-6 text-center">
+          <h3 className="text-lg font-semibold text-maroon-900">{confirms[confirm].title}</h3>
+          <p className="mt-2 text-sm text-maroon-900/60">{confirms[confirm].text}</p>
+          <div className="mt-5 flex gap-2">
+            <button onClick={() => setConfirm(null)} className="btn-secondary flex-1">
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                confirms[confirm].run();
+                setConfirm(null);
+                onClose();
+              }}
+              className="flex-1 rounded-xl bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-600"
+            >
+              {confirms[confirm].action}
+            </button>
           </div>
         </div>
       )}
-
-      {/* Remove Connection Confirmation */}
-      {showRemoveConfirm && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border-2 border-orange-400 animate-scale-in">
-            <div className="bg-gradient-to-r from-orange-600 to-amber-600 p-4 rounded-t-xl">
-              <h3 className="text-white font-bold text-lg flex items-center gap-2">
-                <UserX size={20} />
-                Remove Connection?
-              </h3>
-            </div>
-            <div className="p-6">
-              <p className="text-stone-700 mb-4">
-                Remove <strong>{otherUserName}</strong> from your connections? You can send another connection request later.
-              </p>
-              <div className="flex gap-3">
-                <button
-                  onClick={confirmRemove}
-                  className="flex-1 bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl transition-all"
-                >
-                  Remove
-                </button>
-                <button
-                  onClick={() => setShowRemoveConfirm(false)}
-                  className="flex-1 bg-stone-300 hover:bg-stone-400 text-stone-800 font-bold py-3 rounded-xl transition-all"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+    </div>,
+    document.body
   );
 };
 
