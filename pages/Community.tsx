@@ -335,7 +335,7 @@ const Community: React.FC = () => {
       active ? 'bg-amber-100 text-maroon-900 ring-1 ring-marigold-400' : 'bg-white text-maroon-800 ring-1 ring-sandal-300 hover:bg-sandal-100'
     }`;
   const selectChipCls = (active: boolean) =>
-    `h-9 max-w-[11rem] shrink-0 cursor-pointer truncate rounded-full border-0 py-0 pl-4 pr-8 text-sm font-medium outline-none ring-1 transition focus:ring-2 focus:ring-marigold-400 ${
+    `h-9 max-w-[11rem] shrink-0 cursor-pointer truncate rounded-full border-0 pl-4 pr-8 text-sm font-medium outline-none ring-1 transition focus:ring-2 focus:ring-marigold-400 leading-[2.25rem] ${
       active ? 'bg-amber-100 text-maroon-900 ring-marigold-400' : 'bg-white text-maroon-800 ring-sandal-300'
     }`;
 
@@ -508,40 +508,40 @@ const Community: React.FC = () => {
                   setSelectedProfile(profile);
                   setShowProfileModal(true);
                 }}
-                className="flex cursor-pointer flex-col rounded-3xl bg-white p-4 shadow-soft ring-1 ring-sandal-200 transition hover:-translate-y-0.5 hover:shadow-card hover:ring-amber-200"
+                className="flex cursor-pointer flex-col rounded-2xl bg-white p-3 shadow-soft ring-1 ring-sandal-200 transition hover:-translate-y-0.5 hover:shadow-card hover:ring-amber-200"
               >
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5">
                   <div className="relative shrink-0">
-                    <Avatar src={profile.photoURL} name={profile.userName} className="h-14 w-14 ring-2 ring-amber-100" textClassName="text-lg" />
-                    {profile.isOnline && <span className="absolute bottom-0.5 right-0.5 h-3.5 w-3.5 rounded-full bg-emerald-500 ring-2 ring-white" />}
+                    <Avatar src={profile.photoURL} name={profile.userName} className="h-11 w-11 ring-2 ring-amber-100" textClassName="text-base" />
+                    {profile.isOnline && <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white" />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="truncate text-[15px] font-semibold text-maroon-900">{profile.userName || 'Devotee'}</h3>
-                    <p className={`text-xs ${profile.isOnline ? 'font-medium text-emerald-700' : 'text-maroon-900/45'}`}>
+                    <h3 className="truncate text-sm font-semibold text-maroon-900">{profile.userName || 'Devotee'}</h3>
+                    <p className={`text-[11px] ${profile.isOnline ? 'font-medium text-emerald-700' : 'text-maroon-900/45'}`}>
                       {profile.isOnline ? 'Online now' : profile.lastSeen ? `Active ${getTimeAgo(profile.lastSeen)}` : 'Devotee'}
                     </p>
                   </div>
                 </div>
 
                 {(temple || teacher) && (
-                  <div className="mt-3 space-y-1.5 text-[13px] text-maroon-900/70">
+                  <div className="mt-2 space-y-1 text-[12px] text-maroon-900/70">
                     {temple && (
-                      <p className="flex items-center gap-2">
-                        <MapPin size={14} className="shrink-0 text-marigold-500" />
+                      <p className="flex items-center gap-1.5">
+                        <MapPin size={12} className="shrink-0 text-marigold-500" />
                         <span className="truncate">{temple}</span>
                       </p>
                     )}
                     {teacher && (
-                      <p className="flex items-center gap-2">
-                        <BookOpen size={14} className="shrink-0 text-marigold-500" />
+                      <p className="flex items-center gap-1.5">
+                        <BookOpen size={12} className="shrink-0 text-marigold-500" />
                         <span className="truncate">{teacher}</span>
                       </p>
                     )}
                   </div>
                 )}
-                {profile.bio && <p className="mt-2 line-clamp-2 text-[13px] text-maroon-900/55">{profile.bio}</p>}
+                {profile.bio && <p className="mt-1.5 line-clamp-2 text-[12px] text-maroon-900/55">{profile.bio}</p>}
 
-                <div className="mt-auto pt-4" onClick={(e) => e.stopPropagation()}>
+                <div className="mt-auto pt-3" onClick={(e) => e.stopPropagation()}>
                   {renderConnectionButton(profile)}
                 </div>
               </div>
