@@ -5,6 +5,7 @@ import { getAllUsers, searchUsers, createOrGetChat } from '../services/chat';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserData } from '../contexts/UserDataContext';
 import { Users, Search, MessageCircle, X, UserPlus, UserMinus, Check, HelpCircle, MapPin, BookOpen } from 'lucide-react';
+import SelectField from '../components/SelectField';
 import { useNavigate } from 'react-router-dom';
 import UserProfileModal from '../components/UserProfileModal';
 import Avatar from '../components/Avatar';
@@ -429,36 +430,32 @@ const Community: React.FC = () => {
           {onlineCount > 0 && <span className="text-xs text-maroon-900/45">{onlineCount}</span>}
         </button>
         {(uniqueGurus.length > 0 || hasUsersWithoutGuru) && (
-          <select
+          <SelectField
             aria-label="Filter by teacher"
             value={filters.guruName}
             onChange={(e) => setFilters({ ...filters, guruName: e.target.value })}
-            className={selectChipCls(filters.guruName !== 'All')}
+            className={filters.guruName !== 'All' ? 'bg-amber-100 text-maroon-900 ring-marigold-400' : 'bg-white text-maroon-800 ring-sandal-300'}
           >
             <option value="All">Any teacher</option>
             {uniqueGurus.map((g) => (
-              <option key={g} value={g}>
-                {g}
-              </option>
+              <option key={g} value={g}>{g}</option>
             ))}
             {hasUsersWithoutGuru && <option value="Not Specified">Not specified</option>}
-          </select>
+          </SelectField>
         )}
         {(uniqueCenters.length > 0 || hasUsersWithoutCenter) && (
-          <select
+          <SelectField
             aria-label="Filter by temple"
             value={filters.iskconCenter}
             onChange={(e) => setFilters({ ...filters, iskconCenter: e.target.value })}
-            className={selectChipCls(filters.iskconCenter !== 'All')}
+            className={filters.iskconCenter !== 'All' ? 'bg-amber-100 text-maroon-900 ring-marigold-400' : 'bg-white text-maroon-800 ring-sandal-300'}
           >
             <option value="All">Any temple</option>
             {uniqueCenters.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
+              <option key={c} value={c}>{c}</option>
             ))}
             {hasUsersWithoutCenter && <option value="Not Specified">Not specified</option>}
-          </select>
+          </SelectField>
         )}
         {activeFilters > 0 && (
           <button

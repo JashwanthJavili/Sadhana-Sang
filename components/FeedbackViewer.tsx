@@ -4,6 +4,7 @@ import { MessageCircle, Star, Filter, Search, Calendar, User, Mail, MapPin, Awar
 import { ref, onValue, update } from 'firebase/database';
 import { db } from '../services/firebase';
 import LoadingSpinner from './LoadingSpinner';
+import SelectField from './SelectField';
 
 interface Feedback {
   id: string;
@@ -224,56 +225,45 @@ const FeedbackViewer: React.FC = () => {
           </div>
 
           {/* Status Filter */}
-          <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-2">
-              <Filter className="inline w-4 h-4 mr-1" /> Status
-            </label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full px-4 py-2 border-2 border-stone-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-            >
-              <option value="all">All Status</option>
-              <option value="new">New</option>
-              <option value="reviewed">Reviewed</option>
-              <option value="resolved">Resolved</option>
-            </select>
-          </div>
+          <SelectField
+            label="Status"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="all">All Status</option>
+            <option value="new">New</option>
+            <option value="reviewed">Reviewed</option>
+            <option value="resolved">Resolved</option>
+          </SelectField>
 
           {/* Category Filter */}
-          <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-2">Category</label>
-            <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              className="w-full px-4 py-2 border-2 border-stone-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-            >
-              <option value="all">All Categories</option>
-              <option value="feature">Feature Request</option>
-              <option value="bug">Bug Report</option>
-              <option value="general">General</option>
-              <option value="spiritual">Spiritual</option>
-              <option value="usability">Usability</option>
-              <option value="other">Other</option>
-            </select>
-          </div>
+          <SelectField
+            label="Category"
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+          >
+            <option value="all">All Categories</option>
+            <option value="feature">Feature Request</option>
+            <option value="bug">Bug Report</option>
+            <option value="general">General</option>
+            <option value="spiritual">Spiritual</option>
+            <option value="usability">Usability</option>
+            <option value="other">Other</option>
+          </SelectField>
 
           {/* Rating Filter */}
-          <div>
-            <label className="block text-sm font-semibold text-stone-700 mb-2">Rating</label>
-            <select
-              value={ratingFilter}
-              onChange={(e) => setRatingFilter(e.target.value)}
-              className="w-full px-4 py-2 border-2 border-stone-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-            >
-              <option value="all">All Ratings</option>
-              <option value="5">⭐⭐⭐⭐⭐ (5)</option>
-              <option value="4">⭐⭐⭐⭐ (4)</option>
-              <option value="3">⭐⭐⭐ (3)</option>
-              <option value="2">⭐⭐ (2)</option>
-              <option value="1">⭐ (1)</option>
-            </select>
-          </div>
+          <SelectField
+            label="Rating"
+            value={ratingFilter}
+            onChange={(e) => setRatingFilter(e.target.value)}
+          >
+            <option value="all">All Ratings</option>
+            <option value="5">⭐⭐⭐⭐⭐ (5)</option>
+            <option value="4">⭐⭐⭐⭐ (4)</option>
+            <option value="3">⭐⭐⭐ (3)</option>
+            <option value="2">⭐⭐ (2)</option>
+            <option value="1">⭐ (1)</option>
+          </SelectField>
         </div>
 
         <div className="mt-4 flex justify-between items-center">

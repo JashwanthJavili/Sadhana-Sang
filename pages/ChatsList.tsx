@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Chat } from '../types/chat';
 import { getUserChats } from '../services/chat';
 import { MessageCircle, Search, UserPlus, Lock, X } from 'lucide-react';
+import SelectField from '../components/SelectField';
 import Avatar from '../components/Avatar';
 import { PageLoader } from '../components/LoadingScreen';
 import { isEncrypted } from '../services/encryption';
@@ -150,35 +151,31 @@ const ChatsList: React.FC = () => {
               )}
             </button>
             {uniqueCenters.length > 0 && (
-              <select
+              <SelectField
                 aria-label="Filter by temple"
                 value={filters.iskconCenter}
                 onChange={(e) => setFilters({ ...filters, iskconCenter: e.target.value })}
-                className={selectChipCls(filters.iskconCenter !== 'All')}
+                className={filters.iskconCenter !== 'All' ? 'bg-amber-100 text-maroon-900 ring-marigold-400' : 'bg-white text-maroon-800 ring-sandal-300'}
               >
                 <option value="All">Any temple</option>
                 {uniqueCenters.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
+                  <option key={c} value={c}>{c}</option>
                 ))}
                 {hasNoCenter && <option value="Not Specified">Not specified</option>}
-              </select>
+              </SelectField>
             )}
             {uniqueGurus.length > 0 && (
-              <select
+              <SelectField
                 aria-label="Filter by teacher"
                 value={filters.guruName}
                 onChange={(e) => setFilters({ ...filters, guruName: e.target.value })}
-                className={selectChipCls(filters.guruName !== 'All')}
+                className={filters.guruName !== 'All' ? 'bg-amber-100 text-maroon-900 ring-marigold-400' : 'bg-white text-maroon-800 ring-sandal-300'}
               >
                 <option value="All">Any teacher</option>
                 {uniqueGurus.map((g) => (
-                  <option key={g} value={g}>
-                    {g}
-                  </option>
+                  <option key={g} value={g}>{g}</option>
                 ))}
-              </select>
+              </SelectField>
             )}
             {activeFilters > 0 && (
               <button

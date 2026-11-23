@@ -5,6 +5,7 @@ import { db } from '../services/firebase';
 import { ref, get } from 'firebase/database';
 import { ArrowLeft, Calendar, Heart, Users, BookOpen, Flower2, Star, Languages } from 'lucide-react';
 import { translateText, SUPPORTED_LANGUAGES } from '../services/translator';
+import SelectField from '../components/SelectField';
 
 interface Festival {
   id: string;
@@ -173,35 +174,33 @@ const FestivalDetailPage: React.FC = () => {
 
       {/* Translation Modal */}
       {showTranslateModal && (
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 border-2 border-green-200 shadow-lg">
-          <div className="flex flex-wrap items-center gap-4">
+        <div className="rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 p-5 ring-1 ring-amber-200 shadow-soft">
+          <div className="flex flex-wrap items-end gap-3">
             <div className="flex items-center gap-2">
-              <Languages size={24} className="text-green-600" />
-              <span className="font-bold text-green-800 text-lg">Select Language:</span>
+              <Languages size={20} className="text-brand-600" />
+              <span className="font-semibold text-maroon-900">Select Language</span>
             </div>
-            <select
+            <SelectField
+              label="Language"
               value={selectedLang}
               onChange={(e) => setSelectedLang(e.target.value)}
-              className="flex-1 min-w-[200px] px-4 py-2 border-2 border-green-300 rounded-lg focus:border-green-500 focus:outline-none bg-white"
+              wrapperClassName="flex-1 min-w-[200px]"
             >
-              <option value="">Select Language</option>
+              <option value="">Choose a language…</option>
               {SUPPORTED_LANGUAGES.map(lang => (
                 <option key={lang.code} value={lang.code}>{lang.name}</option>
               ))}
-            </select>
+            </SelectField>
             <button
-              onClick={() => {
-                handleTranslate();
-                setShowTranslateModal(false);
-              }}
+              onClick={() => { handleTranslate(); setShowTranslateModal(false); }}
               disabled={!selectedLang || translating}
-              className="px-6 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg font-bold transition-all flex items-center gap-2"
+              className="btn-primary h-10 shrink-0 disabled:opacity-40"
             >
-              {translating ? '⏳ Translating...' : '🌐 Translate All'}
+              {translating ? '⏳ Translating…' : '🌐 Translate'}
             </button>
             <button
               onClick={() => setShowTranslateModal(false)}
-              className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg font-bold transition-all"
+              className="btn-secondary h-10 shrink-0"
             >
               Cancel
             </button>
