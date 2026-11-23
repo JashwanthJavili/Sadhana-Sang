@@ -116,8 +116,10 @@ const LangPicker: React.FC<{ value: Lang; has: (l: Lang) => boolean; onChange: (
                   style={{ minHeight: 0 }}
                 >
                   <span className="min-w-0 flex-1">
-                    <span className={`block text-sm font-semibold ${on ? 'text-brand-700' : 'text-maroon-900'}`}>{l.label}</span>
-                    <span className="block text-[11px] text-maroon-900/45">{l.code === 'en' ? 'English letters' : ready ? l.name : `${l.name} · not added yet`}</span>
+                    <span className={`block truncate text-sm font-semibold ${on ? 'text-brand-700' : 'text-maroon-900'}`}>
+                      {l.label}
+                      {!ready && l.code !== 'en' && <span className="ml-1.5 text-[11px] font-normal text-maroon-900/40">· not added yet</span>}
+                    </span>
                   </span>
                   {on && <Check size={16} className="shrink-0 text-brand-600" />}
                 </button>
