@@ -144,7 +144,7 @@ const QuestionsPage: React.FC = () => {
       </label>
 
       {/* Category chips */}
-      <div className="overflow-x-auto scrollbar-none">
+      <div className="overflow-x-auto py-1 scrollbar-none">
         <div className="flex w-max gap-2">
           {chips.map((c) => {
             const active = selectedCategory === c.value;

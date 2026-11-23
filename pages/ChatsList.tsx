@@ -139,7 +139,7 @@ const ChatsList: React.FC = () => {
           </label>
 
           {/* Filter chips */}
-          <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-none sm:mx-0 sm:px-0">
+          <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 py-1 scrollbar-none sm:mx-0 sm:px-0">
             <button onClick={() => setUnreadOnly(false)} className={chipCls(!unreadOnly)}>
               All
             </button>
