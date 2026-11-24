@@ -4,7 +4,8 @@ import Layout from './components/Layout';
 import Login from './components/Login';
 import OnboardingModal from './components/OnboardingModal';
 import GenderSelectionModal from './components/GenderSelectionModal';
-import FeatureTour from './components/FeatureTour';
+import NamaskarGreeting from './components/NamaskarGreeting';
+import { startGuide } from './components/AppGuide';
 import FeedbackPrompt from './components/FeedbackPrompt';
 import LoadingScreen, { PageLoader } from './components/LoadingScreen';
 import VersionChecker from './components/VersionChecker';
@@ -303,7 +304,14 @@ function AppContent() {
 
       <OnboardingModal isOpen={showOnboarding} onComplete={handleOnboardingComplete} prefillName={onboardingPrefill || user?.displayName || ''} />
       <GenderSelectionModal isOpen={showGenderSelection} onComplete={handleGenderSelection} />
-      <FeatureTour isOpen={showFeatureTour} onComplete={() => setShowFeatureTour(false)} userName={onboardingUserName} />
+      <NamaskarGreeting
+        open={showFeatureTour}
+        name={onboardingUserName}
+        onClose={() => {
+          setShowFeatureTour(false);
+          startGuide();
+        }}
+      />
 
       {/* Feedback Prompt - Shows after 2+ days */}
       {showFeedback && <FeedbackPrompt onClose={() => setShowFeedback(false)} />}

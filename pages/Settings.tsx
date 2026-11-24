@@ -21,7 +21,9 @@ import {
   ShieldAlert,
   ChevronRight,
   Flower2,
+  Compass,
 } from 'lucide-react';
+import { startGuide } from '../components/AppGuide';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserData } from '../contexts/UserDataContext';
 import { clearAllChats } from '../scripts/clearAllChats';
@@ -754,6 +756,7 @@ const Settings: React.FC = () => {
             ) : undefined
           }
         />
+        <Row icon={Compass} label="App guide" helper="A quick walk through the menu" onClick={startGuide} />
         <Row icon={Mail} label="Contact and feedback" helper="Questions, ideas or privacy requests" href={`mailto:${CONTACT_EMAIL}`} />
         <Row
           icon={Info}

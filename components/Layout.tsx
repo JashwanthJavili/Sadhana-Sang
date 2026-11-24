@@ -24,7 +24,7 @@ import { useUserData } from '../contexts/UserDataContext';
 import FeedbackModal from './FeedbackModal';
 import NotificationBell from './NotificationBell';
 import ConnectionRequestsIcon from './ConnectionRequestsIcon';
-import NamaskarGreeting from './NamaskarGreeting';
+import AppGuide, { START_GUIDE_EVENT } from './AppGuide';
 import BackgroundMusic from './BackgroundMusic';
 import Avatar from './Avatar';
 import MalaIcon from './MalaIcon';
@@ -69,6 +69,22 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const topAccountRef = useRef<HTMLDivElement>(null);
 
   useSyncChatProfile();
+
+  // App guide — walks through the menu items one by one. On phones the menu drawer is opened for it.
+  const [guideActive, setGuideActive] = useState(false);
+  useEffect(() => {
+    const start = () => {
+      setAccountOpen(null);
+      if (window.matchMedia('(max-width: 1023px)').matches) setMobileOpen(true);
+      setGuideActive(true);
+    };
+    window.addEventListener(START_GUIDE_EVENT, start);
+    return () => window.removeEventListener(START_GUIDE_EVENT, start);
+  }, []);
+  const closeGuide = () => {
+    setGuideActive(false);
+    setMobileOpen(false);
+  };
 
   useEffect(() => {
     if (userSettings) setSettings(userSettings);
@@ -225,6 +241,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       return (
         <div
           key={item.to}
+          data-tour={item.to}
           title={`${item.label} — sign in to unlock`}
           className={`flex h-10 cursor-not-allowed items-center gap-3 rounded-xl px-3 text-[14px] font-medium text-maroon-900/30 ${compact ? 'justify-center' : ''}`}
         >
@@ -243,6 +260,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       <NavLink
         key={item.to}
         to={item.to}
+        data-tour={item.to}
         end={item.to === '/'}
         title={compact ? item.label : undefined}
         className={({ isActive }) =>
@@ -484,8 +502,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           )}
         </header>
 
-        <NamaskarGreeting />
-
         <main className={`flex-1 ${isChatRoute ? '' : 'pb-28 lg:pb-10'}`}>
           <div key={location.pathname} className={`mx-auto w-full max-w-7xl animate-fadeIn ${isChatRoute ? 'p-0 sm:p-4' : 'px-4 py-5 sm:px-6 sm:py-8'}`}>
             {children}
@@ -512,6 +528,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
 
       {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
+      <AppGuide active={guideActive} onClose={closeGuide} />
     </div>
   );
 };
