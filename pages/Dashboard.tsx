@@ -380,8 +380,8 @@ const Dashboard: React.FC = () => {
         ) : (
           <ul className="divide-y divide-sandal-200/70">
             {[
-              ...(nextEkadasi ? [{ id: 'ek', name: nextEkadasi.name, date: nextEkadasi.date, to: nextEkadasi.to, tag: 'Ekadashi' }] : []),
-              ...nextFestivals.map((f) => ({ id: f.id, name: f.name, date: f.date, to: `/festival/${f.id}`, tag: '' })),
+              ...(nextEkadasi ? [{ id: 'ek', name: nextEkadasi.name, date: nextEkadasi.date, to: nextEkadasi.to }] : []),
+              ...nextFestivals.map((f) => ({ id: f.id, name: f.name, date: f.date, to: `/festival/${f.id}` })),
             ]
               .sort((x, y) => x.date.localeCompare(y.date))
               .map((it) => (
@@ -397,7 +397,6 @@ const Dashboard: React.FC = () => {
                       <span className="block truncate text-[15px] font-medium text-maroon-900">{it.name}</span>
                       <span className="block text-xs text-maroon-900/50">
                         {formatDate(it.date)}
-                        {it.tag && <span className="ml-1.5 rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">{it.tag}</span>}
                       </span>
                     </span>
                     <span className="shrink-0 text-xs font-semibold text-brand-700">{formatCountdown(it.date)}</span>

@@ -302,7 +302,6 @@ export default function ChantingCounter() {
     const now = Date.now();
     let l = { ...liveRef.current };
     if (!l.startedAt) l = { ...l, startedAt: now, roundStartedAt: now };
-    startTimer();
 
     if (l.beads + 1 >= settings.perRound) {
       const rounds = l.rounds + 1;
@@ -316,7 +315,7 @@ export default function ChantingCounter() {
     }
     setLive(l);
     setPulse((p) => p + 1);
-  }, [settings, setLive, showSuccess, startTimer]);
+  }, [settings, setLive, showSuccess]);
 
   const undo = useCallback(() => {
     const l = liveRef.current;

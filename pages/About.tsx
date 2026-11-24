@@ -52,34 +52,63 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
   </section>
 );
 
-/** A guru card with a gentle flower offering */
+const PETALS = ['🌸', '🌺', '🌼', '🌷', '🪷', '🌹'];
+
+/** A guru card: large square portrait in a golden frame, with a falling-flower offering */
 const GuruCard: React.FC<{ image: string; name: string; role: string }> = ({ image, name, role }) => {
-  const [offered, setOffered] = useState(false);
+  const [offered, setOffered] = useState(0); // bumps on every offering so the shower restarts
+  const [showing, setShowing] = useState(false);
+  const hide = React.useRef<number | undefined>(undefined);
   const offer = () => {
-    setOffered(true);
-    setTimeout(() => setOffered(false), 6000);
+    setOffered((n) => n + 1);
+    setShowing(true);
+    window.clearTimeout(hide.current);
+    hide.current = window.setTimeout(() => setShowing(false), 6500);
   };
+  React.useEffect(() => () => window.clearTimeout(hide.current), []);
   return (
-    <div className="relative flex flex-col items-center overflow-hidden rounded-3xl bg-white p-5 text-center shadow-soft ring-1 ring-sandal-200">
-      {offered && (
-        <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-          {Array.from({ length: 14 }).map((_, i) => (
-            <span
-              key={i}
-              className="absolute animate-float-flower text-2xl"
-              style={{ left: `${(i * 7 + 5) % 95}%`, animationDelay: `${(i % 5) * 0.15}s`, animationDuration: `${2 + (i % 4) * 0.4}s` }}
-            >
-              {['🌸', '🌺', '🌼', '🌷'][i % 4]}
-            </span>
-          ))}
+    <div className="relative overflow-hidden rounded-[32px] bg-white p-3 shadow-card ring-1 ring-sandal-200">
+      {/* golden frame + square portrait */}
+      <div className="relative rounded-[28px] bg-gradient-to-br from-marigold-300 via-amber-100 to-brand-400 p-1.5">
+        <div className={`relative aspect-square w-full overflow-hidden rounded-[22px] bg-sandal-100 ${showing ? 'animate-[portraitGlow_1.6s_ease-out]' : ''}`} key={offered}>
+          <img src={image} alt={name} className="h-full w-full object-cover object-top" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-maroon-900/55 to-transparent" />
+          <p className="absolute bottom-3 left-4 right-4 text-left text-base font-semibold leading-tight text-white drop-shadow">{name}</p>
         </div>
-      )}
-      <img src={image} alt={name} className="h-28 w-28 rounded-full object-cover object-top ring-4 ring-amber-100" />
-      <h3 className="mt-3 text-base font-semibold text-maroon-900">{name}</h3>
-      <p className="text-sm text-maroon-900/55">{role}</p>
-      <button onClick={offer} className="btn-secondary btn-sm mt-3">
-        <Flower2 size={15} className="text-rose-500" /> Offer flowers
-      </button>
+
+        {showing && (
+          <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[28px]" aria-hidden="true" key={'f' + offered}>
+            {Array.from({ length: 24 }).map((_, i) => {
+              const size = 18 + ((i * 7) % 5) * 5; // 18–38px
+              return (
+                <span
+                  key={i}
+                  className="absolute animate-[petalFall_linear_forwards] motion-reduce:hidden"
+                  style={
+                    {
+                      left: `${(i * 37 + 4) % 92}%`,
+                      fontSize: size,
+                      animationDuration: `${3.6 + (i % 5) * 0.6}s`,
+                      animationDelay: `${(i % 8) * 0.18}s`,
+                      '--dx': `${((i % 2 ? 1 : -1) * (14 + ((i * 11) % 28)))}px`,
+                      '--rot': `${(i % 2 ? 1 : -1) * (180 + ((i * 53) % 360))}deg`,
+                    } as React.CSSProperties
+                  }
+                >
+                  {PETALS[i % PETALS.length]}
+                </span>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div className="px-2 pb-1 pt-3 text-center">
+        <p className="text-sm text-maroon-900/60">{role}</p>
+        <button onClick={offer} className="btn-secondary btn-sm mt-3 w-full">
+          <Flower2 size={15} className="text-rose-500" /> Offer flowers
+        </button>
+      </div>
     </div>
   );
 };
@@ -90,8 +119,14 @@ const About: React.FC = () => {
   return (
     <div className="mx-auto max-w-2xl animate-fadeIn space-y-8 pb-10">
       <style>{`
-        @keyframes floatFlower { 0% { transform: translateY(-10%) rotate(0deg); opacity: 1 } 100% { transform: translateY(420%) rotate(540deg); opacity: 0 } }
-        .animate-float-flower { animation: floatFlower linear forwards; }
+        @keyframes petalFall {
+          0%   { top: -12%; opacity: 0; transform: translateX(0) rotate(0deg) scale(.6) }
+          12%  { opacity: 1; transform: translateX(calc(var(--dx) * .2)) rotate(calc(var(--rot) * .1)) scale(1) }
+          50%  { top: 50%; transform: translateX(var(--dx)) rotate(calc(var(--rot) * .5)) scale(1) }
+          75%  { transform: translateX(calc(var(--dx) * -.6)) rotate(calc(var(--rot) * .8)) scale(.95) }
+          100% { top: 108%; opacity: 0; transform: translateX(calc(var(--dx) * .5)) rotate(var(--rot)) scale(.8) }
+        }
+        @keyframes portraitGlow { 0% { filter: brightness(1) } 25% { filter: brightness(1.12) saturate(1.1) } 100% { filter: brightness(1) } }
       `}</style>
 
       {/* Intro */}
@@ -133,7 +168,7 @@ const About: React.FC = () => {
             This app is placed at the lotus feet of my spiritual masters. Whatever good comes from it is their mercy; every fault is mine alone.
           </p>
         </div>
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <GuruCard image={paramGuruImage} name="HH Radhanath Swami" role="Param Gurumaharaj" />
           <GuruCard image={guruImage} name="HG Pranavananda Das" role="My spiritual master" />
         </div>
