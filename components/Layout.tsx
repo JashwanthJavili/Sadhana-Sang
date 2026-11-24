@@ -499,9 +499,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-sandal-200 bg-sandal-50/95 shadow-[0_-8px_24px_-12px_rgba(67,27,17,0.18)] backdrop-blur-xl lg:hidden"
           aria-label="Quick navigation"
         >
-          <div className="grid h-16 grid-cols-5">
+          <div className="grid h-16 grid-cols-4">
             {renderBottomTab('/', 'Home', Home)}
-            {renderBottomTab('/planner', 'Planner', PenTool)}
             {renderBottomTab('/chanting', 'Japa', MalaIcon)}
             {renderBottomTab('/slokas', 'Mantras', BookHeart, isGuest ? ['/slokas'] : ['/slokas', '/festivals', '/festival/', '/ekadashi/'])}
             {isGuest

@@ -94,12 +94,10 @@ const ChatsList: React.FC = () => {
         {chats.length > 0 && <CollapsibleSearch value={searchTerm} onChange={setSearchTerm} placeholder="Search chats" />}
         <button
           onClick={() => navigate('/community')}
-          className="flex h-12 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-2xl bg-brand-600 text-white shadow-soft transition hover:bg-brand-700 active:scale-95"
-          aria-label="Find devotees"
+          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-white px-4 text-sm font-semibold text-brand-700 shadow-soft ring-1 ring-amber-200 transition hover:bg-amber-50 active:scale-95"
           style={{ minHeight: 0 }}
         >
-          <Users size={18} />
-          <span className="text-[10px] font-semibold leading-none">Devotees</span>
+          <Users size={16} /> Devotees
         </button>
       </div>
 

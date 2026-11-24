@@ -1,4 +1,4 @@
-import { ref, remove, get, set } from 'firebase/database';
+import { ref, remove, get, set, update } from 'firebase/database';
 import { database, auth } from './firebase';
 
 /**
@@ -248,6 +248,7 @@ export const getAllUsersAdmin = async () => {
       email: userEmail,
       guruName: userData.guruName || userData.settings?.guruName || 'N/A',
       iskconCenter: userData.iskconCenter || userData.settings?.iskconCenter || 'N/A',
+      gender: userData.gender || userData.settings?.gender || null,
       joinedDate: userData.usage?.firstLogin || userData.joinedDate || Date.now(),
       lastActive: userData.usage?.lastActive || userData.lastSeen || 0,
       loginCount: userData.usage?.loginCount || 0,
@@ -257,6 +258,17 @@ export const getAllUsersAdmin = async () => {
   });
   
   return users.sort((a, b) => b.lastActive - a.lastActive);
+};
+
+/**
+ * ADMIN ONLY: set a user's gender (used for greetings and their avatar)
+ */
+export const setUserGenderAdmin = async (uid: string, gender: 'male' | 'female') => {
+  verifyAdminAccess();
+  await update(ref(database), {
+    [`users/${uid}/gender`]: gender,
+    [`users/${uid}/settings/gender`]: gender,
+  });
 };
 
 /**

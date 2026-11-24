@@ -351,14 +351,12 @@ const Community: React.FC = () => {
         </div>
         <button
           onClick={() => navigate('/connection-requests')}
-          aria-label="Connection requests"
-          className="relative flex h-12 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-2xl bg-white text-brand-700 shadow-soft ring-1 ring-sandal-200 transition hover:bg-amber-50"
+          className="relative inline-flex h-11 shrink-0 items-center gap-2 rounded-2xl bg-white px-4 text-sm font-semibold text-brand-700 shadow-soft ring-1 ring-amber-200 transition hover:bg-amber-50 active:scale-95"
           style={{ minHeight: 0 }}
         >
-          <UserCheck size={18} />
-          <span className="text-[10px] font-semibold leading-none">Requests</span>
+          <UserCheck size={16} /> Requests
           {pendingRequestCount > 0 && (
-            <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-600 px-1.5 text-[11px] font-bold text-white ring-2 ring-white">
+            <span className="flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-600 px-1.5 text-[11px] font-bold text-white">
               {pendingRequestCount}
             </span>
           )}

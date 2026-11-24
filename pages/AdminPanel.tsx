@@ -19,7 +19,8 @@ import {
   ADMIN_EMAIL,
   getAllAdmins,
   grantAdminAccess,
-  revokeAdminAccess
+  revokeAdminAccess,
+  setUserGenderAdmin,
 } from '../services/admin';
 import { migrateAllUserProfiles } from '../scripts/migrateUserProfiles';
 import { ref, set, push, get, remove, update } from 'firebase/database';
@@ -34,6 +35,7 @@ interface UserInfo {
   email: string;
   guruName: string;
   iskconCenter: string;
+  gender?: 'male' | 'female' | null;
   joinedDate: number;
   lastActive: number;
   loginCount: number;
@@ -1072,6 +1074,7 @@ const AdminPanel: React.FC = () => {
                   </td>
                   <td className="p-3 font-semibold">
                     {u.userName}
+                    <span className="ml-2 text-xs font-medium text-stone-400">{u.gender === 'female' ? 'Female' : u.gender === 'male' ? 'Male' : 'Gender not set'}</span>
                     {u.isAdmin && (
                       <span className="ml-2 px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full">
                         ADMIN
@@ -1164,6 +1167,30 @@ const AdminPanel: React.FC = () => {
                               
                               <div className="border-t border-stone-200 my-1" />
                               
+                              {/* Gender */}
+                              {(['male', 'female'] as const).map((g) => (
+                                <button
+                                  key={g}
+                                  onClick={async () => {
+                                    setOpenDropdown(null);
+                                    try {
+                                      await setUserGenderAdmin(u.uid, g);
+                                      setUsers((list) => list.map((x) => (x.uid === u.uid ? { ...x, gender: g } : x)));
+                                      alert(`${u.userName} is now set as ${g === 'male' ? 'Male (Prabhuji)' : 'Female (Mataji)'}`);
+                                    } catch (e) {
+                                      console.error(e);
+                                      alert('Could not change the gender. Please try again.');
+                                    }
+                                  }}
+                                  className="w-full px-4 py-2 text-left hover:bg-amber-50 transition-all flex items-center gap-2 text-stone-700 font-semibold"
+                                >
+                                  <Users size={16} />
+                                  Set as {g === 'male' ? 'Male (Prabhuji)' : 'Female (Mataji)'}
+                                  {u.gender === g && <span className="ml-auto text-xs text-emerald-600">current</span>}
+                                </button>
+                              ))}
+                              <div className="border-t border-stone-200 my-1" />
+
                               {/* View Profile */}
                               <button
                                 onClick={() => {
