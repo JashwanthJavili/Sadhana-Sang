@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+// @ts-ignore
+import heroImage from '../utils/Images/krishna-embrace.jpg';
 
 /** Gentle status lines shown while the app starts, in words devotees relate to */
 const MESSAGES = [
@@ -17,19 +19,20 @@ const LoadingScreen: React.FC = () => {
   }, []);
 
   return (
-    <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-sandal-100 px-6" role="status" aria-live="polite">
-      <div className="pointer-events-none absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-marigold-400/20 blur-3xl" />
+    <div className="fixed inset-0 z-[200] flex flex-col items-center justify-end overflow-hidden bg-maroon-900 px-6 pb-[14vh]" role="status" aria-live="polite">
+      <img src={heroImage} alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover object-[50%_22%]" />
+      <div className="absolute inset-0 bg-gradient-to-t from-maroon-900/90 via-maroon-900/30 to-transparent" />
 
       <div className="relative flex flex-col items-center text-center">
-        <p className="text-sm font-medium tracking-wide text-brand-700/80">Hare Krishna 🙏</p>
-        <h1 className="mt-2 text-2xl font-semibold text-maroon-900 sm:text-3xl">Welcome to Sadhana Sang</h1>
+        <p className="text-sm font-medium tracking-wide text-sandal-100/85">Hare Krishna</p>
+        <h1 className="mt-2 font-elegant text-3xl font-semibold text-sandal-50 sm:text-4xl">Sadhana Sang</h1>
 
         {/* progress bar */}
-        <div className="mt-7 h-1 w-48 overflow-hidden rounded-full bg-sandal-300/60">
-          <div className="h-full w-1/3 animate-[loader_1.4s_ease-in-out_infinite] rounded-full bg-gradient-to-r from-marigold-400 to-brand-600" />
+        <div className="mt-7 h-1 w-48 overflow-hidden rounded-full bg-white/25">
+          <div className="h-full w-1/3 animate-[loader_1.4s_ease-in-out_infinite] rounded-full bg-gradient-to-r from-marigold-400 to-amber-200" />
         </div>
 
-        <p key={index} className="mt-4 h-5 animate-fadeIn text-sm text-maroon-900/55">
+        <p key={index} className="mt-4 h-5 animate-fadeIn text-sm text-sandal-100/75">
           {MESSAGES[index]}
         </p>
       </div>

@@ -4,6 +4,7 @@ import { X, Loader2, Send, Check, ChevronDown, Wand2, Smartphone } from 'lucide-
 import MantraText from './MantraText';
 import { LINE_CHOICES } from '../utils/mantraText';
 import { transliterate } from '../utils/transliterate';
+import { useKeyboardSafe } from './useKeyboardSafe';
 
 export interface MantraFormValues {
   title: string;
@@ -61,6 +62,7 @@ const MantraForm: React.FC<Props> = ({ mode, initial, onClose, onSubmit }) => {
   const [tab, setTab] = useState<'hi' | 'te'>('hi');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const kb = useKeyboardSafe();
 
   const set = (patch: Partial<MantraFormValues>) => setV((x) => ({ ...x, ...patch }));
   const ready = v.title.trim() && v.mantra.trim();
@@ -94,13 +96,13 @@ const MantraForm: React.FC<Props> = ({ mode, initial, onClose, onSubmit }) => {
   const meanKey = tab === 'hi' ? 'hiMeaning' : 'teMeaning';
 
   return createPortal(
-    <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label={copy.title}>
+    <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center sm:p-6" style={kb} role="dialog" aria-modal="true" aria-label={copy.title}>
       <div className="absolute inset-0 animate-fadeIn bg-maroon-900/25 backdrop-blur-[2px]" onClick={busy ? undefined : onClose} />
 
       <form
         onSubmit={submit}
         style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
-        className="relative flex max-h-[94dvh] w-full animate-rise-in flex-col overflow-hidden rounded-t-[28px] bg-white shadow-lift sm:max-w-xl sm:rounded-[28px]"
+        className="relative flex max-h-[94%] w-full animate-rise-in flex-col overflow-hidden rounded-t-[28px] bg-white shadow-lift sm:max-w-xl sm:rounded-[28px]"
       >
         {/* Header */}
         <header className="border-b border-sandal-200/80 px-5 pb-4 pt-3 sm:px-6 sm:pt-5">
@@ -117,7 +119,7 @@ const MantraForm: React.FC<Props> = ({ mode, initial, onClose, onSubmit }) => {
         </header>
 
         {/* Fields */}
-        <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5 sm:px-6">
+        <div className="flex-1 space-y-6 overflow-y-auto overscroll-contain scroll-smooth px-5 py-5 sm:px-6">
           <Step n={1} title="Name and type">
             <input value={v.title} onChange={(e) => set({ title: e.target.value })} placeholder="e.g. Hare Krishna Maha-mantra" className={field} autoFocus={mode !== 'edit'} />
             <div className="scrollbar-none -mx-1 mt-2.5 flex gap-1.5 overflow-x-auto px-1 pb-0.5">

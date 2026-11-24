@@ -2,7 +2,9 @@ import { getJapaGoal } from '../utils/japaGoal';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { ref, get } from 'firebase/database';
-import { PenLine, ChevronRight, Trophy, CalendarDays, Moon, Clock, ArrowRight, BarChart3 } from 'lucide-react';
+import { PenLine, ChevronRight, Trophy, CalendarDays, Moon, ArrowRight } from 'lucide-react';
+import { useEkadashiCalendar } from '../components/ekadashi/useEkadashiCalendar';
+import { ekadashiName } from '../components/ekadashi/shared';
 import { db } from '../services/firebase';
 import { getAllEntries } from '../services/storage';
 import { DailyEntry } from '../types';
@@ -100,11 +102,11 @@ const Ring: React.FC<{ value: number; max: number; size?: number }> = ({ value, 
       <svg width={size} height={size} className="-rotate-90">
         <defs>
           <linearGradient id="japaRing" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#FDE68A" />
-            <stop offset="100%" stopColor="#F6B23E" />
+            <stop offset="0%" stopColor="#FBBF24" />
+            <stop offset="100%" stopColor="#EA580C" />
           </linearGradient>
         </defs>
-        <circle cx={size / 2} cy={size / 2} r={r} stroke="rgba(255,255,255,0.15)" strokeWidth={stroke} fill="none" />
+        <circle cx={size / 2} cy={size / 2} r={r} stroke="rgba(246,178,62,0.18)" strokeWidth={stroke} fill="none" />
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -119,8 +121,8 @@ const Ring: React.FC<{ value: number; max: number; size?: number }> = ({ value, 
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-4xl font-semibold leading-none text-white">{value}</span>
-        <span className="mt-1 text-xs font-medium text-sandal-100/60">of {max}</span>
+        <span className="text-4xl font-semibold leading-none text-maroon-900">{value}</span>
+        <span className="mt-1 text-xs font-medium text-maroon-900/50">of {max}</span>
       </div>
     </div>
   );
@@ -189,7 +191,7 @@ const Dashboard: React.FC = () => {
 
   /* ------------------------------ derived data ----------------------------- */
 
-  const { entries, sessions, stats, festivals } = data;
+  const { entries, sessions, festivals } = data;
   const today = localDateKey();
 
   const roundsByDay = useMemo(() => {
@@ -260,8 +262,19 @@ const Dashboard: React.FC = () => {
     () => (festivals || []).filter((f) => f.date && daysUntil(f.date) >= 0).sort((a, b) => a.date.localeCompare(b.date)),
     [festivals]
   );
-  const nextEkadasi = upcoming.find((f) => /ekad/i.test(f.name));
-  const nextFestivals = upcoming.filter((f) => f.id !== nextEkadasi?.id).slice(0, 3);
+  const nextFestivals = upcoming.filter((f) => !/ekad/i.test(f.name)).slice(0, 3);
+
+  // Next Ekadashi comes from the astronomical calendar (no admin data needed)
+  const ekadashi = useEkadashiCalendar();
+  const nextEkRow = ekadashi.loading ? undefined : ekadashi.rows[ekadashi.nextIndex];
+  const nextEkadasi =
+    nextEkRow && nextEkRow.paranaDate >= ekadashi.todayKey
+      ? {
+          name: ekadashiName(nextEkRow.slug, ekadashi.content),
+          date: nextEkRow.fastDate,
+          to: `/ekadashi/${nextEkRow.slug}?date=${nextEkRow.fastDate}`,
+        }
+      : undefined;
 
   /* ------------------------------- greeting ------------------------------- */
 
@@ -323,14 +336,14 @@ const Dashboard: React.FC = () => {
           </div>
         </section>
 
-        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-maroon-800 via-maroon-700 to-brand-700 p-6 text-white shadow-[0_20px_44px_-20px_rgba(67,27,17,0.65)] sm:p-7">
-          <div className="pointer-events-none absolute -right-14 -top-14 h-48 w-48 rounded-full bg-marigold-400/25 blur-2xl" />
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-50 via-white to-orange-50 p-6 text-maroon-900 shadow-[0_1px_2px_rgba(67,27,17,0.04),0_8px_24px_-12px_rgba(67,27,17,0.12)] ring-1 ring-amber-200/70 sm:p-7">
+          <div className="pointer-events-none absolute -right-14 -top-14 h-48 w-48 rounded-full bg-marigold-400/20 blur-2xl" />
           <div className="relative flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-[15px] font-semibold text-white">
-              <MalaIcon size={18} /> Today's japa
+            <h2 className="flex items-center gap-2 text-[15px] font-semibold text-maroon-900">
+              <span className="text-brand-600"><MalaIcon size={18} /></span> Today's japa
             </h2>
             {goal > 0 && (
-              <span className="rounded-full bg-white/15 px-2.5 py-1 text-xs font-semibold text-sandal-50">
+              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-brand-700">
                 {roundsToday >= goal ? 'Goal reached' : `${remaining} to go`}
               </span>
             )}
@@ -338,24 +351,24 @@ const Dashboard: React.FC = () => {
           <div className="relative mt-5 flex items-center gap-5">
             <Ring value={roundsToday} max={goal || Math.max(roundsToday, 1)} />
             <div className="min-w-0">
-              <p className="text-sm text-sandal-100/75">{goal ? `Your goal: ${goal} rounds` : 'Chanted today'}</p>
+              <p className="text-sm text-maroon-900/60">{goal ? `Your goal: ${goal} rounds` : 'Chanted today'}</p>
               <p className="text-2xl font-semibold leading-tight">
                 {roundsToday} round{roundsToday === 1 ? '' : 's'}
               </p>
-              {roundsToday > 0 && <p className="mt-1 text-xs text-sandal-100/55">{(roundsToday * 108).toLocaleString('en-IN')} holy names</p>}
+              {roundsToday > 0 && <p className="mt-1 text-xs text-maroon-900/45">{(roundsToday * 108).toLocaleString('en-IN')} holy names</p>}
             </div>
           </div>
           <button
             onClick={() => navigate('/chanting')}
-            className="relative mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-white py-3 text-sm font-semibold text-maroon-800 shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
+            className="btn-primary relative mt-6 w-full rounded-2xl py-3"
           >
             {roundsToday > 0 ? 'Continue chanting' : 'Start chanting'} <ArrowRight size={16} />
           </button>
         </section>
       </div>
 
-      {/* ===================== Consistency + Upcoming + Journey ===================== */}
-      <div className="grid gap-5 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
+      {/* ===================== Consistency + Upcoming ===================== */}
+      <div className="grid gap-5 sm:gap-6 md:grid-cols-2">
         <Card className="flex flex-col">
           <CardTitle icon={<Trophy size={17} />} title="Consistency" />
           <div className="flex items-end gap-6">
@@ -411,9 +424,7 @@ const Dashboard: React.FC = () => {
 
         <Card>
           <CardTitle icon={<CalendarDays size={17} />} title="Upcoming" action={<TextLink to="/festivals">Calendar</TextLink>} />
-          {isGuest ? (
-            <EmptyHint icon={<Moon size={18} />} text="Sign in to see upcoming Ekadasis and festivals." />
-          ) : festivals === null ? (
+          {ekadashi.loading && (isGuest || festivals === null) ? (
             <div className="space-y-3">
               <div className="skeleton h-[72px] rounded-2xl" />
               <div className="skeleton h-10 rounded-xl" />
@@ -425,7 +436,7 @@ const Dashboard: React.FC = () => {
             <div className="space-y-3">
               {nextEkadasi && (
                 <Link
-                  to={`/festival/${nextEkadasi.id}`}
+                  to={nextEkadasi.to}
                   className="flex items-center gap-3 rounded-2xl bg-gradient-to-br from-sky-50 to-indigo-50 p-3.5 ring-1 ring-indigo-100 transition hover:ring-indigo-200"
                   style={{ minHeight: 0 }}
                 >
@@ -464,36 +475,6 @@ const Dashboard: React.FC = () => {
           )}
         </Card>
 
-        <Card className="md:col-span-2 lg:col-span-1">
-          <CardTitle icon={<Clock size={17} />} title="Your journey" action={<TextLink to="/analytics">Analytics</TextLink>} />
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { label: 'Rounds', value: (stats?.totalRounds || 0).toLocaleString('en-IN') },
-              { label: 'Hours', value: Math.round((stats?.totalTime || 0) / 3600).toLocaleString('en-IN') },
-              { label: 'Days logged', value: entries.length.toLocaleString('en-IN') },
-            ].map((s) => (
-              <div key={s.label} className="rounded-2xl bg-sandal-100/70 px-3 py-4 text-center">
-                <p className="text-2xl font-semibold leading-none text-maroon-900">{s.value}</p>
-                <p className="mt-1.5 text-[11px] font-medium text-maroon-900/50">{s.label}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            {[
-              isGuest ? { to: '/analytics', label: 'Analytics', Icon: BarChart3 } : { to: '/journal', label: 'Journal', Icon: PenLine },
-              { to: '/history', label: 'History', Icon: CalendarDays },
-            ].map(({ to, label, Icon }) => (
-              <Link
-                key={to}
-                to={to}
-                className="flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium text-maroon-900/75 ring-1 ring-sandal-200 transition hover:bg-sandal-100/60 hover:text-maroon-900"
-                style={{ minHeight: 0 }}
-              >
-                <Icon size={15} className="text-brand-600" /> {label}
-              </Link>
-            ))}
-          </div>
-        </Card>
       </div>
     </div>
   );

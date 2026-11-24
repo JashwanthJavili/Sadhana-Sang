@@ -5,7 +5,6 @@ import { getAllUsers, searchUsers, createOrGetChat } from '../services/chat';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserData } from '../contexts/UserDataContext';
 import { Users, Search, MessageCircle, X, UserPlus, UserMinus, Check, HelpCircle, MapPin, BookOpen } from 'lucide-react';
-import SelectField from '../components/SelectField';
 import { useNavigate } from 'react-router-dom';
 import UserProfileModal from '../components/UserProfileModal';
 import Avatar from '../components/Avatar';
@@ -248,16 +247,6 @@ const Community: React.FC = () => {
     }
   };
 
-  const uniqueGurus = Array.from(new Set(users.map(u => u.guruName)))
-    .filter(Boolean)
-    .filter((g): g is string => typeof g === 'string' && g !== 'Not Specified' && g.toLowerCase() !== 'n/a');
-  
-  const uniqueCenters = Array.from(new Set(users.map(u => u.iskconCenter)))
-    .filter(Boolean)
-    .filter((c): c is string => typeof c === 'string' && c !== 'Not Specified' && c.toLowerCase() !== 'n/a');
-  
-  const hasUsersWithoutGuru = users.some(u => !u.guruName || u.guruName === 'Not Specified' || u.guruName === '' || u.guruName.toLowerCase() === 'n/a');
-  const hasUsersWithoutCenter = users.some(u => !u.iskconCenter || u.iskconCenter === 'Not Specified' || u.iskconCenter === '' || u.iskconCenter.toLowerCase() === 'n/a');
 
   const getOnlineCount = () => filteredUsers.filter(u => u.isOnline).length;
   const getTimeAgo = (timestamp: number) => {
@@ -325,20 +314,11 @@ const Community: React.FC = () => {
   const connectedUsers = users.filter((u) => connectedUserIds.includes(u.uid));
   const exploreUsers = users.filter((u) => !connectedUserIds.includes(u.uid));
   const displayUsers = filteredUsers; // already filtered for the current tab
-  const activeFilters = (filters.onlineOnly ? 1 : 0) + (filters.guruName !== 'All' ? 1 : 0) + (filters.iskconCenter !== 'All' ? 1 : 0);
+  const activeFilters = filters.onlineOnly ? 1 : 0;
   const known = (v?: string) => (v && v.toLowerCase() !== 'n/a' && v !== 'Not Specified' ? v : '');
   const onlineCount = users.filter((u) => u.isOnline).length;
 
   if (loading) return <PageLoader label="Finding devotees…" />;
-
-  const chipCls = (active: boolean) =>
-    `inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-medium transition ${
-      active ? 'bg-amber-100 text-maroon-900 ring-1 ring-marigold-400' : 'bg-white text-maroon-800 ring-1 ring-sandal-300 hover:bg-sandal-100'
-    }`;
-  const selectChipCls = (active: boolean) =>
-    `h-9 max-w-[11rem] shrink-0 cursor-pointer truncate rounded-full border-0 pl-4 pr-8 text-sm font-medium outline-none ring-1 transition focus:ring-2 focus:ring-marigold-400 leading-[2.25rem] ${
-      active ? 'bg-amber-100 text-maroon-900 ring-marigold-400' : 'bg-white text-maroon-800 ring-sandal-300'
-    }`;
 
   const quickLinks = [
     { label: 'Messages', icon: MessageCircle, to: '/chats', count: 0 },
@@ -348,52 +328,30 @@ const Community: React.FC = () => {
 
   return (
     <div className="mx-auto w-full max-w-5xl animate-rise-in">
-      {/* Title */}
-      <div>
+      {/* Header — title + quick links in one row */}
+      <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight text-maroon-900">Community</h1>
-        <p className="mt-0.5 text-sm text-maroon-900/60">Meet devotees, make friends and grow together in Krishna consciousness.</p>
+        <div className="flex gap-1.5">
+          {quickLinks.map(({ label, icon: Icon, to, count }) => (
+            <button
+              key={label}
+              onClick={() => navigate(to)}
+              title={label}
+              aria-label={label}
+              className="relative inline-flex h-10 items-center gap-1.5 rounded-full bg-white px-3 text-sm font-semibold text-maroon-800 shadow-soft ring-1 ring-sandal-200 transition hover:bg-amber-50 hover:ring-amber-200"
+              style={{ minHeight: 0 }}
+            >
+              <Icon size={17} className="text-brand-600" />
+              <span className="hidden sm:inline">{label}</span>
+              {count > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-600 px-1.5 text-[11px] font-bold text-white ring-2 ring-white">
+                  {count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
-
-      {/* Quick links */}
-      <div className="mt-4 grid grid-cols-3 gap-2 sm:max-w-md sm:gap-3">
-        {quickLinks.map(({ label, icon: Icon, to, count }) => (
-          <button
-            key={label}
-            onClick={() => navigate(to)}
-            className="relative flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-white px-2 py-3 shadow-soft ring-1 ring-sandal-200 transition hover:-translate-y-0.5 hover:shadow-card hover:ring-amber-200"
-          >
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-50 text-brand-600">
-              <Icon size={18} />
-            </span>
-            <span className="text-[13px] font-semibold text-maroon-900">{label}</span>
-            {count > 0 && (
-              <span className="absolute right-2 top-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-600 px-1.5 text-[11px] font-bold text-white">
-                {count}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Search */}
-      <label className="mt-5 flex h-12 items-center gap-2.5 rounded-2xl bg-white px-4 shadow-soft ring-1 ring-sandal-200 focus-within:ring-2 focus-within:ring-marigold-400">
-        <Search size={18} className="shrink-0 text-maroon-900/40" />
-        <input
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search by name, teacher or temple"
-          className="w-full min-w-0 bg-transparent text-[15px] text-maroon-900 outline-none placeholder:text-maroon-900/40"
-        />
-        {searchTerm && (
-          <button
-            onClick={() => setSearchTerm('')}
-            className="-mr-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-maroon-900/40 hover:bg-sandal-100"
-            aria-label="Clear search"
-          >
-            <X size={16} />
-          </button>
-        )}
-      </label>
 
       {/* Tabs */}
       <div className="mt-4 grid grid-cols-2 rounded-2xl bg-sandal-100 p-1 ring-1 ring-sandal-200 sm:inline-grid" role="tablist">
@@ -418,53 +376,39 @@ const Community: React.FC = () => {
         ))}
       </div>
 
-      {/* Filter chips */}
-      <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 py-1 scrollbar-none sm:mx-0 sm:flex-wrap sm:px-0">
+      {/* Search + online */}
+      <div className="mt-3 flex gap-2">
+        <label className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-2xl bg-white px-4 shadow-soft ring-1 ring-sandal-200 focus-within:ring-2 focus-within:ring-marigold-400">
+          <Search size={17} className="shrink-0 text-maroon-900/40" />
+          <input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search devotees"
+            className="w-full min-w-0 bg-transparent text-[15px] text-maroon-900 outline-none placeholder:text-maroon-900/40"
+          />
+          {searchTerm && (
+            <button
+              onClick={() => setSearchTerm('')}
+              className="-mr-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-maroon-900/40 hover:bg-sandal-100"
+              aria-label="Clear search"
+              style={{ minHeight: 0 }}
+            >
+              <X size={16} />
+            </button>
+          )}
+        </label>
         <button
           onClick={() => setFilters({ ...filters, onlineOnly: !filters.onlineOnly })}
-          className={chipCls(filters.onlineOnly)}
           aria-pressed={filters.onlineOnly}
+          className={`inline-flex h-11 shrink-0 items-center gap-1.5 rounded-2xl px-3.5 text-sm font-semibold shadow-soft ring-1 transition ${
+            filters.onlineOnly ? 'bg-emerald-50 text-emerald-800 ring-emerald-300' : 'bg-white text-maroon-800 ring-sandal-200 hover:bg-sandal-50'
+          }`}
+          style={{ minHeight: 0 }}
         >
           <span className="h-2 w-2 rounded-full bg-emerald-500" />
-          Online now
-          {onlineCount > 0 && <span className="text-xs text-maroon-900/45">{onlineCount}</span>}
+          Online
+          {onlineCount > 0 && <span className="text-xs font-medium opacity-60">{onlineCount}</span>}
         </button>
-        {(uniqueGurus.length > 0 || hasUsersWithoutGuru) && (
-          <SelectField
-            aria-label="Filter by teacher"
-            value={filters.guruName}
-            onChange={(e) => setFilters({ ...filters, guruName: e.target.value })}
-            className={filters.guruName !== 'All' ? 'bg-amber-100 text-maroon-900 ring-marigold-400' : 'bg-white text-maroon-800 ring-sandal-300'}
-          >
-            <option value="All">Any teacher</option>
-            {uniqueGurus.map((g) => (
-              <option key={g} value={g}>{g}</option>
-            ))}
-            {hasUsersWithoutGuru && <option value="Not Specified">Not specified</option>}
-          </SelectField>
-        )}
-        {(uniqueCenters.length > 0 || hasUsersWithoutCenter) && (
-          <SelectField
-            aria-label="Filter by temple"
-            value={filters.iskconCenter}
-            onChange={(e) => setFilters({ ...filters, iskconCenter: e.target.value })}
-            className={filters.iskconCenter !== 'All' ? 'bg-amber-100 text-maroon-900 ring-marigold-400' : 'bg-white text-maroon-800 ring-sandal-300'}
-          >
-            <option value="All">Any temple</option>
-            {uniqueCenters.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-            {hasUsersWithoutCenter && <option value="Not Specified">Not specified</option>}
-          </SelectField>
-        )}
-        {activeFilters > 0 && (
-          <button
-            onClick={() => setFilters({ onlineOnly: false, guruName: 'All', iskconCenter: 'All' })}
-            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full px-3 text-sm font-medium text-brand-700 hover:bg-amber-50"
-          >
-            <X size={14} /> Clear
-          </button>
-        )}
       </div>
 
       {/* Devotees */}
@@ -486,7 +430,7 @@ const Community: React.FC = () => {
               <h2 className="mt-4 text-base font-semibold text-maroon-900">No devotees found</h2>
               <p className="mt-1 text-sm text-maroon-900/60">Try a different search or clear the filters.</p>
               {activeFilters > 0 && (
-                <button onClick={() => setFilters({ onlineOnly: false, guruName: 'All', iskconCenter: 'All' })} className="btn-secondary mt-5 h-10">
+                <button onClick={() => setFilters({ ...filters, onlineOnly: false })} className="btn-secondary mt-5 h-10">
                   Clear filters
                 </button>
               )}

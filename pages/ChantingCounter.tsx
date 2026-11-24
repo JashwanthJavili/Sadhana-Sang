@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Undo2, Maximize2, X, Settings2, Check, Loader2, Minus, Plus, RotateCcw, Vibrate, Bell } from 'lucide-react';
+import { Undo2, Maximize2, X, Settings2, Minus, Plus, RotateCcw, Vibrate, Bell } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { ChantingSession, loadSessions, saveSession } from '../services/japa';
@@ -173,7 +173,9 @@ export default function ChantingCounter() {
   const [live, setLiveState] = useState<Live>(() => readJSON(liveKey, EMPTY));
   const liveRef = useRef(live);
   const [sessions, setSessions] = useState<ChantingSession[]>([]);
-  const [saving, setSaving] = useState(false);
+  const [sessionsLoaded, setSessionsLoaded] = useState(false);
+  const savedTodayRef = useRef(0);
+  const flushingRef = useRef(false);
   const [focus, setFocus] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
@@ -196,8 +198,19 @@ export default function ChantingCounter() {
     });
 
   useEffect(() => {
-    loadSessions(uid).then(setSessions);
+    setSessionsLoaded(false);
+    loadSessions(uid).then((s) => {
+      setSessions(s);
+      setSessionsLoaded(true);
+    });
   }, [uid]);
+
+  // Restore the in-progress count (bead + round) whenever the page/user changes
+  useEffect(() => {
+    const saved = readJSON(liveKey, EMPTY);
+    liveRef.current = saved;
+    setLiveState(saved);
+  }, [liveKey]);
 
   // Keep the screen awake in full-screen mode
   useEffect(() => {
@@ -230,7 +243,7 @@ export default function ChantingCounter() {
       l = { ...l, beads: 0, rounds, laps: [...l.laps, (now - (l.roundStartedAt || now)) / 1000], roundStartedAt: now };
       if (settings.sound) playBell();
       if (settings.vibrate) buzz([140, 70, 140]);
-      if (settings.goal && rounds === settings.goal) showSuccess('Goal reached!', 'Hare Krishna 🙏');
+      if (settings.goal && savedTodayRef.current + rounds === settings.goal) showSuccess('Goal reached!', 'Hare Krishna');
     } else {
       l = { ...l, beads: l.beads + 1 };
       if (settings.vibrate) buzz(18);
@@ -268,36 +281,47 @@ export default function ChantingCounter() {
     return () => window.removeEventListener('keydown', onKey);
   }, [count, undo, showSettings]);
 
-  /* ----------------------------- save ----------------------------- */
+  /* ----------------------------- auto-save ----------------------------- */
 
   const today = localDateKey();
   const savedToday = useMemo(
     () => sessions.filter((s) => localDateKey(new Date(s.timestamp)) === today).reduce((a, s) => a + (Number(s.rounds) || 0), 0),
     [sessions, today]
   );
+  savedTodayRef.current = savedToday;
 
-  const onSave = async () => {
+  // live.rounds = finished rounds not yet saved. Each completed round is saved
+  // automatically; if offline they stay pending here and are retried.
+  const flush = useCallback(async () => {
     const l = liveRef.current;
-    if (!l.rounds && !l.beads) return;
-    setSaving(true);
+    if (flushingRef.current || !sessionsLoaded || l.rounds <= 0) return;
+    flushingRef.current = true;
+    const rounds = l.rounds;
+    const laps = l.laps.slice(0, rounds);
     try {
       const started = l.startedAt || Date.now();
       const session = await saveSession(
         uid,
-        { rounds: l.rounds, beads: l.beads, beadsPerRound: settings.perRound, startedAt: started, durationSec: (Date.now() - started) / 1000, laps: l.laps },
-        savedToday
+        { rounds, beads: 0, beadsPerRound: settings.perRound, startedAt: started, durationSec: laps.reduce((a, s) => a + s, 0), laps },
+        savedTodayRef.current
       );
       setSessions((s) => [session, ...s]);
-      setLive(EMPTY);
-      setFocus(false);
-      showSuccess('Saved 🙏', l.rounds ? `${l.rounds} round${l.rounds > 1 ? 's' : ''} added to today` : 'Your count is saved');
+      const cur = liveRef.current;
+      const pending = Math.max(cur.rounds - rounds, 0);
+      setLive({ ...cur, rounds: pending, laps: cur.laps.slice(rounds), startedAt: pending ? cur.startedAt : cur.roundStartedAt });
     } catch (e) {
       console.error(e);
-      showWarning('Could not save', 'Please check your internet and try again. Your count is safe on this phone.');
+      showWarning('Could not save round', 'It is kept on this phone and will be saved when you are back online.');
     } finally {
-      setSaving(false);
+      flushingRef.current = false;
     }
-  };
+  }, [uid, sessionsLoaded, settings.perRound, setLive, showWarning]);
+
+  useEffect(() => {
+    if (live.rounds > 0) flush();
+    window.addEventListener('online', flush);
+    return () => window.removeEventListener('online', flush);
+  }, [live.rounds, flush]);
 
   /* ----------------------------- derived ----------------------------- */
 
@@ -317,7 +341,7 @@ export default function ChantingCounter() {
         {live.beads}
       </span>
       <span className="mt-1.5 text-xs font-medium text-maroon-900/50">
-        of {settings.perRound} · Round {live.rounds + 1}
+        of {settings.perRound} · Round {todayTotal + 1}
       </span>
     </>
   );
@@ -349,10 +373,10 @@ export default function ChantingCounter() {
           {goal > 0
             ? left
               ? `${left} more to reach your goal`
-              : 'Goal reached — Hare Krishna 🙏'
+              : 'Goal reached — Hare Krishna'
             : todayTotal
-              ? 'Every round is precious 🙏'
-              : 'Even one round is a beautiful start 🙏'}
+              ? 'Every round is precious'
+              : 'Even one round is a beautiful start'}
         </p>
       </div>
 
@@ -372,7 +396,7 @@ export default function ChantingCounter() {
           </TapCircle>
         </button>
 
-        <p className="relative mt-2 text-center text-sm text-maroon-900/55">{hasCount ? `${live.rounds} round${live.rounds === 1 ? '' : 's'} in this session` : 'Tap the beads to count'}</p>
+        <p className="relative mt-2 text-center text-xs text-maroon-900/45">Tap the circle to count · each round saves automatically</p>
 
         {/* Buttons */}
         <div className="relative mt-5 grid grid-cols-3 gap-2">
@@ -393,16 +417,6 @@ export default function ChantingCounter() {
             </button>
           ))}
         </div>
-
-        <button
-          type="button"
-          onClick={onSave}
-          disabled={!hasCount || saving}
-          className="relative mt-3 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-marigold-400 to-brand-500 py-3.5 text-base font-semibold text-white shadow-[0_10px_24px_-10px_rgba(238,154,30,0.8)] transition hover:brightness-105 active:scale-[0.99] disabled:from-sandal-200 disabled:to-sandal-200 disabled:text-maroon-900/35 disabled:shadow-none"
-        >
-          {saving ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
-          Save
-        </button>
       </section>
 
       {/* Recent */}

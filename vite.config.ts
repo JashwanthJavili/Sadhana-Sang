@@ -4,13 +4,24 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
+    // Unique per build: the app compares it with /version.json to detect a new release
+    const buildId = String(Date.now());
     return {
       server: {
         port: 3000,
         host: '0.0.0.0',
       },
-      plugins: [react()],
+      plugins: [
+        react(),
+        {
+          name: 'emit-version-json',
+          generateBundle() {
+            this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify({ buildId }) });
+          },
+        },
+      ],
       define: {
+        __BUILD_ID__: JSON.stringify(mode === 'production' ? buildId : 'dev'),
         'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
         'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
       },

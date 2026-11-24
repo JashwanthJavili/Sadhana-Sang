@@ -4,11 +4,11 @@ import { X, Languages, Loader2, Send } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { submitSlokaRequest } from '../services/requests';
-import { transliterate } from '../utils/transliterate';
 import MantraText from './MantraText';
+import { useKeyboardSafe } from './useKeyboardSafe';
 
-const NAMES = { hi: 'Hindi (हिन्दी)', te: 'Telugu (తెలుగు)' } as const;
 const SHORT = { hi: 'Hindi', te: 'Telugu' } as const;
+const NATIVE = { hi: 'हिन्दी', te: 'తెలుగు' } as const;
 
 interface Props {
   sloka: { id: string; title: string; mantra: string; meaning?: string };
@@ -26,15 +26,8 @@ const field =
 const MantraTranslateForm: React.FC<Props> = ({ sloka, lang, onClose }) => {
   const { user } = useAuth();
   const { showError, showSuccess } = useToast();
-  // a first draft written by the app — the devotee checks every letter
-  const [draft] = useState(() => {
-    try {
-      return transliterate(sloka.mantra, lang);
-    } catch {
-      return '';
-    }
-  });
-  const [mantra, setMantra] = useState(draft);
+  const kb = useKeyboardSafe();
+  const [mantra, setMantra] = useState('');
   const [meaning, setMeaning] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -66,46 +59,55 @@ const MantraTranslateForm: React.FC<Props> = ({ sloka, lang, onClose }) => {
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label={`Add the ${SHORT[lang]} version`}>
+    <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center sm:p-6" style={kb} role="dialog" aria-modal="true" aria-label={`Add the ${SHORT[lang]} version`}>
       <div className="absolute inset-0 animate-fadeIn bg-maroon-900/25 backdrop-blur-[2px]" onClick={busy ? undefined : onClose} />
-      <form onSubmit={submit} style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }} className="relative flex max-h-[92dvh] w-full animate-rise-in flex-col overflow-hidden rounded-t-[28px] bg-white sm:max-w-lg sm:rounded-[28px]">
-        <div className="bg-gradient-to-br from-amber-100 via-orange-50 to-white px-5 pb-4 pt-5 sm:px-6">
+      <form
+        onSubmit={submit}
+        style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+        className="relative flex max-h-[94%] w-full animate-rise-in flex-col overflow-hidden rounded-t-[28px] bg-white shadow-lift sm:max-w-lg sm:rounded-[28px]"
+      >
+        {/* Header */}
+        <header className="border-b border-sandal-200/80 px-5 pb-4 pt-3 sm:px-6 sm:pt-5">
           <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-sandal-300 sm:hidden" />
-          <div className="flex items-start gap-3">
-            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white text-brand-500 shadow-sm ring-1 ring-amber-200">
-              <Languages size={21} />
+          <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-brand-500 ring-1 ring-amber-200">
+              <Languages size={19} />
             </span>
             <div className="min-w-0 flex-1">
-              <h3 className="text-lg font-semibold text-maroon-900">Add the {SHORT[lang]} version</h3>
+              <h3 className="text-base font-semibold text-maroon-900">
+                Add {SHORT[lang]} version <span className="font-normal text-maroon-900/45">· {NATIVE[lang]}</span>
+              </h3>
               <p className="truncate text-sm text-maroon-900/55">{sloka.title}</p>
             </div>
-            <button type="button" onClick={onClose} className="icon-btn" aria-label="Close" disabled={busy}>
+            <button type="button" onClick={onClose} className="icon-btn -mr-1" aria-label="Close" disabled={busy}>
               <X size={18} />
             </button>
           </div>
-        </div>
+        </header>
 
-        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-5 sm:px-6">
-          <p className="rounded-2xl bg-amber-50/80 px-4 py-3 text-sm leading-relaxed text-maroon-900/75">
-            Please take a little time to write this mantra <b>correctly</b> in {NAMES[lang]}. It will help every devotee who wants to recite it.
-          </p>
-
+        {/* Fields */}
+        <div className="flex-1 space-y-5 overflow-y-auto overscroll-contain px-5 py-5 sm:px-6">
           <div>
-            <p className="mb-1 text-xs font-semibold text-maroon-900/50">English</p>
-            <p className="rounded-xl bg-sandal-50 px-3.5 py-2.5 text-sm text-maroon-900/70">{sloka.mantra}</p>
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-maroon-900/45">English (for reference)</p>
+            <div className="rounded-2xl bg-sandal-50 px-3 py-3 text-center text-sm font-medium text-maroon-900/75 ring-1 ring-sandal-200">
+              <MantraText text={sloka.mantra} />
+            </div>
           </div>
 
           <label className="block">
-            <span className="mb-1.5 flex items-baseline justify-between gap-2">
-              <span className="text-sm font-semibold text-maroon-900">The mantra in {SHORT[lang]}</span>
-              {draft && <span className="text-xs text-maroon-900/40">First draft added — please check every letter</span>}
-            </span>
-            <textarea rows={3} value={mantra} onChange={(e) => setMantra(e.target.value)} className={`${field} resize-none leading-relaxed`} placeholder={lang === 'hi' ? 'हरे कृष्ण हरे कृष्ण…' : 'హరే కృష్ణ హరే కృష్ణ…'} autoFocus />
+            <span className="mb-1.5 block text-sm font-semibold text-maroon-900">Mantra in {SHORT[lang]}</span>
+            <textarea
+              rows={4}
+              value={mantra}
+              onChange={(e) => setMantra(e.target.value)}
+              className={`${field} resize-none leading-relaxed`}
+              placeholder={`Type the mantra in ${SHORT[lang]} script`}
+            />
           </label>
 
           {mantra.trim().split(/\s+/).length >= 2 && (
-            <div className="rounded-2xl bg-amber-50/70 px-3 py-3 text-center font-medium text-maroon-900">
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-brand-600/70">How it will look</p>
+            <div className="animate-fadeIn rounded-2xl bg-amber-50/70 px-3 py-3 text-center font-medium text-maroon-900 ring-1 ring-amber-100">
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-brand-600/70">Preview</p>
               <MantraText text={mantra} />
             </div>
           )}
@@ -116,9 +118,12 @@ const MantraTranslateForm: React.FC<Props> = ({ sloka, lang, onClose }) => {
             </span>
             <textarea rows={3} value={meaning} onChange={(e) => setMeaning(e.target.value)} className={`${field} resize-none leading-relaxed`} />
           </label>
+
+          <p className="text-xs leading-relaxed text-maroon-900/45">Please check every letter carefully. It is shown to everyone after a quick review.</p>
         </div>
 
-        <div className="flex gap-2 border-t border-sandal-200 px-5 pt-4 sm:px-6">
+        {/* Actions */}
+        <div className="flex gap-2 border-t border-sandal-200 bg-white px-5 pt-3 sm:px-6">
           <button type="button" onClick={onClose} disabled={busy} className="btn-secondary flex-1">
             Cancel
           </button>

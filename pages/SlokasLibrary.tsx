@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ref, get, set, push, remove, update } from 'firebase/database';
 import {
   BookHeart, Plus, Search, Heart, MessageCircle, Trash2, Copy, Check, ChevronDown, ChevronUp, Send, Languages,
-  Pencil, X, Lightbulb,
+  Pencil, X, Lightbulb, UserRound,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
@@ -14,7 +14,7 @@ import MantraText from '../components/MantraText';
 import { getUserSlokaRequests, SlokaRequest } from '../services/requests';
 import { PageLoader } from '../components/LoadingScreen';
 import i18n from '../i18n';
-import { knownTranslation, LINE_CHOICES } from '../utils/mantraText';
+import { knownTranslation } from '../utils/mantraText';
 
 type Lang = 'en' | 'hi' | 'te';
 
@@ -62,7 +62,7 @@ const pill = 'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13
 /* Language dropdown (one per mantra)                                  */
 /* ------------------------------------------------------------------ */
 
-const LangPicker: React.FC<{ value: Lang; has: (l: Lang) => boolean; onChange: (l: Lang) => void }> = ({ value, has, onChange }) => {
+const LangPicker: React.FC<{ value: Lang; onChange: (l: Lang) => void }> = ({ value, onChange }) => {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
 
@@ -101,7 +101,6 @@ const LangPicker: React.FC<{ value: Lang; has: (l: Lang) => boolean; onChange: (
         <ul role="listbox" aria-label="Choose language" className="absolute right-0 top-full z-30 mt-1.5 w-48 animate-scale-in overflow-hidden rounded-2xl bg-white p-1.5 shadow-lift ring-1 ring-sandal-200">
           {LANG_OPTIONS.map((l) => {
             const on = l.code === value;
-            const ready = has(l.code);
             return (
               <li key={l.code}>
                 <button
@@ -118,8 +117,8 @@ const LangPicker: React.FC<{ value: Lang; has: (l: Lang) => boolean; onChange: (
                   <span className="min-w-0 flex-1">
                     <span className={`block truncate text-sm font-semibold ${on ? 'text-brand-700' : 'text-maroon-900'}`}>
                       {l.label}
-                      {!ready && l.code !== 'en' && <span className="ml-1.5 text-[11px] font-normal text-maroon-900/40">· not added yet</span>}
                     </span>
+                    {l.code !== 'en' && <span className="block text-[11px] text-maroon-900/40">{l.name}</span>}
                   </span>
                   {on && <Check size={16} className="shrink-0 text-brand-600" />}
                 </button>
@@ -142,6 +141,7 @@ const SlokasLibrary: React.FC = () => {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
   const [meaningOpen, setMeaningOpen] = useState<Record<string, boolean>>({});
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [commentsOpen, setCommentsOpen] = useState<string | null>(null);
   const [commentText, setCommentText] = useState<Record<string, string>>({});
   const [langs, setLangs] = useState<Record<string, Lang>>({}); // per mantra, English by default
@@ -277,12 +277,6 @@ const SlokasLibrary: React.FC = () => {
     await update(ref(db), updates).catch(() => load());
   };
 
-  /** Admin: choose how many lines a mantra is shown in */
-  const setLines = async (s: Sloka, lines: number | undefined) => {
-    setSlokas((list) => list.map((x) => (x.id === s.id ? { ...x, lines } : x)));
-    await update(ref(db, `slokas/${s.id}`), { lines: lines ?? null }).catch(() => load());
-  };
-
   const translationsFrom = (v: MantraFormValues, old?: Sloka) => {
     const me = user!.displayName || 'Admin';
     const one = (lang: 'hi' | 'te', mantra: string, meaning: string) => {
@@ -404,62 +398,65 @@ const SlokasLibrary: React.FC = () => {
             const idx = slokas.findIndex((x) => x.id === s.id);
             const langName = LANG_OPTIONS.find((l) => l.code === v.lang)!.name;
             const showMeaning = !!meaningOpen[s.id];
+            const isOpen = !!expanded[s.id];
+            const toggle = () => setExpanded((x) => ({ ...x, [s.id]: !isOpen }));
             return (
-              <li key={s.id} className="rounded-3xl bg-white shadow-soft ring-1 ring-sandal-200/90">
-                {/* Title + language */}
-                <div className="flex items-start gap-3 px-4 pt-4 sm:px-5 sm:pt-5">
-                  <div className="min-w-0 flex-1">
-                    {s.category && <p className="text-[11px] font-semibold uppercase tracking-wider text-brand-600/80">{s.category}</p>}
-                    <h3 className="text-base font-semibold leading-snug text-maroon-900">{s.title}</h3>
-                  </div>
-                  <LangPicker value={v.lang} has={(l) => l === 'en' || !!textIn(s, l)} onChange={(l) => setLangs((x) => ({ ...x, [s.id]: l }))} />
+              <li key={s.id} className={`rounded-3xl bg-white ring-1 transition-shadow duration-300 ${isOpen ? 'shadow-card ring-amber-200/80' : 'shadow-soft ring-sandal-200/90'}`}>
+                {/* Header — tap to expand */}
+                <div className="flex items-center gap-2 py-2 pl-2 pr-3 sm:pr-4">
+                  <button
+                    onClick={toggle}
+                    aria-expanded={isOpen}
+                    className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl px-2 py-1.5 text-left"
+                    style={{ minHeight: 0 }}
+                  >
+                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 transition-colors ${isOpen ? 'bg-amber-100 text-brand-600 ring-amber-200' : 'bg-amber-50 text-brand-500 ring-amber-100'}`}>
+                      <BookHeart size={18} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      {s.category && <span className="block text-[10.5px] font-semibold uppercase tracking-wider text-brand-600/80">{s.category}</span>}
+                      <span className="block truncate text-[15px] font-semibold leading-snug text-maroon-900">{s.title}</span>
+                      {!isOpen && <span className="block truncate text-xs text-maroon-900/45">{s.mantra.split('\n')[0]}</span>}
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <div className="animate-fadeIn">
+                      <LangPicker value={v.lang} onChange={(l) => setLangs((x) => ({ ...x, [s.id]: l }))} />
+                    </div>
+                  )}
+                  <button onClick={toggle} className="icon-btn shrink-0" aria-label={isOpen ? 'Collapse' : 'Expand'}>
+                    <ChevronDown size={18} className={`text-maroon-900/45 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
+                  </button>
                 </div>
 
+                <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${isOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                <div className="min-h-0 overflow-hidden">
                 {/* The mantra */}
-                <div className="px-3 pt-3 sm:px-5">
+                <div className="px-3 pt-1 sm:px-5">
                   {v.missing ? (
-                    <div className="rounded-2xl border border-dashed border-amber-300 bg-amber-50/60 px-4 py-5 text-center">
-                      <p className="text-[15px] font-semibold text-maroon-900">Not in {langName} yet</p>
-                      <p className="mx-auto mt-1 max-w-sm text-sm leading-relaxed text-maroon-900/65">
-                        Please take a little time to add the correct {langName} version. It will help other devotees recite it.
-                      </p>
-                      <div className="mt-3.5 flex flex-wrap items-center justify-center gap-2">
-                        <button onClick={() => (signedIn ? setTranslateFor({ sloka: s, lang: v.lang as 'hi' | 'te' }) : alert('Please sign in to add a version.'))} className="btn-primary btn-sm">
-                          <Plus size={15} /> Add {langName} version
-                        </button>
-                        <button onClick={() => setLangs((l) => ({ ...l, [s.id]: 'en' }))} className="btn-ghost btn-sm">
-                          Read in English
-                        </button>
-                      </div>
+                    <div className="flex items-center justify-between gap-3 rounded-2xl bg-sandal-50 px-4 py-3 ring-1 ring-sandal-200">
+                      <p className="text-sm text-maroon-900/60">No {langName} version yet</p>
+                      <button
+                        onClick={() => (signedIn ? setTranslateFor({ sloka: s, lang: v.lang as 'hi' | 'te' }) : alert('Please sign in to add a version.'))}
+                        className="btn-primary btn-sm shrink-0"
+                      >
+                        <Plus size={15} /> Add {langName}
+                      </button>
                     </div>
                   ) : (
-                    <div className="rounded-2xl bg-gradient-to-b from-amber-50 to-orange-50/40 px-3 py-4 text-center font-medium text-maroon-900 ring-1 ring-amber-100 sm:px-6">
+                    <div key={v.lang} className="animate-fadeIn rounded-2xl bg-gradient-to-b from-amber-50 to-orange-50/40 px-3 py-4 text-center font-medium text-maroon-900 ring-1 ring-amber-100 sm:px-6">
                       <MantraText text={v.mantra} lines={s.lines} />
                     </div>
                   )}
                 </div>
 
-                {/* Admin: lines */}
-                {userIsAdmin && !v.missing && (
-                  <div className="mx-4 mt-2.5 flex items-center gap-2 sm:mx-5">
-                    <span className="shrink-0 text-[11px] font-semibold text-maroon-900/45">Lines</span>
-                    <div className="scrollbar-none flex gap-1 overflow-x-auto">
-                      {LINE_CHOICES.map((c) => {
-                        const on = s.lines === c.value;
-                        return (
-                          <button
-                            key={c.label}
-                            onClick={() => setLines(s, c.value)}
-                            className={`shrink-0 rounded-md px-2 py-0.5 text-[11px] font-semibold transition ${on ? 'bg-amber-100 text-brand-700 ring-1 ring-amber-300' : 'text-maroon-800/55 hover:bg-sandal-100'}`}
-                            style={{ minHeight: 0 }}
-                            aria-pressed={on}
-                          >
-                            {c.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                {/* Who added this version */}
+                {!v.missing && v.by && (
+                  <p className="flex items-center gap-1.5 px-4 pt-2.5 text-xs text-maroon-900/50 sm:px-5">
+                    <UserRound size={13} className="text-brand-500/70" />
+                    {v.lang === 'en' ? 'Added by' : `${langName} version by`}
+                    <span className="font-semibold text-maroon-900/70">{v.by}</span>
+                  </p>
                 )}
 
                 {/* Meaning */}
@@ -474,7 +471,11 @@ const SlokasLibrary: React.FC = () => {
                       {showMeaning ? 'Hide meaning' : 'Show meaning'}
                       <ChevronDown size={15} className={`transition-transform ${showMeaning ? 'rotate-180' : ''}`} />
                     </button>
-                    {showMeaning && <p className="mt-2 animate-fadeIn whitespace-pre-line text-sm leading-relaxed text-maroon-900/75">{v.meaning}</p>}
+                    <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${showMeaning ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                      <p className="min-h-0 overflow-hidden whitespace-pre-line text-sm leading-relaxed text-maroon-900/75">
+                        <span className="block pt-2">{v.meaning}</span>
+                      </p>
+                    </div>
                   </div>
                 )}
 
@@ -512,7 +513,7 @@ const SlokasLibrary: React.FC = () => {
 
                 {/* Comments */}
                 {commentsOpen === s.id && (
-                  <div className="animate-fadeIn space-y-2.5 border-t border-sandal-200/70 bg-sandal-50/60 px-4 py-3 sm:px-5">
+                  <div className="animate-fadeIn space-y-2.5 rounded-b-3xl border-t border-sandal-200/70 bg-sandal-50/60 px-4 py-3 sm:px-5">
                     {comments.length === 0 && <p className="py-1 text-center text-sm text-maroon-900/45">No comments yet.</p>}
                     {comments.map((c) => (
                       <div key={c.id} className="rounded-xl bg-white px-3 py-2.5 ring-1 ring-sandal-200">
@@ -537,13 +538,8 @@ const SlokasLibrary: React.FC = () => {
                     </div>
                   </div>
                 )}
-
-                {/* Who contributed this version */}
-                {!v.missing && v.by && (
-                  <p className="border-t border-sandal-200/70 px-4 py-2.5 text-center text-xs text-maroon-900/50 sm:px-5">
-                    Contributed by <span className="font-semibold text-maroon-900/70">{v.by}</span>
-                  </p>
-                )}
+                </div>
+                </div>
               </li>
             );
           })}
