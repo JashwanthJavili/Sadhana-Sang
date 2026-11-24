@@ -250,7 +250,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             compact ? 'justify-center' : ''
           } ${
             isActive
-              ? 'bg-white text-maroon-900 shadow-[0_1px_3px_rgba(67,27,17,0.10)] ring-1 ring-sandal-300/60'
+              ? 'bg-gradient-to-r from-amber-100 to-amber-50 font-semibold text-brand-800'
               : 'text-maroon-900/60 hover:bg-sandal-200/50 hover:text-maroon-900'
           }`
         }
@@ -259,7 +259,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <>
             <item.icon
               size={18}
-              className={`shrink-0 transition-colors ${isActive ? 'text-brand-600' : 'text-maroon-900/40 group-hover:text-maroon-900/70'}`}
+              className={`shrink-0 transition-colors ${isActive ? 'text-brand-700' : 'text-maroon-900/40 group-hover:text-maroon-900/70'}`}
             />
             {!compact && <span className="truncate">{item.label}</span>}
             {badge > 0 ? (
@@ -268,9 +268,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               ) : (
                 <span className="count-badge ml-auto">{badge > 99 ? '99+' : badge}</span>
               )
-            ) : (
-              isActive && !compact && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-brand-500" />
-            )}
+            ) : null}
           </>
         )}
       </NavLink>
