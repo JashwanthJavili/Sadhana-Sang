@@ -75,7 +75,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   useEffect(() => {
     const start = () => {
       setAccountOpen(null);
-      if (window.matchMedia('(max-width: 1023px)').matches) setMobileOpen(true);
+      setMobileOpen(false);
       setGuideActive(true);
     };
     window.addEventListener(START_GUIDE_EVENT, start);
@@ -438,7 +438,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         {/* Top bar */}
         <header className={`sticky top-0 z-30 border-b border-sandal-200/70 bg-sandal-100/80 backdrop-blur-xl ${isChatRoute ? 'hidden' : ''}`}>
           <div className="flex h-16 items-center gap-2 px-3 sm:h-[72px] sm:px-6 lg:px-8">
-            <button onClick={() => setMobileOpen(true)} className="header-icon-btn lg:hidden" aria-label="Open menu">
+            <button onClick={() => setMobileOpen(true)} data-tour="menu" className="header-icon-btn lg:hidden" aria-label="Open menu">
               <Menu size={20} />
             </button>
 
@@ -528,7 +528,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
 
       {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
-      <AppGuide active={guideActive} onClose={closeGuide} />
+      <AppGuide
+        active={guideActive}
+        onClose={closeGuide}
+        available={[...groups.flatMap((g) => g.items.filter((i) => !i.hidden && !i.locked).map((i) => i.to)), ...ACCOUNT_ITEMS.map((i) => i.to)]}
+        onStepChange={(t) => {
+          if (window.matchMedia('(max-width: 1023px)').matches) setMobileOpen(t !== 'menu');
+        }}
+      />
     </div>
   );
 };

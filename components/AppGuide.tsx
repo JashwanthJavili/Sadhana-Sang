@@ -13,15 +13,16 @@ interface Step {
 }
 
 const STEPS: Step[] = [
-  { target: '/chanting', title: 'Japa Counter', text: 'Tap to count each bead. Rounds save on their own.' },
-  { target: '/planner', title: 'Weekly Planner', text: 'Plan your sadhana for each day of the week.' },
-  { target: '/journal', title: 'Journal', text: 'A private place for your daily reflections.' },
-  { target: '/slokas', title: 'Mantras & Kirtans', text: 'Read prayers and songs in many languages.' },
-  { target: '/festivals', title: 'Vaishnava Calendar', text: 'Festivals and Ekadashis, with their stories.' },
-  { target: '/chats', title: 'Messages', text: 'Private chats with devotees you are connected to.' },
-  { target: '/community', title: 'Devotees', text: 'Find devotees and send connection requests.' },
-  { target: '/questions', title: 'Forum', text: 'Ask questions and learn from the sangha.' },
-  { target: '/settings', title: 'Settings', text: 'Your profile and preferences. You can replay this guide from here.' },
+  { target: 'menu', title: 'Your menu', text: 'Everything in Sadhana Sang lives here. Tap Next and we will open it for you.' },
+  { target: '/chanting', title: 'Japa Counter', text: 'Tap the circle for each bead. Every completed round is saved, and a gentle bell marks the milestones.' },
+  { target: '/planner', title: 'Weekly Planner', text: 'Set your wake-up time, study hours and chanting goal for each day of the week.' },
+  { target: '/journal', title: 'Journal', text: 'Write your daily reflections: what went well, and what you will improve. Only you can read it.' },
+  { target: '/slokas', title: 'Mantras & Kirtans', text: 'Read prayers and songs in English, Hindi, Telugu and more.' },
+  { target: '/festivals', title: 'Vaishnava Calendar', text: 'Never miss an Ekadashi or festival. Open any day for its story and timings.' },
+  { target: '/chats', title: 'Messages', text: 'Chat privately with devotees you are connected to. Messages are encrypted.' },
+  { target: '/community', title: 'Devotees', text: 'Find devotees by temple or guru, and send a connection request to start a conversation.' },
+  { target: '/questions', title: 'Forum', text: 'Ask a spiritual question, or help someone else with an answer.' },
+  { target: '/settings', title: 'Settings', text: 'Update your profile and privacy. You can replay this guide from here any time.' },
 ];
 
 type Box = { top: number; left: number; width: number; height: number };
@@ -38,22 +39,32 @@ const findTarget = (target: string): HTMLElement | null => {
 interface AppGuideProps {
   active: boolean;
   onClose: () => void;
+  /** Menu paths this user can see (the menu button is added automatically when it exists) */
+  available: string[];
+  /** Called when the highlighted target changes, so the app can open or close the mobile menu */
+  onStepChange?: (target: string) => void;
 }
 
-const AppGuide: React.FC<AppGuideProps> = ({ active, onClose }) => {
+const AppGuide: React.FC<AppGuideProps> = ({ active, onClose, available, onStepChange }) => {
   const [steps, setSteps] = useState<Step[]>([]);
   const [i, setI] = useState(0);
   const [box, setBox] = useState<Box | null>(null);
   const [vw, setVw] = useState(window.innerWidth);
   const [vh, setVh] = useState(window.innerHeight);
+  const cardRef = React.useRef<HTMLDivElement>(null);
+  const [cardH, setCardH] = useState(170);
+  useLayoutEffect(() => {
+    if (cardRef.current) setCardH(cardRef.current.offsetHeight);
+  });
 
   // When the guide opens, wait for the menu to slide in, then keep only steps that exist for this user
   useEffect(() => {
     if (!active) return;
     setI(0);
     setBox(null);
-    const t = window.setTimeout(() => setSteps(STEPS.filter((s) => findTarget(s.target))), 380);
-    return () => window.clearTimeout(t);
+    const hasMenuButton = !!findTarget('menu'); // only on phones / tablets
+    setSteps(STEPS.filter((s) => (s.target === 'menu' ? hasMenuButton : available.includes(s.target))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
 
   const step = steps[i];
@@ -71,13 +82,18 @@ const AppGuide: React.FC<AppGuideProps> = ({ active, onClose }) => {
 
   useLayoutEffect(() => {
     if (!active || !step) return;
-    findTarget(step.target)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    measure();
-    const t = window.setTimeout(measure, 320); // after the smooth scroll settles
+    onStepChange?.(step.target);
+    // The menu may still be sliding in — measure a few times until it settles
+    const timers = [0, 120, 350, 700].map((d) =>
+      window.setTimeout(() => {
+        findTarget(step.target)?.scrollIntoView({ block: 'nearest' });
+        measure();
+      }, d)
+    );
     window.addEventListener('resize', measure);
     window.addEventListener('scroll', measure, true);
     return () => {
-      window.clearTimeout(t);
+      timers.forEach(window.clearTimeout);
       window.removeEventListener('resize', measure);
       window.removeEventListener('scroll', measure, true);
     };
@@ -100,7 +116,7 @@ const AppGuide: React.FC<AppGuideProps> = ({ active, onClose }) => {
 
   // Card placement: beside the item when there is room, otherwise below (or above) it
   const CARD_W = Math.min(300, vw - 32);
-  const CARD_H = 150;
+  const CARD_H = cardH;
   let cardTop: number;
   let cardLeft: number;
   if (box.left + box.width + 16 + CARD_W <= vw - 16) {
@@ -108,7 +124,7 @@ const AppGuide: React.FC<AppGuideProps> = ({ active, onClose }) => {
     cardTop = Math.min(Math.max(box.top + box.height / 2 - CARD_H / 2, 16), vh - CARD_H - 16);
   } else {
     cardLeft = Math.min(Math.max(box.left, 16), vw - CARD_W - 16);
-    cardTop = box.top + box.height + 12 + CARD_H < vh - 16 ? box.top + box.height + 12 : box.top - CARD_H - 12;
+    cardTop = box.top + box.height + 12 + CARD_H < vh - 16 ? box.top + box.height + 12 : Math.max(box.top - CARD_H - 16, 16);
   }
 
   const move = 'all 420ms cubic-bezier(.22,1,.36,1)';
@@ -128,6 +144,7 @@ const AppGuide: React.FC<AppGuideProps> = ({ active, onClose }) => {
 
       {/* Card */}
       <div
+        ref={cardRef}
         className="absolute rounded-2xl bg-white p-4 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.45)]"
         style={{ top: cardTop, left: cardLeft, width: CARD_W, transition: move }}
       >
