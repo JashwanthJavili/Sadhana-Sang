@@ -614,7 +614,7 @@ const AdminPanel: React.FC = () => {
   if (!isAuthenticated) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-red-50">
-        <div className="bg-white rounded-2xl shadow-2xl border-2 border-orange-300 p-8 max-w-md w-full mx-4">
+        <div className="bg-white rounded-2xl shadow-card border-2 border-orange-300 p-8 max-w-md w-full mx-4">
           <div className="text-center mb-6">
             <Shield className="mx-auto mb-4 text-red-600" size={64} />
             <h1 className="text-3xl font-bold text-stone-800 mb-2">Admin Panel Access</h1>
@@ -631,7 +631,7 @@ const AdminPanel: React.FC = () => {
                 value={passwordInput}
                 onChange={(e) => setPasswordInput(e.target.value)}
                 placeholder="Enter admin password"
-                className="w-full px-4 py-3 border-2 border-stone-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
+                className="w-full px-4 py-3 border border-sandal-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
                 autoFocus
               />
               {passwordError && (
@@ -665,7 +665,7 @@ const AdminPanel: React.FC = () => {
   return (
     <div className="min-h-full space-y-4 sm:space-y-6 max-w-7xl mx-auto animate-fadeIn">
       {/* Header */}
-      <div className="bg-gradient-to-r from-red-700 via-orange-600 to-red-700 rounded-lg sm:rounded-xl md:rounded-2xl p-4 sm:p-6 shadow-2xl border-2 border-red-400">
+      <div className="bg-gradient-to-r from-red-700 via-orange-600 to-red-700 rounded-lg sm:rounded-xl md:rounded-2xl p-4 sm:p-6 shadow-card border-2 border-red-400">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
           <div>
             <h1 className="text-xl sm:text-2xl md:text-3xl font-serif font-bold text-white mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3">
@@ -716,7 +716,7 @@ const AdminPanel: React.FC = () => {
       )}
 
       {/* Admin Actions */}
-      <div className="bg-white rounded-2xl shadow-xl border-2 border-stone-200 p-6">
+      <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
         <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
           <Shield size={28} className="text-red-600" />
           Admin Actions
@@ -742,14 +742,14 @@ const AdminPanel: React.FC = () => {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="bg-white rounded-2xl shadow-xl border-2 border-stone-200 p-2">
+      <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-2">
         <div className="flex flex-wrap gap-2">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`px-6 py-3 rounded-xl font-bold transition-all ${
+            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
               activeTab === 'overview'
-                ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-lg'
-                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                ? 'bg-brand-600 text-white shadow-soft'
+                : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
             }`}
           >
             <BarChart3 className="inline mr-2" size={20} />
@@ -757,10 +757,10 @@ const AdminPanel: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('users')}
-            className={`px-6 py-3 rounded-xl font-bold transition-all ${
+            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
               activeTab === 'users'
-                ? 'bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg'
-                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                ? 'bg-brand-600 text-white shadow-soft'
+                : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
             }`}
           >
             <Users className="inline mr-2" size={20} />
@@ -769,10 +769,10 @@ const AdminPanel: React.FC = () => {
           {isSuperAdmin && (
             <button
               onClick={() => setActiveTab('admins')}
-              className={`px-6 py-3 rounded-xl font-bold transition-all ${
+              className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                 activeTab === 'admins'
-                  ? 'bg-gradient-to-r from-red-600 to-red-700 text-white shadow-lg'
-                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  ? 'bg-brand-600 text-white shadow-soft'
+                  : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
               }`}
             >
               <Shield className="inline mr-2" size={20} />
@@ -781,10 +781,10 @@ const AdminPanel: React.FC = () => {
           )}
           <button
             onClick={() => setActiveTab('content')}
-            className={`px-6 py-3 rounded-xl font-bold transition-all ${
+            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
               activeTab === 'content'
-                ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-lg'
-                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                ? 'bg-brand-600 text-white shadow-soft'
+                : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
             }`}
           >
             <Flag className="inline mr-2" size={20} />
@@ -792,10 +792,10 @@ const AdminPanel: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('feedback')}
-            className={`px-6 py-3 rounded-xl font-bold transition-all ${
+            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
               activeTab === 'feedback'
                 ? 'bg-gradient-to-r from-pink-600 to-rose-600 text-white shadow-lg'
-                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
             }`}
           >
             <MessageCircle className="inline mr-2" size={20} />
@@ -803,10 +803,10 @@ const AdminPanel: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('ekadashi')}
-            className={`px-6 py-3 rounded-xl font-bold transition-all ${
+            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
               activeTab === 'ekadashi'
                 ? 'bg-gradient-to-r from-brand-500 to-amber-500 text-white shadow-lg'
-                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
             }`}
           >
             <Moon className="inline mr-2" size={20} />
@@ -814,10 +814,10 @@ const AdminPanel: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveTab('requests')}
-            className={`px-6 py-3 rounded-xl font-bold transition-all ${
+            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
               activeTab === 'requests'
                 ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white shadow-lg'
-                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
             }`}
           >
             <Send className="inline mr-2" size={20} />
@@ -826,10 +826,10 @@ const AdminPanel: React.FC = () => {
           {isSuperAdmin && (
             <button
               onClick={() => setActiveTab('announcements')}
-              className={`px-6 py-3 rounded-xl font-bold transition-all ${
+              className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                 activeTab === 'announcements'
                   ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg'
-                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
               }`}
             >
               <Bell className="inline mr-2" size={20} />
@@ -839,10 +839,10 @@ const AdminPanel: React.FC = () => {
           {isSuperAdmin && (
             <button
               onClick={() => setActiveTab('system')}
-              className={`px-6 py-3 rounded-xl font-bold transition-all ${
+              className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
                 activeTab === 'system'
-                  ? 'bg-gradient-to-r from-orange-600 to-orange-700 text-white shadow-lg'
-                  : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                  ? 'bg-brand-600 text-white shadow-soft'
+                  : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
               }`}
             >
               <Database className="inline mr-2" size={20} />
@@ -851,10 +851,10 @@ const AdminPanel: React.FC = () => {
           )}
           <button
             onClick={() => setActiveTab('settings')}
-            className={`px-6 py-3 rounded-xl font-bold transition-all ${
+            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
               activeTab === 'settings'
-                ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white shadow-lg'
-                : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                ? 'bg-brand-600 text-white shadow-soft'
+                : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
             }`}
           >
             <Zap className="inline mr-2" size={20} />
@@ -871,7 +871,7 @@ const AdminPanel: React.FC = () => {
           {/* Analytics Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* User Activity Chart */}
-            <div className="bg-white rounded-2xl shadow-xl border-2 border-stone-200 p-6">
+            <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
               <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
                 <TrendingUp className="text-blue-600" size={24} />
                 User Activity (Last 7 Days)
@@ -890,7 +890,7 @@ const AdminPanel: React.FC = () => {
             </div>
 
             {/* Center Distribution */}
-            <div className="bg-white rounded-2xl shadow-xl border-2 border-stone-200 p-6">
+            <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
               <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
                 <Users className="text-green-600" size={24} />
                 Top ISKCON Centers
@@ -908,7 +908,7 @@ const AdminPanel: React.FC = () => {
           </div>
 
           {/* Engagement Pie Chart */}
-          <div className="bg-white rounded-2xl shadow-xl border-2 border-stone-200 p-6">
+          <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
             <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
               <Activity className="text-purple-600" size={24} />
               User Engagement Levels
@@ -948,7 +948,7 @@ const AdminPanel: React.FC = () => {
           </div>
 
           {/* Broadcast Announcement */}
-          <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl shadow-xl border-2 border-orange-300 p-6">
+          <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl shadow-soft border-2 border-orange-300 p-6">
             <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
               <Bell className="text-orange-600" size={24} />
               Broadcast Announcement to All Users
@@ -974,7 +974,7 @@ const AdminPanel: React.FC = () => {
       )}
 
       {activeTab === 'users' && (
-        <div className="bg-white rounded-2xl shadow-xl border-2 border-stone-200 p-6">
+        <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
           {/* Search and Filters */}
           <div className="flex flex-wrap gap-4 mb-6">
             <div className="flex-1 min-w-[250px]">
@@ -985,7 +985,7 @@ const AdminPanel: React.FC = () => {
                   placeholder="Search users..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border-2 border-stone-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full pl-10 pr-4 py-3 border border-sandal-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
             </div>
@@ -993,7 +993,7 @@ const AdminPanel: React.FC = () => {
               <select
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'inactive')}
-                className="px-4 py-3 border-2 border-stone-300 rounded-xl font-semibold focus:ring-2 focus:ring-blue-500 outline-none"
+                className="px-4 py-3 border border-sandal-200 rounded-xl font-semibold focus:ring-2 focus:ring-blue-500 outline-none"
               >
                 <option value="all">All Users</option>
                 <option value="active">Active (Last 7 Days)</option>
@@ -1126,7 +1126,7 @@ const AdminPanel: React.FC = () => {
                           />
                           
                           {/* Dropdown Content */}
-                          <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border-2 border-stone-200 z-20 overflow-hidden">
+                          <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-card border border-sandal-200 z-20 overflow-hidden">
                             <div className="p-2 bg-stone-100 border-b border-stone-200">
                               <p className="text-xs font-bold text-stone-600 px-2">USER ACTIONS</p>
                             </div>
@@ -1223,7 +1223,7 @@ const AdminPanel: React.FC = () => {
       )}
 
       {activeTab === 'admins' && (
-        <div className="bg-white rounded-2xl shadow-xl border-2 border-stone-200 p-6">
+        <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
           <div className="mb-6">
             <h2 className="text-2xl font-bold flex items-center gap-2">
               <Shield size={28} className="text-red-600" />
@@ -1289,7 +1289,7 @@ const AdminPanel: React.FC = () => {
 
       {activeTab === 'content' && (
         <div className="space-y-6">
-          <div className="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 rounded-xl p-6 text-white shadow-2xl">
+          <div className="bg-gradient-to-r from-purple-600 via-pink-500 to-purple-600 rounded-xl p-6 text-white shadow-card">
             <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
               <Flag size={32} />
               Advanced Content Moderation
@@ -1347,7 +1347,7 @@ const AdminPanel: React.FC = () => {
                   className={`px-4 py-2 rounded-lg font-bold transition-all ${
                     contentFilter === 'all'
                       ? 'bg-purple-600 text-white'
-                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                      : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
                   }`}
                 >
                   All Content
@@ -1357,7 +1357,7 @@ const AdminPanel: React.FC = () => {
                   className={`px-4 py-2 rounded-lg font-bold transition-all ${
                     contentFilter === 'questions'
                       ? 'bg-blue-600 text-white'
-                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                      : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
                   }`}
                 >
                   Questions ({questions.length})
@@ -1367,7 +1367,7 @@ const AdminPanel: React.FC = () => {
                   className={`px-4 py-2 rounded-lg font-bold transition-all ${
                     contentFilter === 'answers'
                       ? 'bg-green-600 text-white'
-                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                      : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
                   }`}
                 >
                   Answers ({answers.length})
@@ -1377,7 +1377,7 @@ const AdminPanel: React.FC = () => {
                   className={`px-4 py-2 rounded-lg font-bold transition-all ${
                     contentFilter === 'flagged'
                       ? 'bg-red-600 text-white'
-                      : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                      : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
                   }`}
                 >
                   Flagged ({flaggedContent.filter(f => f.status === 'pending').length})
@@ -1630,7 +1630,7 @@ const AdminPanel: React.FC = () => {
 
       {activeTab === 'feedback' && (
         <div className="space-y-6">
-          <div className="bg-gradient-to-r from-pink-600 via-rose-500 to-pink-600 rounded-xl p-6 text-white shadow-2xl">
+          <div className="bg-gradient-to-r from-pink-600 via-rose-500 to-pink-600 rounded-xl p-6 text-white shadow-card">
             <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
               <MessageCircle size={32} />
               User Feedback Management
@@ -1649,7 +1649,7 @@ const AdminPanel: React.FC = () => {
       {/* Announcements Tab - Rich Text Broadcast System */}
       {activeTab === 'announcements' && (
         <div className="space-y-6">
-          <div className="bg-gradient-to-r from-cyan-600 to-blue-600 rounded-xl p-6 text-white shadow-2xl">
+          <div className="bg-gradient-to-r from-cyan-600 to-blue-600 rounded-xl p-6 text-white shadow-card">
             <h2 className="text-3xl font-bold mb-2 flex items-center gap-3">
               <Bell size={32} />
               Broadcast Announcements
@@ -1658,7 +1658,7 @@ const AdminPanel: React.FC = () => {
           </div>
 
           {/* Rich Text Editor */}
-          <div className="bg-white rounded-xl shadow-xl border-2 border-cyan-200 p-6">
+          <div className="bg-white rounded-xl shadow-soft border-2 border-cyan-200 p-6">
             <h3 className="text-xl font-bold mb-4 text-cyan-700">Create New Announcement</h3>
             
             {/* Announcement Type Selector */}
@@ -1694,7 +1694,7 @@ const AdminPanel: React.FC = () => {
                 value={announcementTitle}
                 onChange={(e) => setAnnouncementTitle(e.target.value)}
                 placeholder="Enter announcement title..."
-                className="w-full px-4 py-3 border-2 border-stone-300 rounded-lg focus:border-cyan-500 focus:outline-none text-lg font-semibold"
+                className="w-full px-4 py-3 border border-sandal-200 rounded-lg focus:border-cyan-500 focus:outline-none text-lg font-semibold"
               />
             </div>
 
@@ -1730,7 +1730,7 @@ const AdminPanel: React.FC = () => {
                 <select
                   value={fontSize}
                   onChange={(e) => setFontSize(e.target.value)}
-                  className="px-3 py-2 rounded-lg border-2 border-stone-300 bg-white hover:border-cyan-500 transition-all cursor-pointer"
+                  className="px-3 py-2 rounded-lg border border-sandal-200 bg-white hover:border-cyan-500 transition-all cursor-pointer"
                 >
                   <option value="12">Small</option>
                   <option value="16">Normal</option>
@@ -1745,7 +1745,7 @@ const AdminPanel: React.FC = () => {
                     type="color"
                     value={textColor}
                     onChange={(e) => setTextColor(e.target.value)}
-                    className="w-12 h-10 rounded-lg border-2 border-stone-300 cursor-pointer"
+                    className="w-12 h-10 rounded-lg border border-sandal-200 cursor-pointer"
                   />
                 </div>
 
@@ -1891,7 +1891,7 @@ const AdminPanel: React.FC = () => {
           </div>
 
           {/* Quick Templates */}
-          <div className="bg-white rounded-xl shadow-xl border-2 border-stone-200 p-6">
+          <div className="bg-white rounded-xl shadow-soft border border-sandal-200 p-6">
             <h3 className="text-xl font-bold mb-4 text-stone-700">Quick Templates</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {[
@@ -1923,7 +1923,7 @@ const AdminPanel: React.FC = () => {
                     setAnnouncementText(template.message);
                     setAnnouncementType(template.type as any);
                   }}
-                  className="p-4 text-left border-2 border-stone-200 rounded-lg hover:border-cyan-500 hover:bg-cyan-50 transition-all group"
+                  className="p-4 text-left border border-sandal-200 rounded-lg hover:border-cyan-500 hover:bg-cyan-50 transition-all group"
                 >
                   <h4 className="font-bold text-stone-800 group-hover:text-cyan-700">{template.title}</h4>
                   <p className="text-sm text-stone-600 mt-1 line-clamp-2">{template.message}</p>
@@ -1935,7 +1935,7 @@ const AdminPanel: React.FC = () => {
       )}
 
       {activeTab === 'system' && (
-        <div className="bg-white rounded-2xl shadow-xl border-2 border-stone-200 p-6">
+        <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
           <div className="mb-6">
             <h2 className="text-2xl font-bold flex items-center gap-2">
               <Database size={28} className="text-orange-600" />
@@ -2003,7 +2003,7 @@ const AdminPanel: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl border-2 border-stone-300 p-6">
+            <div className="bg-white rounded-xl border border-sandal-200 p-6">
               <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
                 <TrendingUp className="text-orange-600" size={24} />
                 Performance Metrics
@@ -2024,7 +2024,7 @@ const AdminPanel: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border-2 border-stone-300 p-6">
+            <div className="bg-white rounded-xl border border-sandal-200 p-6">
               <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
                 <Zap className="text-blue-600" size={24} />
                 System Information
@@ -2099,7 +2099,7 @@ const AdminPanel: React.FC = () => {
 
             {/* System Events */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-xl border-2 border-stone-300 p-6">
+              <div className="bg-white rounded-xl border border-sandal-200 p-6">
                 <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
                   <Zap className="text-amber-600" size={24} />
                   System Events (Last 24h)
@@ -2120,7 +2120,7 @@ const AdminPanel: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-white rounded-xl border-2 border-stone-300 p-6">
+              <div className="bg-white rounded-xl border border-sandal-200 p-6">
                 <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
                   <Database className="text-purple-600" size={24} />
                   Database Operations
@@ -2154,7 +2154,7 @@ const AdminPanel: React.FC = () => {
       )}
 
       {activeTab === 'reports' && (
-        <div className="bg-white rounded-2xl shadow-xl border-2 border-stone-200 p-6">
+        <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
           <div className="mb-6">
             <h2 className="text-2xl font-bold flex items-center gap-2">
               <BarChart3 size={28} className="text-teal-600" />

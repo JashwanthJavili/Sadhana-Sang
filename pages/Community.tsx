@@ -96,8 +96,8 @@ const Community: React.FC = () => {
         if (searchTerm) {
           filtered = filtered.filter(u =>
             u.userName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            u.guruName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            u.iskconCenter?.toLowerCase().includes(searchTerm.toLowerCase())
+            (u.showGuruName !== false && u.guruName?.toLowerCase().includes(searchTerm.toLowerCase())) ||
+            (u.showIskconCenter !== false && u.iskconCenter?.toLowerCase().includes(searchTerm.toLowerCase()))
           );
         }
 
@@ -442,8 +442,8 @@ const Community: React.FC = () => {
       ) : (
         <div className="mt-4 grid grid-cols-1 items-start gap-2 md:grid-cols-2 xl:grid-cols-3">
           {displayUsers.map((profile) => {
-            const temple = known(profile.iskconCenter);
-            const teacher = known(profile.guruName);
+            const temple = profile.showIskconCenter === false ? '' : known(profile.iskconCenter);
+            const teacher = profile.showGuruName === false ? '' : known(profile.guruName);
             const open = openUid === profile.uid;
             return (
               <div
@@ -480,11 +480,11 @@ const Community: React.FC = () => {
                       <div className="space-y-1.5 text-[13px] text-maroon-900/75">
                         <p className="flex items-center gap-2">
                           <MapPin size={14} className="shrink-0 text-marigold-500" />
-                          <span className="truncate">{temple || 'Temple not shared'}</span>
+                          <span className="truncate">{temple || 'Not shared'}</span>
                         </p>
                         <p className="flex items-center gap-2">
                           <BookOpen size={14} className="shrink-0 text-marigold-500" />
-                          <span className="truncate">{teacher || 'Teacher not shared'}</span>
+                          <span className="truncate">{teacher || 'Not shared'}</span>
                         </p>
                       </div>
                       {profile.bio && <p className="text-[13px] leading-relaxed text-maroon-900/60">{profile.bio}</p>}

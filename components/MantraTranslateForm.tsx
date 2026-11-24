@@ -7,12 +7,12 @@ import { submitSlokaRequest } from '../services/requests';
 import MantraText from './MantraText';
 import { useKeyboardSafe } from './useKeyboardSafe';
 
-const SHORT = { hi: 'Hindi', te: 'Telugu' } as const;
-const NATIVE = { hi: 'हिन्दी', te: 'తెలుగు' } as const;
-
 interface Props {
   sloka: { id: string; title: string; mantra: string; meaning?: string };
-  lang: 'hi' | 'te';
+  /** language code, e.g. hi, te or an approved custom one */
+  lang: string;
+  /** name shown to the devotee, e.g. "Hindi" or "हिन्दी" */
+  langName: string;
   onClose: () => void;
 }
 
@@ -23,7 +23,7 @@ const field =
  * Lets a devotee write the Hindi / Telugu version of a mantra.
  * It is sent to the team for review, then shown to everyone.
  */
-const MantraTranslateForm: React.FC<Props> = ({ sloka, lang, onClose }) => {
+const MantraTranslateForm: React.FC<Props> = ({ sloka, lang, langName, onClose }) => {
   const { user } = useAuth();
   const { showError, showSuccess } = useToast();
   const kb = useKeyboardSafe();
@@ -38,11 +38,11 @@ const MantraTranslateForm: React.FC<Props> = ({ sloka, lang, onClose }) => {
     setBusy(true);
     try {
       await submitSlokaRequest({
-        title: `${SHORT[lang]} version — ${sloka.title}`,
+        title: `${langName} version — ${sloka.title}`,
         sanskrit: mantra.trim(),
         transliteration: '',
         translation: meaning.trim(),
-        category: `${SHORT[lang]} version`,
+        category: `${langName} version`,
         purport: '',
         reference: `translation:${lang}:${sloka.id}`,
         requesterId: user.uid,
@@ -59,7 +59,7 @@ const MantraTranslateForm: React.FC<Props> = ({ sloka, lang, onClose }) => {
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center sm:p-6" style={kb} role="dialog" aria-modal="true" aria-label={`Add the ${SHORT[lang]} version`}>
+    <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center sm:p-6" style={kb} role="dialog" aria-modal="true" aria-label={`Add the ${langName} version`}>
       <div className="absolute inset-0 animate-fadeIn bg-maroon-900/25 backdrop-blur-[2px]" onClick={busy ? undefined : onClose} />
       <form
         onSubmit={submit}
@@ -75,7 +75,7 @@ const MantraTranslateForm: React.FC<Props> = ({ sloka, lang, onClose }) => {
             </span>
             <div className="min-w-0 flex-1">
               <h3 className="text-base font-semibold text-maroon-900">
-                Add {SHORT[lang]} version <span className="font-normal text-maroon-900/45">· {NATIVE[lang]}</span>
+                Add {langName} version
               </h3>
               <p className="truncate text-sm text-maroon-900/55">{sloka.title}</p>
             </div>
@@ -95,13 +95,13 @@ const MantraTranslateForm: React.FC<Props> = ({ sloka, lang, onClose }) => {
           </div>
 
           <label className="block">
-            <span className="mb-1.5 block text-sm font-semibold text-maroon-900">Mantra in {SHORT[lang]}</span>
+            <span className="mb-1.5 block text-sm font-semibold text-maroon-900">Mantra in {langName}</span>
             <textarea
               rows={4}
               value={mantra}
               onChange={(e) => setMantra(e.target.value)}
               className={`${field} resize-none leading-relaxed`}
-              placeholder={`Type the mantra in ${SHORT[lang]} script`}
+              placeholder={`Type the mantra in ${langName} script`}
             />
           </label>
 
@@ -114,7 +114,7 @@ const MantraTranslateForm: React.FC<Props> = ({ sloka, lang, onClose }) => {
 
           <label className="block">
             <span className="mb-1.5 block text-sm font-semibold text-maroon-900">
-              Meaning in {SHORT[lang]} <span className="font-normal text-maroon-900/40">(optional)</span>
+              Meaning in {langName} <span className="font-normal text-maroon-900/40">(optional)</span>
             </span>
             <textarea rows={3} value={meaning} onChange={(e) => setMeaning(e.target.value)} className={`${field} resize-none leading-relaxed`} />
           </label>

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Calendar, BookOpen, Send, Check, X, MessageSquare, Trash2, Eye } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Calendar, BookOpen, Languages, Check, X, ChevronDown, Inbox, Loader2 } from 'lucide-react';
 import {
   getAllFestivalRequests,
   getAllSlokaRequests,
@@ -11,425 +11,279 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 
+type Tab = 'festivals' | 'mantras' | 'languages';
+type Status = 'pending' | 'approved' | 'rejected' | 'all';
+
+const STATUS_STYLE: Record<string, string> = {
+  pending: 'bg-amber-100 text-amber-800',
+  approved: 'bg-emerald-100 text-emerald-800',
+  rejected: 'bg-rose-100 text-rose-800',
+};
+
+const when = (ts: number) => new Date(ts).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+/** One label + value row inside an expanded request */
+const Field: React.FC<{ label: string; children?: React.ReactNode }> = ({ label, children }) =>
+  children ? (
+    <div>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-maroon-900/40">{label}</p>
+      <p className="mt-0.5 whitespace-pre-line text-sm leading-relaxed text-maroon-900/80">{children}</p>
+    </div>
+  ) : null;
+
+interface CardProps {
+  title: string;
+  meta: string;
+  status: string;
+  open: boolean;
+  onToggle: () => void;
+  comment?: string;
+  reviewedBy?: string;
+  children: React.ReactNode;
+  review?: React.ReactNode;
+}
+
+const RequestCard: React.FC<CardProps> = ({ title, meta, status, open, onToggle, comment, reviewedBy, children, review }) => (
+  <li className={`rounded-2xl bg-white ring-1 transition-shadow ${open ? 'shadow-card ring-amber-200' : 'shadow-soft ring-sandal-200'}`}>
+    <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-3 px-4 py-3 text-left" style={{ minHeight: 0 }}>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[15px] font-semibold text-maroon-900">{title}</p>
+        <p className="truncate text-xs text-maroon-900/50">{meta}</p>
+      </div>
+      <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-bold capitalize ${STATUS_STYLE[status] || 'bg-stone-100 text-stone-700'}`}>{status}</span>
+      <ChevronDown size={17} className={`shrink-0 text-maroon-900/40 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+    </button>
+    <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+      <div className="min-h-0 overflow-hidden">
+        <div className="space-y-3 border-t border-sandal-200/70 px-4 pb-4 pt-3">
+          {children}
+          {comment && (
+            <div className="rounded-xl bg-sky-50 px-3 py-2.5 ring-1 ring-sky-100">
+              <p className="text-xs font-semibold text-sky-900">Admin note{reviewedBy ? ` · ${reviewedBy}` : ''}</p>
+              <p className="mt-0.5 text-sm text-sky-800">{comment}</p>
+            </div>
+          )}
+          {review}
+        </div>
+      </div>
+    </div>
+  </li>
+);
+
 export default function AdminRequestsPanel() {
   const { user } = useAuth();
   const { showError, showSuccess } = useToast();
-  const [activeTab, setActiveTab] = useState<'festivals' | 'slokas'>('festivals');
+  const [tab, setTab] = useState<Tab>('festivals');
   const [festivalRequests, setFestivalRequests] = useState<FestivalRequest[]>([]);
   const [slokaRequests, setSlokaRequests] = useState<SlokaRequest[]>([]);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
-  const [expandedRequest, setExpandedRequest] = useState<string | null>(null);
-  const [adminComment, setAdminComment] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [status, setStatus] = useState<Status>('pending');
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    const festivalUnsubscribe = getAllFestivalRequests((requests) => {
-      setFestivalRequests(requests);
-    });
-
-    const slokaUnsubscribe = getAllSlokaRequests((requests) => {
-      setSlokaRequests(requests);
-    });
-
+    const a = getAllFestivalRequests(setFestivalRequests);
+    const b = getAllSlokaRequests(setSlokaRequests);
     return () => {
-      festivalUnsubscribe();
-      slokaUnsubscribe();
+      a();
+      b();
     };
   }, []);
 
-  const handleReviewFestival = async (requestId: string, status: 'approved' | 'rejected') => {
-    if (!user) return;
-    if (!adminComment.trim() && status === 'rejected') {
-      showError('Please provide a comment for rejection');
-      return;
-    }
+  const isLanguage = (r: SlokaRequest) => (r.reference || '').startsWith('language:');
+  const mantraRequests = useMemo(() => slokaRequests.filter((r) => !isLanguage(r)), [slokaRequests]);
+  const languageRequests = useMemo(() => slokaRequests.filter(isLanguage), [slokaRequests]);
 
-    setIsProcessing(true);
+  const pending = {
+    festivals: festivalRequests.filter((r) => r.status === 'pending').length,
+    mantras: mantraRequests.filter((r) => r.status === 'pending').length,
+    languages: languageRequests.filter((r) => r.status === 'pending').length,
+  };
+
+  const byStatus = <T extends { status: string }>(list: T[]) => (status === 'all' ? list : list.filter((r) => r.status === status));
+
+  const review = async (kind: 'festival' | 'sloka', id: string, result: 'approved' | 'rejected') => {
+    if (!user) return;
+    if (result === 'rejected' && !note.trim()) return showError('Please add a short note for the devotee');
+    setBusy(true);
     try {
-      await reviewFestivalRequest(
-        requestId,
-        status,
-        adminComment.trim(),
-        user.uid,
-        user.displayName || user.email || 'Admin'
-      );
-      showSuccess(
-        `Festival request ${status === 'approved' ? 'approved and published' : 'rejected'}!`
-      );
-      setAdminComment('');
-      setExpandedRequest(null);
-    } catch (error) {
-      console.error('Error reviewing festival:', error);
-      showError('Failed to process request');
+      const who = user.displayName || user.email || 'Admin';
+      if (kind === 'festival') await reviewFestivalRequest(id, result, note.trim(), user.uid, who);
+      else await reviewSlokaRequest(id, result, note.trim(), user.uid, who);
+      showSuccess(result === 'approved' ? 'Approved and published' : 'Request declined');
+      setNote('');
+      setOpenId(null);
+    } catch (e) {
+      console.error(e);
+      showError('Could not process the request');
     } finally {
-      setIsProcessing(false);
+      setBusy(false);
     }
   };
 
-  const handleReviewSloka = async (requestId: string, status: 'approved' | 'rejected') => {
-    if (!user) return;
-    if (!adminComment.trim() && status === 'rejected') {
-      showError('Please provide a comment for rejection');
-      return;
-    }
-
-    setIsProcessing(true);
-    try {
-      await reviewSlokaRequest(
-        requestId,
-        status,
-        adminComment.trim(),
-        user.uid,
-        user.displayName || user.email || 'Admin'
-      );
-      showSuccess(
-        `Sloka request ${status === 'approved' ? 'approved and published' : 'rejected'}!`
-      );
-      setAdminComment('');
-      setExpandedRequest(null);
-    } catch (error) {
-      console.error('Error reviewing sloka:', error);
-      showError('Failed to process request');
-    } finally {
-      setIsProcessing(false);
-    }
+  const toggle = (id: string) => {
+    setOpenId((o) => (o === id ? null : id));
+    setNote('');
   };
 
-  const filteredFestivalRequests = festivalRequests.filter((req) =>
-    statusFilter === 'all' ? true : req.status === statusFilter
+  const reviewBox = (kind: 'festival' | 'sloka', id: string, approveLabel: string) => (
+    <div className="space-y-2.5 pt-1">
+      <input
+        value={openId === id ? note : ''}
+        onChange={(e) => setNote(e.target.value)}
+        placeholder="Short note (needed to decline)"
+        className="block w-full rounded-xl border border-sandal-300 bg-white px-3.5 py-2.5 text-sm text-maroon-900 placeholder:text-maroon-900/30 focus:border-marigold-400 focus:outline-none focus:ring-4 focus:ring-marigold-400/20"
+      />
+      <div className="flex gap-2">
+        <button onClick={() => review(kind, id, 'rejected')} disabled={busy} className="btn-secondary flex-1 disabled:opacity-50">
+          <X size={16} /> Decline
+        </button>
+        <button onClick={() => review(kind, id, 'approved')} disabled={busy} className="btn-primary flex-[1.4] disabled:opacity-50">
+          {busy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} {approveLabel}
+        </button>
+      </div>
+    </div>
   );
 
-  const filteredSlokaRequests = slokaRequests.filter((req) =>
-    statusFilter === 'all' ? true : req.status === statusFilter
+  const empty = (label: string) => (
+    <div className="rounded-3xl bg-white px-6 py-12 text-center shadow-soft ring-1 ring-sandal-200">
+      <Inbox size={34} className="mx-auto text-sandal-400" />
+      <p className="mt-2 text-sm text-maroon-900/55">No {status === 'all' ? '' : `${status} `}{label}</p>
+    </div>
   );
 
-  const pendingFestivalsCount = festivalRequests.filter((r) => r.status === 'pending').length;
-  const pendingSlokasCount = slokaRequests.filter((r) => r.status === 'pending').length;
+  const tabs: { id: Tab; label: string; Icon: React.ComponentType<any> }[] = [
+    { id: 'festivals', label: 'Festivals', Icon: Calendar },
+    { id: 'mantras', label: 'Mantras', Icon: BookOpen },
+    { id: 'languages', label: 'Languages', Icon: Languages },
+  ];
+
+  const festivals = byStatus(festivalRequests);
+  const mantras = byStatus(mantraRequests);
+  const languages = byStatus(languageRequests);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-orange-500 to-pink-500 rounded-xl p-6 text-white">
-        <h1 className="text-2xl font-bold mb-2">Content Requests</h1>
-        <p className="text-orange-100">Review and approve community contributions</p>
-        <div className="flex gap-4 mt-4 text-sm">
-          <div className="bg-white/20 rounded-lg px-4 py-2">
-            <span className="font-bold">{pendingFestivalsCount}</span> pending festivals
-          </div>
-          <div className="bg-white/20 rounded-lg px-4 py-2">
-            <span className="font-bold">{pendingSlokasCount}</span> pending slokas
-          </div>
-        </div>
+    <div className="space-y-4">
+      <div>
+        <h2 className="font-elegant text-2xl font-semibold text-maroon-900">Requests</h2>
+        <p className="mt-0.5 text-sm text-maroon-900/55">Review what devotees have suggested.</p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab('festivals')}
-          className={`px-6 py-3 font-medium flex items-center gap-2 border-b-2 transition-colors ${
-            activeTab === 'festivals'
-              ? 'border-orange-500 text-orange-600'
-              : 'border-transparent text-gray-600 hover:text-gray-800'
-          }`}
-        >
-          <Calendar size={18} />
-          Festivals
-          {pendingFestivalsCount > 0 && (
-            <span className="bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full">
-              {pendingFestivalsCount}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('slokas')}
-          className={`px-6 py-3 font-medium flex items-center gap-2 border-b-2 transition-colors ${
-            activeTab === 'slokas'
-              ? 'border-orange-500 text-orange-600'
-              : 'border-transparent text-gray-600 hover:text-gray-800'
-          }`}
-        >
-          <BookOpen size={18} />
-          Slokas/Mantras
-          {pendingSlokasCount > 0 && (
-            <span className="bg-orange-500 text-white text-xs px-2 py-0.5 rounded-full">
-              {pendingSlokasCount}
-            </span>
-          )}
-        </button>
-      </div>
-
-      {/* Status Filter */}
-      <div className="flex gap-2">
-        {(['all', 'pending', 'approved', 'rejected'] as const).map((status) => (
+      <div className="grid grid-cols-3 gap-1 rounded-2xl bg-sandal-100 p-1">
+        {tabs.map(({ id, label, Icon }) => (
           <button
-            key={status}
-            onClick={() => setStatusFilter(status)}
-            className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
-              statusFilter === status
-                ? 'bg-orange-500 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            key={id}
+            onClick={() => {
+              setTab(id);
+              setOpenId(null);
+            }}
+            className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-sm font-semibold transition-all ${
+              tab === id ? 'bg-white text-maroon-900 shadow-soft' : 'text-maroon-900/55 hover:text-maroon-900'
             }`}
+            style={{ minHeight: 0 }}
           >
-            {status.charAt(0).toUpperCase() + status.slice(1)}
+            <Icon size={16} />
+            {label}
+            {pending[id] > 0 && <span className="rounded-full bg-brand-600 px-1.5 text-[11px] font-bold text-white">{pending[id]}</span>}
           </button>
         ))}
       </div>
 
-      {/* Festival Requests */}
-      {activeTab === 'festivals' && (
-        <div className="space-y-4">
-          {filteredFestivalRequests.length === 0 ? (
-            <div className="bg-white rounded-xl p-12 text-center border-2 border-dashed border-gray-300">
-              <Calendar size={48} className="mx-auto mb-4 text-gray-400" />
-              <p className="text-gray-600">No {statusFilter !== 'all' && statusFilter} festival requests</p>
-            </div>
-          ) : (
-            filteredFestivalRequests.map((request) => (
-              <div
-                key={request.id}
-                className="bg-white rounded-xl border-2 border-gray-200 overflow-hidden"
+      {/* Status */}
+      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 scrollbar-none sm:mx-0 sm:px-0">
+        {(['pending', 'approved', 'rejected', 'all'] as const).map((s) => (
+          <button
+            key={s}
+            onClick={() => setStatus(s)}
+            className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold capitalize transition ${
+              status === s ? 'bg-brand-600 text-white' : 'bg-white text-maroon-900/65 ring-1 ring-sandal-200 hover:bg-sandal-50'
+            }`}
+            style={{ minHeight: 0 }}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'festivals' &&
+        (festivals.length === 0 ? (
+          empty('festival requests')
+        ) : (
+          <ul className="space-y-2.5">
+            {festivals.map((r) => (
+              <RequestCard
+                key={r.id}
+                title={r.name}
+                meta={`${r.requesterName} · ${when(r.timestamp)}`}
+                status={r.status}
+                open={openId === r.id}
+                onToggle={() => toggle(r.id!)}
+                comment={r.adminComment}
+                reviewedBy={r.reviewedBy}
+                review={r.status === 'pending' ? reviewBox('festival', r.id!, 'Approve & publish') : undefined}
               >
-                {/* Request Header */}
-                <div className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex-1">
-                      <h3 className="text-xl font-bold text-gray-900 mb-1">{request.name}</h3>
-                      <p className="text-sm text-gray-600 mb-2">
-                        {new Date(request.date).toLocaleDateString('en-US', {
-                          weekday: 'long',
-                          year: 'numeric',
-                          month: 'long',
-                          day: 'numeric',
-                        })}
-                      </p>
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <span>Requested by {request.requesterName}</span>
-                        <span>•</span>
-                        <span>{new Date(request.timestamp).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        request.status === 'pending'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : request.status === 'approved'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}
-                    >
-                      {request.status.toUpperCase()}
-                    </span>
-                  </div>
+                <Field label="Date">
+                  {new Date(r.date).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                </Field>
+                <Field label="Category">{r.category}</Field>
+                <Field label="Description">{r.description}</Field>
+                <Field label="Significance">{r.significance}</Field>
+                <Field label="Observances">{r.observances}</Field>
+              </RequestCard>
+            ))}
+          </ul>
+        ))}
 
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-sm font-bold text-gray-700 mb-1">Category:</p>
-                      <p className="text-gray-600">{request.category}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-gray-700 mb-1">Description:</p>
-                      <p className="text-gray-600">{request.description}</p>
-                    </div>
-                    {request.significance && (
-                      <div>
-                        <p className="text-sm font-bold text-gray-700 mb-1">Significance:</p>
-                        <p className="text-gray-600">{request.significance}</p>
-                      </div>
-                    )}
-                    {request.observances && (
-                      <div>
-                        <p className="text-sm font-bold text-gray-700 mb-1">Observances:</p>
-                        <p className="text-gray-600">{request.observances}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Admin Comment Display */}
-                  {request.adminComment && (
-                    <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <p className="text-xs font-bold text-blue-900 mb-1">Admin Comment:</p>
-                      <p className="text-sm text-blue-800">{request.adminComment}</p>
-                      {request.reviewedBy && (
-                        <p className="text-xs text-blue-600 mt-2">
-                          Reviewed by {request.reviewedBy} on{' '}
-                          {new Date(request.reviewedAt!).toLocaleDateString()}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  {request.status === 'pending' && (
-                    <div className="mt-4 space-y-3">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Admin Comment
-                        </label>
-                        <textarea
-                          value={expandedRequest === request.id ? adminComment : ''}
-                          onChange={(e) => {
-                            setExpandedRequest(request.id!);
-                            setAdminComment(e.target.value);
-                          }}
-                          placeholder="Add a comment (required for rejection)"
-                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
-                          rows={3}
-                        />
-                      </div>
-                      <div className="flex gap-3">
-                        <button
-                          onClick={() => handleReviewFestival(request.id!, 'approved')}
-                          disabled={isProcessing}
-                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <Check size={18} />
-                          Approve & Publish
-                        </button>
-                        <button
-                          onClick={() => handleReviewFestival(request.id!, 'rejected')}
-                          disabled={isProcessing}
-                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <X size={18} />
-                          Reject
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {/* Sloka Requests */}
-      {activeTab === 'slokas' && (
-        <div className="space-y-4">
-          {filteredSlokaRequests.length === 0 ? (
-            <div className="bg-white rounded-xl p-12 text-center border-2 border-dashed border-gray-300">
-              <BookOpen size={48} className="mx-auto mb-4 text-gray-400" />
-              <p className="text-gray-600">No {statusFilter !== 'all' && statusFilter} sloka requests</p>
-            </div>
-          ) : (
-            filteredSlokaRequests.map((request) => (
-              <div
-                key={request.id}
-                className="bg-white rounded-xl border-2 border-gray-200 overflow-hidden"
+      {tab === 'mantras' &&
+        (mantras.length === 0 ? (
+          empty('mantra requests')
+        ) : (
+          <ul className="space-y-2.5">
+            {mantras.map((r) => (
+              <RequestCard
+                key={r.id}
+                title={r.title}
+                meta={`${r.requesterName} · ${when(r.timestamp)}`}
+                status={r.status}
+                open={openId === r.id}
+                onToggle={() => toggle(r.id!)}
+                comment={r.adminComment}
+                reviewedBy={r.reviewedBy}
+                review={r.status === 'pending' ? reviewBox('sloka', r.id!, 'Approve & publish') : undefined}
               >
-                {/* Request Header */}
-                <div className="p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex-1">
-                      <h3 className="text-xl font-bold text-gray-900 mb-1">{request.title}</h3>
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
-                        <span>Requested by {request.requesterName}</span>
-                        <span>•</span>
-                        <span>{new Date(request.timestamp).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        request.status === 'pending'
-                          ? 'bg-yellow-100 text-yellow-800'
-                          : request.status === 'approved'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}
-                    >
-                      {request.status.toUpperCase()}
-                    </span>
-                  </div>
+                <Field label="Category">{r.category}</Field>
+                <Field label="Mantra">{r.sanskrit}</Field>
+                <Field label="Meaning">{r.translation}</Field>
+                <Field label="Purport">{r.purport}</Field>
+              </RequestCard>
+            ))}
+          </ul>
+        ))}
 
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-sm font-bold text-gray-700 mb-1">Category:</p>
-                      <p className="text-gray-600">{request.category}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-gray-700 mb-1">Sanskrit:</p>
-                      <p className="text-gray-600 font-sanskrit text-lg">{request.sanskrit}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-gray-700 mb-1">Transliteration:</p>
-                      <p className="text-gray-600 italic">{request.transliteration}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-gray-700 mb-1">Translation:</p>
-                      <p className="text-gray-600">{request.translation}</p>
-                    </div>
-                    {request.purport && (
-                      <div>
-                        <p className="text-sm font-bold text-gray-700 mb-1">Purport:</p>
-                        <p className="text-gray-600">{request.purport}</p>
-                      </div>
-                    )}
-                    {request.reference && (
-                      <div>
-                        <p className="text-sm font-bold text-gray-700 mb-1">Reference:</p>
-                        <p className="text-gray-600">{request.reference}</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Admin Comment Display */}
-                  {request.adminComment && (
-                    <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                      <p className="text-xs font-bold text-blue-900 mb-1">Admin Comment:</p>
-                      <p className="text-sm text-blue-800">{request.adminComment}</p>
-                      {request.reviewedBy && (
-                        <p className="text-xs text-blue-600 mt-2">
-                          Reviewed by {request.reviewedBy} on{' '}
-                          {new Date(request.reviewedAt!).toLocaleDateString()}
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Action Buttons */}
-                  {request.status === 'pending' && (
-                    <div className="mt-4 space-y-3">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Admin Comment
-                        </label>
-                        <textarea
-                          value={expandedRequest === request.id ? adminComment : ''}
-                          onChange={(e) => {
-                            setExpandedRequest(request.id!);
-                            setAdminComment(e.target.value);
-                          }}
-                          placeholder="Add a comment (required for rejection)"
-                          className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent resize-none"
-                          rows={3}
-                        />
-                      </div>
-                      <div className="flex gap-3">
-                        <button
-                          onClick={() => handleReviewSloka(request.id!, 'approved')}
-                          disabled={isProcessing}
-                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <Check size={18} />
-                          Approve & Publish
-                        </button>
-                        <button
-                          onClick={() => handleReviewSloka(request.id!, 'rejected')}
-                          disabled={isProcessing}
-                          className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          <X size={18} />
-                          Reject
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
+      {tab === 'languages' &&
+        (languages.length === 0 ? (
+          empty('language requests')
+        ) : (
+          <ul className="space-y-2.5">
+            {languages.map((r) => (
+              <RequestCard
+                key={r.id}
+                title={r.sanskrit}
+                meta={`${r.requesterName} · ${when(r.timestamp)}`}
+                status={r.status}
+                open={openId === r.id}
+                onToggle={() => toggle(r.id!)}
+                comment={r.adminComment}
+                reviewedBy={r.reviewedBy}
+                review={r.status === 'pending' ? reviewBox('sloka', r.id!, 'Approve language') : undefined}
+              >
+                <Field label="Requested language">{r.sanskrit}</Field>
+                <p className="text-xs text-maroon-900/50">Once approved, it appears in every mantra's language list.</p>
+              </RequestCard>
+            ))}
+          </ul>
+        ))}
     </div>
   );
 }

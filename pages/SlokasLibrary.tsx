@@ -10,18 +10,21 @@ import { isAdmin } from '../services/admin';
 import SlokaRequestForm from '../components/SlokaRequestForm';
 import MantraForm, { MantraFormValues } from '../components/MantraForm';
 import MantraTranslateForm from '../components/MantraTranslateForm';
+import LangPicker, { LangOption } from '../components/LangPicker';
+import LanguageRequestForm from '../components/LanguageRequestForm';
 import MantraText from '../components/MantraText';
 import { getUserSlokaRequests, SlokaRequest } from '../services/requests';
 import { PageLoader } from '../components/LoadingScreen';
 import i18n from '../i18n';
 import { knownTranslation } from '../utils/mantraText';
 
-type Lang = 'en' | 'hi' | 'te';
+type Lang = string;
 
-const LANG_OPTIONS: { code: Lang; label: string; name: string }[] = [
-  { code: 'en', label: 'English', name: 'English' },
-  { code: 'hi', label: 'हिन्दी', name: 'Hindi' },
-  { code: 'te', label: 'తెలుగు', name: 'Telugu' },
+/** Each language is written in its own script */
+const BUILTIN_LANGS: LangOption[] = [
+  { code: 'en', label: 'English' },
+  { code: 'hi', label: 'हिन्दी' },
+  { code: 'te', label: 'తెలుగు' },
 ];
 
 interface Comment {
@@ -48,7 +51,7 @@ interface Sloka {
   comments?: Record<string, Comment>;
   order?: number;
   /** Saved Hindi / Telugu versions, written by devotees */
-  translations?: Partial<Record<'hi' | 'te', { mantra?: string; meaning?: string; by?: string }>>;
+  translations?: Record<string, { mantra?: string; meaning?: string; by?: string }>;
 }
 
 const t = i18n.getFixedT('en'); // the page is in English; only the mantras change language
@@ -57,78 +60,6 @@ const fieldCls =
   'block w-full rounded-xl border border-sandal-300 bg-white px-3.5 py-2.5 text-sm text-maroon-900 placeholder:text-maroon-900/30 focus:border-marigold-400 focus:outline-none focus:ring-4 focus:ring-marigold-400/20';
 
 const pill = 'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[13px] font-semibold transition';
-
-/* ------------------------------------------------------------------ */
-/* Language dropdown (one per mantra)                                  */
-/* ------------------------------------------------------------------ */
-
-const LangPicker: React.FC<{ value: Lang; onChange: (l: Lang) => void }> = ({ value, onChange }) => {
-  const [open, setOpen] = useState(false);
-  const box = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const close = (e: MouseEvent | TouchEvent) => !box.current?.contains(e.target as Node) && setOpen(false);
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
-    document.addEventListener('mousedown', close);
-    document.addEventListener('touchstart', close);
-    document.addEventListener('keydown', esc);
-    return () => {
-      document.removeEventListener('mousedown', close);
-      document.removeEventListener('touchstart', close);
-      document.removeEventListener('keydown', esc);
-    };
-  }, [open]);
-
-  const current = LANG_OPTIONS.find((l) => l.code === value)!;
-
-  return (
-    <div ref={box} className="relative shrink-0">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label={`Language: ${current.name}`}
-        className={`flex items-center gap-1 rounded-full py-1 pl-2.5 pr-1.5 text-xs font-semibold ring-1 transition ${open ? 'bg-amber-50 text-brand-700 ring-amber-300' : 'bg-white text-maroon-800 ring-sandal-200 hover:bg-sandal-50'}`}
-        style={{ minHeight: 0 }}
-      >
-        {current.label}
-        <ChevronDown size={13} className={`text-maroon-900/40 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <ul role="listbox" aria-label="Choose language" className="absolute right-0 top-full z-30 mt-1.5 w-40 animate-scale-in overflow-hidden rounded-2xl bg-white p-1.5 shadow-lift ring-1 ring-sandal-200">
-          {LANG_OPTIONS.map((l) => {
-            const on = l.code === value;
-            return (
-              <li key={l.code}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={on}
-                  onClick={() => {
-                    onChange(l.code);
-                    setOpen(false);
-                  }}
-                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition ${on ? 'bg-amber-50' : 'hover:bg-sandal-50'}`}
-                  style={{ minHeight: 0 }}
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className={`block truncate text-sm font-semibold ${on ? 'text-brand-700' : 'text-maroon-900'}`}>
-                      {l.label}
-                    </span>
-                    {l.code !== 'en' && <span className="block text-[11px] text-maroon-900/40">{l.name}</span>}
-                  </span>
-                  {on && <Check size={16} className="shrink-0 text-brand-600" />}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
-  );
-};
 
 /* ------------------------------------------------------------------ */
 
@@ -148,9 +79,26 @@ const SlokasLibrary: React.FC = () => {
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState<Sloka | null>(null);
   const [showRequest, setShowRequest] = useState(false);
-  const [translateFor, setTranslateFor] = useState<{ sloka: Sloka; lang: 'hi' | 'te' } | null>(null);
+  const [translateFor, setTranslateFor] = useState<{ sloka: Sloka; lang: string; langName: string } | null>(null);
+  const [customLangs, setCustomLangs] = useState<LangOption[]>([]);
+  const [requestLang, setRequestLang] = useState(false);
+  const langOptions = useMemo(() => [...BUILTIN_LANGS, ...customLangs], [customLangs]);
   const [userIsAdmin, setUserIsAdmin] = useState(false);
   const [requests, setRequests] = useState<SlokaRequest[]>([]);
+
+  // Languages an admin has approved
+  useEffect(() => {
+    get(ref(db, 'slokaLanguages'))
+      .then((snap) => {
+        const out: LangOption[] = [];
+        snap.forEach((c) => {
+          const name = c.val()?.name;
+          if (name && !BUILTIN_LANGS.some((b) => b.code === c.key)) out.push({ code: c.key!, label: String(name) });
+        });
+        setCustomLangs(out);
+      })
+      .catch(() => undefined);
+  }, []);
 
   const load = async () => {
     try {
@@ -205,7 +153,8 @@ const SlokasLibrary: React.FC = () => {
     );
   }, [slokas, search, category]);
 
-  const textIn = (s: Sloka, lang: 'hi' | 'te') => s.translations?.[lang]?.mantra?.trim() || knownTranslation(s.mantra, lang) || '';
+  const textIn = (s: Sloka, lang: Lang) =>
+    s.translations?.[lang]?.mantra?.trim() || (lang === 'hi' || lang === 'te' ? knownTranslation(s.mantra, lang) : null) || '';
 
   /** What to show for a mantra in the language chosen for it */
   const view = (s: Sloka) => {
@@ -395,7 +344,7 @@ const SlokasLibrary: React.FC = () => {
             const liked = !!user && s.likedBy?.includes(user.uid);
             const comments = Object.values(s.comments || {}).sort((a, b) => a.timestamp - b.timestamp);
             const idx = slokas.findIndex((x) => x.id === s.id);
-            const langName = LANG_OPTIONS.find((l) => l.code === v.lang)!.name;
+            const langName = langOptions.find((l) => l.code === v.lang)?.label || v.lang;
             const showMeaning = !!meaningOpen[s.id];
             const isOpen = !!expanded[s.id];
             const toggle = () => setExpanded((x) => ({ ...x, [s.id]: !isOpen }));
@@ -425,13 +374,18 @@ const SlokasLibrary: React.FC = () => {
                 {/* The mantra */}
                 <div className="px-3 pt-1 sm:px-5">
                   <div className="mb-2 flex justify-end">
-                    <LangPicker value={v.lang} onChange={(l) => setLangs((x) => ({ ...x, [s.id]: l }))} />
+                    <LangPicker
+                      value={v.lang}
+                      options={langOptions}
+                      onChange={(l) => setLangs((x) => ({ ...x, [s.id]: l }))}
+                      onRequest={() => (signedIn ? setRequestLang(true) : alert('Please sign in to request a language.'))}
+                    />
                   </div>
                   {v.missing ? (
                     <div className="flex items-center justify-between gap-3 rounded-2xl bg-sandal-50 px-4 py-3 ring-1 ring-sandal-200">
                       <p className="text-sm text-maroon-900/60">No {langName} version yet</p>
                       <button
-                        onClick={() => (signedIn ? setTranslateFor({ sloka: s, lang: v.lang as 'hi' | 'te' }) : alert('Please sign in to add a version.'))}
+                        onClick={() => (signedIn ? setTranslateFor({ sloka: s, lang: v.lang, langName }) : alert('Please sign in to add a version.'))}
                         className="btn-primary btn-sm shrink-0"
                       >
                         <Plus size={15} /> Add {langName}
@@ -581,7 +535,8 @@ const SlokasLibrary: React.FC = () => {
         />
       )}
       {showRequest && <SlokaRequestForm onClose={() => setShowRequest(false)} />}
-      {translateFor && <MantraTranslateForm sloka={translateFor.sloka} lang={translateFor.lang} onClose={() => setTranslateFor(null)} />}
+      {requestLang && <LanguageRequestForm existing={langOptions.map((l) => l.label)} onClose={() => setRequestLang(false)} />}
+      {translateFor && <MantraTranslateForm sloka={translateFor.sloka} lang={translateFor.lang} langName={translateFor.langName} onClose={() => setTranslateFor(null)} />}
     </div>
   );
 };

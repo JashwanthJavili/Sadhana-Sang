@@ -128,6 +128,24 @@ export const submitSlokaRequest = async (request: Omit<SlokaRequest, 'id' | 'tim
   }
 };
 
+/** Ask for a new Mantras language (short name). Shown after an admin approves it. */
+export const submitLanguageRequest = async (name: string, requester: { id: string; name: string; email: string }) => {
+  const clean = name.trim().slice(0, 30);
+  const code = clean.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 20) || `lang${Date.now()}`;
+  return submitSlokaRequest({
+    title: `New language — ${clean}`,
+    sanskrit: clean,
+    transliteration: '',
+    translation: '',
+    category: 'Language request',
+    purport: '',
+    reference: `language:${code}`,
+    requesterId: requester.id,
+    requesterName: requester.name,
+    requesterEmail: requester.email,
+  });
+};
+
 // Get all festival requests (for admins)
 export const getAllFestivalRequests = (callback: (requests: FestivalRequest[]) => void) => {
   const requestsRef = ref(db, 'festivalRequests');
@@ -302,8 +320,16 @@ export const reviewSlokaRequest = async (
 
     // If approved, publish it
     if (status === 'approved') {
-      const translation = /^translation:(hi|te):(.+)$/.exec(request.reference || '');
-      if (translation) {
+      const translation = /^translation:([a-z0-9_-]+):(.+)$/.exec(request.reference || '');
+      const newLanguage = /^language:([a-z0-9_-]+)$/.exec(request.reference || '');
+      if (newLanguage) {
+        // a new language for the Mantras page
+        await set(ref(db, `slokaLanguages/${newLanguage[1]}`), {
+          name: request.sanskrit,
+          by: request.requesterName,
+          at: Date.now(),
+        });
+      } else if (translation) {
         // a Hindi / Telugu version of an existing mantra
         await set(ref(db, `slokas/${translation[2]}/translations/${translation[1]}`), {
           mantra: request.sanskrit,
