@@ -8,6 +8,7 @@ import { Users, Search, MessageCircle, X, UserPlus, UserMinus, Check, HelpCircle
 import { useNavigate } from 'react-router-dom';
 import UserProfileModal from '../components/UserProfileModal';
 import Avatar from '../components/Avatar';
+import CollapsibleSearch from '../components/CollapsibleSearch';
 import { 
   getConnectionStatus, 
   sendConnectionRequest, 
@@ -322,95 +323,63 @@ const Community: React.FC = () => {
 
   if (loading) return <PageLoader label="Finding devotees…" />;
 
-  const quickLinks = [
-    { label: 'Messages', icon: MessageCircle, to: '/chats', count: 0 },
-    { label: 'Requests', icon: UserPlus, to: '/connection-requests', count: pendingRequestCount },
-    { label: 'Forum', icon: HelpCircle, to: '/questions', count: 0 },
-  ];
-
   return (
     <div className="mx-auto w-full max-w-5xl animate-rise-in">
-      {/* Header — title + quick links in one row */}
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold tracking-tight text-maroon-900">Community</h1>
-        <div className="flex gap-1.5">
-          {quickLinks.map(({ label, icon: Icon, to, count }) => (
+      {/* Tabs + requests */}
+      <div className="flex items-center gap-2">
+        <div className="grid min-w-0 flex-1 grid-cols-2 rounded-2xl bg-sandal-100 p-1 ring-1 ring-sandal-200 sm:max-w-md" role="tablist">
+          {(
+            [
+              { id: 'connected', label: 'Connections', count: connectedUsers.length },
+              { id: 'explore', label: 'Find devotees', count: exploreUsers.length },
+            ] as const
+          ).map((t) => (
             <button
-              key={label}
-              onClick={() => navigate(to)}
-              title={label}
-              aria-label={label}
-              className="relative inline-flex h-10 items-center gap-1.5 rounded-full bg-white px-3 text-sm font-semibold text-maroon-800 shadow-soft ring-1 ring-sandal-200 transition hover:bg-amber-50 hover:ring-amber-200"
+              key={t.id}
+              role="tab"
+              aria-selected={view === t.id}
+              onClick={() => setView(t.id)}
+              className={`flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-sm font-semibold transition sm:px-4 ${
+                view === t.id ? 'bg-white text-maroon-900 shadow-soft' : 'text-maroon-900/55 hover:text-maroon-900'
+              }`}
               style={{ minHeight: 0 }}
             >
-              <Icon size={17} className="text-brand-600" />
-              <span className="hidden sm:inline">{label}</span>
-              {count > 0 && (
-                <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-600 px-1.5 text-[11px] font-bold text-white ring-2 ring-white">
-                  {count}
-                </span>
-              )}
+              <span className="truncate">{t.label}</span>
+              <span className={`text-xs font-medium ${view === t.id ? 'text-brand-600' : 'text-maroon-900/40'}`}>{t.count}</span>
             </button>
           ))}
         </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="mt-4 grid grid-cols-2 rounded-2xl bg-sandal-100 p-1 ring-1 ring-sandal-200 sm:inline-grid" role="tablist">
-        {(
-          [
-            { id: 'connected', label: 'My connections', count: connectedUsers.length },
-            { id: 'explore', label: 'Find devotees', count: exploreUsers.length },
-          ] as const
-        ).map((t) => (
-          <button
-            key={t.id}
-            role="tab"
-            aria-selected={view === t.id}
-            onClick={() => setView(t.id)}
-            className={`flex h-10 min-w-0 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-semibold transition sm:px-5 ${
-              view === t.id ? 'bg-white text-maroon-900 shadow-soft' : 'text-maroon-900/55 hover:text-maroon-900'
-            }`}
-          >
-            <span className="truncate">{t.label}</span>
-            <span className={`text-xs font-medium ${view === t.id ? 'text-brand-600' : 'text-maroon-900/40'}`}>{t.count}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Search + online */}
-      <div className="mt-3 flex gap-2">
-        <label className="flex h-11 min-w-0 flex-1 items-center gap-2.5 rounded-2xl bg-white px-4 shadow-soft ring-1 ring-sandal-200 focus-within:ring-2 focus-within:ring-marigold-400">
-          <Search size={17} className="shrink-0 text-maroon-900/40" />
-          <input
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search devotees"
-            className="w-full min-w-0 bg-transparent text-[15px] text-maroon-900 outline-none placeholder:text-maroon-900/40"
-          />
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm('')}
-              className="-mr-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-maroon-900/40 hover:bg-sandal-100"
-              aria-label="Clear search"
-              style={{ minHeight: 0 }}
-            >
-              <X size={16} />
-            </button>
+        <button
+          onClick={() => navigate('/connection-requests')}
+          title="Connection requests"
+          aria-label="Connection requests"
+          className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-brand-600 shadow-soft ring-1 ring-sandal-200 transition hover:bg-amber-50"
+          style={{ minHeight: 0 }}
+        >
+          <UserPlus size={18} />
+          {pendingRequestCount > 0 && (
+            <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-600 px-1.5 text-[11px] font-bold text-white ring-2 ring-white">
+              {pendingRequestCount}
+            </span>
           )}
-        </label>
+        </button>
+      </div>
+
+      {/* Search + online (search is an icon until tapped) */}
+      <div className="mt-3 flex items-center justify-end gap-2">
         <button
           onClick={() => setFilters({ ...filters, onlineOnly: !filters.onlineOnly })}
           aria-pressed={filters.onlineOnly}
-          className={`inline-flex h-11 shrink-0 items-center gap-1.5 rounded-2xl px-3.5 text-sm font-semibold shadow-soft ring-1 transition ${
+          className={`inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold shadow-soft ring-1 transition ${
             filters.onlineOnly ? 'bg-emerald-50 text-emerald-800 ring-emerald-300' : 'bg-white text-maroon-800 ring-sandal-200 hover:bg-sandal-50'
           }`}
           style={{ minHeight: 0 }}
         >
           <span className="h-2 w-2 rounded-full bg-emerald-500" />
-          Connected & online
+          Online
           {onlineCount > 0 && <span className="text-xs font-medium opacity-60">{onlineCount}</span>}
         </button>
+        <CollapsibleSearch value={searchTerm} onChange={setSearchTerm} placeholder="Search devotees" />
       </div>
 
       {/* Devotees */}

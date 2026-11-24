@@ -1,3 +1,4 @@
+import CollapsibleSearch from '../components/CollapsibleSearch';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { localDateKey } from '../utils/date';
 import { useAuth } from '../contexts/AuthContext';
@@ -414,17 +415,7 @@ const DevotionalJournal: React.FC = () => {
   return (
     <div ref={topRef} className="mx-auto max-w-3xl scroll-mt-20 space-y-5 animate-fadeIn">
       {/* Header */}
-      <header className="flex flex-col gap-3 rounded-3xl bg-gradient-to-br from-amber-100 via-orange-50 to-white p-5 ring-1 ring-amber-200/70 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-maroon-900">{L('Journal', 'भक्ति डायरी', 'భక్తి డైరీ')}</h1>
-          <p className="mt-1 text-sm text-maroon-900/60">
-            {L(
-              'A quiet place to write your thoughts on your spiritual journey.',
-              'अपनी आंतरिक भक्ति भावनाओं और आध्यात्मिक अनुभवों को रिकॉर्ड करें',
-              'మీ అంతర్గత భక్తి భావాలు మరియు ఆధ్యాత్మిక అనుభవాలను రికార్డ్ చేయండి'
-            )}
-          </p>
-        </div>
+      <header className="flex items-center justify-end">
         {!isWriting && (
           <button type="button" onClick={startNew} className="btn-primary w-full shrink-0 sm:w-auto">
             <Plus size={17} />
@@ -464,23 +455,9 @@ const DevotionalJournal: React.FC = () => {
               {L('Past entries', 'पिछली प्रविष्टियां', 'గత ఎంట్రీలు')}
               <span className="ml-1.5 font-normal text-maroon-900/45">{entries.length}</span>
             </h2>
+            <CollapsibleSearch value={search} onChange={setSearch} placeholder={L('Search your entries', 'प्रविष्टियां खोजें', 'ఎంట్రీలను వెతకండి')} />
           </div>
 
-          <label className="flex min-h-[46px] items-center gap-2 rounded-2xl bg-white px-4 ring-1 ring-sandal-200 focus-within:ring-2 focus-within:ring-marigold-400">
-            <Search size={17} className="shrink-0 text-maroon-900/35" />
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder={L('Search your entries', 'प्रविष्टियां खोजें', 'ఎంట్రీలను వెతకండి')}
-              className="min-w-0 flex-1 bg-transparent py-2.5 text-sm text-maroon-900 placeholder:text-maroon-900/35 focus:outline-none"
-            />
-            {search && (
-              <button type="button" onClick={() => setSearch('')} className="-mr-2 flex h-9 w-9 items-center justify-center rounded-xl text-maroon-900/40 hover:bg-sandal-100" aria-label={L('Clear search', 'खोज साफ़ करें', 'శోధన క్లియర్ చేయండి')}>
-                <X size={16} />
-              </button>
-            )}
-          </label>
 
           {groups.length === 0 ? (
             <p className="rounded-2xl bg-sandal-50 px-4 py-8 text-center text-sm text-maroon-900/55">

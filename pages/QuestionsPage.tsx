@@ -1,3 +1,4 @@
+import CollapsibleSearch from '../components/CollapsibleSearch';
 import React, { useEffect, useState } from 'react';
 import { PageLoader } from '../components/LoadingScreen';
 import { useNavigate } from 'react-router-dom';
@@ -111,37 +112,16 @@ const QuestionsPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 animate-fadeIn sm:space-y-5">
-      {/* Intro */}
-      <section className="rounded-3xl bg-gradient-to-br from-amber-100 via-orange-50 to-white p-5 ring-1 ring-amber-200/70 sm:p-7">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-maroon-900 sm:text-2xl">Questions and answers</h1>
-            <p className="mt-1 text-sm leading-relaxed text-maroon-900/65">
-              Ask what is on your mind. Fellow devotees will share what they have learned.
-            </p>
-          </div>
-          <button onClick={() => navigate('/questions/ask')} className="btn-primary w-full shrink-0 sm:w-auto">
-            <Plus size={16} /> Ask a question
-          </button>
+      {/* Ask + search — the page title is already in the top bar */}
+      <div className="flex items-center gap-2">
+        <button onClick={() => navigate('/questions/ask')} className="btn-primary flex-1 sm:flex-none">
+          <Plus size={16} /> Ask a question
+        </button>
+        <div className="flex flex-1 justify-end">
+          <CollapsibleSearch value={searchTerm} onChange={setSearchTerm} placeholder="Search questions" />
         </div>
-      </section>
+      </div>
 
-      {/* Search */}
-      <label className="flex items-center gap-2 rounded-2xl bg-white px-4 ring-1 ring-sandal-200 focus-within:ring-marigold-400">
-        <Search size={17} className="shrink-0 text-maroon-900/35" />
-        <input
-          type="text"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          placeholder="Search questions"
-          className="w-full min-w-0 bg-transparent py-3 text-sm text-maroon-900 outline-none placeholder:text-maroon-900/35"
-        />
-        {searchTerm && (
-          <button onClick={() => setSearchTerm('')} className="icon-btn -mr-2 shrink-0" aria-label="Clear search">
-            <X size={16} />
-          </button>
-        )}
-      </label>
 
       {/* Category chips */}
       <div className="overflow-x-auto py-1 scrollbar-none">

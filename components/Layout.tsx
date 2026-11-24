@@ -418,7 +418,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       <div className={`flex min-h-screen flex-col transition-[padding] duration-200 ${collapsed ? 'lg:pl-[76px]' : 'lg:pl-64'}`}>
         {/* Top bar */}
-        <header className="sticky top-0 z-30 border-b border-sandal-200/70 bg-sandal-100/80 backdrop-blur-xl">
+        <header className={`sticky top-0 z-30 border-b border-sandal-200/70 bg-sandal-100/80 backdrop-blur-xl ${isChatRoute ? 'hidden' : ''}`}>
           <div className="flex h-16 items-center gap-2 px-3 sm:h-[72px] sm:px-6 lg:px-8">
             <button onClick={() => setMobileOpen(true)} className="header-icon-btn lg:hidden" aria-label="Open menu">
               <Menu size={20} />
@@ -439,14 +439,6 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   <span className="mx-0.5 hidden h-5 w-px bg-sandal-300/80 sm:block" />
                   <ConnectionRequestsIcon />
                   <NotificationBell />
-                  <button
-                    onClick={() => navigate('/community')}
-                    className={`header-icon-btn lg:hidden ${location.pathname.startsWith('/community') || location.pathname.startsWith('/questions') ? 'bg-white text-brand-600' : ''}`}
-                    aria-label="Community"
-                    title="Community"
-                  >
-                    <Users size={19} />
-                  </button>
                   <button
                     onClick={() => navigate('/chats')}
                     className="header-icon-btn hidden lg:inline-flex"

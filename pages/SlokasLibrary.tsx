@@ -12,6 +12,7 @@ import MantraForm, { MantraFormValues } from '../components/MantraForm';
 import MantraTranslateForm from '../components/MantraTranslateForm';
 import LangPicker, { LangOption } from '../components/LangPicker';
 import LanguageRequestForm from '../components/LanguageRequestForm';
+import CollapsibleSearch from '../components/CollapsibleSearch';
 import MantraText from '../components/MantraText';
 import { getUserSlokaRequests, SlokaRequest } from '../services/requests';
 import { PageLoader } from '../components/LoadingScreen';
@@ -284,37 +285,23 @@ const SlokasLibrary: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 pb-4">
-      {/* Title + actions */}
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-maroon-900">Mantras</h1>
-          <p className="mt-0.5 text-sm text-maroon-900/55">Read, recite and share prayers and kirtans.</p>
-        </div>
-        <div className="flex w-full gap-2 sm:w-auto">
-          {signedIn && (
-            <button onClick={() => setShowRequest(true)} className="btn-secondary flex-1 sm:flex-none">
-              <Lightbulb size={16} /> Suggest a mantra
-            </button>
-          )}
-          {userIsAdmin && (
-            <button onClick={() => setShowAdd(true)} className="btn-primary flex-1 sm:flex-none">
-              <Plus size={16} /> Add mantra
-            </button>
-          )}
-        </div>
-      </header>
+      {/* Actions — the page title is already in the top bar */}
+      <div className="flex items-center justify-end gap-2">
+        {signedIn && (
+          <button onClick={() => setShowRequest(true)} className="btn-secondary btn-sm">
+            <Lightbulb size={15} /> Suggest
+          </button>
+        )}
+        {userIsAdmin && (
+          <button onClick={() => setShowAdd(true)} className="btn-primary btn-sm">
+            <Plus size={15} /> Add
+          </button>
+        )}
+        <CollapsibleSearch value={search} onChange={setSearch} placeholder="Search mantras" />
+      </div>
 
       {/* Search + type */}
       <div className="space-y-3">
-        <label className="flex items-center gap-2.5 rounded-2xl bg-white px-4 shadow-soft ring-1 ring-sandal-200 focus-within:ring-2 focus-within:ring-marigold-400">
-          <Search size={18} className="shrink-0 text-maroon-900/35" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name or words" className="w-full bg-transparent py-3 text-[15px] text-maroon-900 outline-none placeholder:text-maroon-900/35" />
-          {search && (
-            <button onClick={() => setSearch('')} className="text-maroon-900/40 hover:text-maroon-900" aria-label="Clear search" style={{ minHeight: 0 }}>
-              <X size={17} />
-            </button>
-          )}
-        </label>
         {categories.length > 0 && (
           <div className="scrollbar-none -mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5">
             {categories.map((c) => (

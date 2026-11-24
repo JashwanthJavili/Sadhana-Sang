@@ -563,11 +563,6 @@ const Settings: React.FC = () => {
 
   return (
     <div className="mx-auto w-full max-w-2xl animate-fadeIn space-y-6 pb-10">
-      {/* Header */}
-      <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight text-maroon-900 sm:text-3xl">Settings</h1>
-        <p className="mt-1 text-sm text-maroon-900/60">Your profile, privacy and account.</p>
-      </div>
 
       {/* Profile card */}
       <section className="overflow-hidden rounded-2xl border border-sandal-200 bg-gradient-to-br from-sandal-50 via-white to-brand-50/60 shadow-card">

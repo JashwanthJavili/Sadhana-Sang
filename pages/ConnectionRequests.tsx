@@ -172,8 +172,6 @@ const ConnectionRequests: React.FC = () => {
       <button onClick={() => navigate('/community')} className="inline-flex items-center gap-1.5 text-sm font-medium text-maroon-900/60 transition hover:text-maroon-900" style={{ minHeight: 0 }}>
         <ArrowLeft size={16} /> Devotees
       </button>
-      <h1 className="mt-2 font-elegant text-2xl font-semibold text-maroon-900">Connection requests</h1>
-      <p className="mt-0.5 text-sm text-maroon-900/55">Connect to chat and see each other's status.</p>
 
       <Section title="Received" count={pendingRequests.length} empty="No requests waiting for you">
         {pendingRequests.map((request) => {

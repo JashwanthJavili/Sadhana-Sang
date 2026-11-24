@@ -5,6 +5,7 @@ import { Chat } from '../types/chat';
 import { getUserChats } from '../services/chat';
 import { MessageCircle, Search, UserPlus, Lock, X } from 'lucide-react';
 import Avatar from '../components/Avatar';
+import CollapsibleSearch from '../components/CollapsibleSearch';
 import { PageLoader } from '../components/LoadingScreen';
 import { isEncrypted } from '../services/encryption';
 
@@ -32,7 +33,7 @@ const selectChipCls = (active: boolean) =>
 const ChatsList: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [chats, setChats] = useState<Chat[]>([]);
+  const [allChats, setAllChats] = useState<Chat[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [unreadOnly, setUnreadOnly] = useState(false);
@@ -40,7 +41,7 @@ const ChatsList: React.FC = () => {
   useEffect(() => {
     if (!user) return;
     const unsubscribe = getUserChats(user.uid, (fetched) => {
-      setChats(fetched);
+      setAllChats(fetched);
       setLoading(false);
     });
     const timeout = setTimeout(() => setLoading(false), 5000);
@@ -49,6 +50,9 @@ const ChatsList: React.FC = () => {
       clearTimeout(timeout);
     };
   }, [user]);
+
+  // a chat with no message yet is not a conversation — leave it out
+  const chats = useMemo(() => allChats.filter((c) => !!c.lastMessage), [allChats]);
 
   const other = (chat: Chat) => {
     const id = chat.participants.find((p) => p !== user?.uid);
@@ -74,23 +78,29 @@ const ChatsList: React.FC = () => {
 
   return (
     <div className="mx-auto w-full max-w-3xl animate-rise-in">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold tracking-tight text-maroon-900">Messages</h1>
-          <p className="mt-0.5 truncate text-sm text-maroon-900/55">
-            {totalUnread > 0 ? `${totalUnread} new message${totalUnread === 1 ? '' : 's'}` : 'Talk with the devotees you know'}
-          </p>
-        </div>
-        {chats.length > 0 && (
-          <button
-            onClick={() => navigate('/community')}
-            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-amber-50 px-3.5 text-sm font-semibold text-brand-700 ring-1 ring-amber-200 transition hover:bg-amber-100"
-          >
-            <UserPlus size={16} />
-            Find devotees
+      {/* Toolbar — the page title is already in the top bar */}
+      <div className="flex items-center gap-2">
+        <div className="-mx-1 flex min-w-0 flex-1 gap-2 overflow-x-auto px-1 py-1 scrollbar-none">
+          <button onClick={() => setUnreadOnly(false)} className={chipCls(!unreadOnly)}>
+            All
           </button>
-        )}
+          <button onClick={() => setUnreadOnly(true)} className={chipCls(unreadOnly)}>
+            Unread
+            {unreadChats > 0 && (
+              <span className={`rounded-full px-1.5 text-[11px] font-bold ${unreadOnly ? 'bg-white/25 text-white' : 'bg-brand-600 text-white'}`}>{unreadChats}</span>
+            )}
+          </button>
+        </div>
+        {chats.length > 0 && <CollapsibleSearch value={searchTerm} onChange={setSearchTerm} placeholder="Search chats" />}
+        <button
+          onClick={() => navigate('/community')}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white shadow-soft transition hover:bg-brand-700 active:scale-95"
+          aria-label="Find devotees"
+          title="Find devotees"
+          style={{ minHeight: 0 }}
+        >
+          <UserPlus size={18} />
+        </button>
       </div>
 
       {chats.length === 0 ? (
@@ -109,39 +119,6 @@ const ChatsList: React.FC = () => {
         </div>
       ) : (
         <>
-          {/* Search */}
-          <label className="mt-4 flex h-12 items-center gap-2.5 rounded-2xl bg-white px-4 shadow-soft ring-1 ring-sandal-200 focus-within:ring-2 focus-within:ring-marigold-400">
-            <Search size={18} className="shrink-0 text-maroon-900/40" />
-            <input
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by name"
-              className="w-full min-w-0 bg-transparent text-[15px] text-maroon-900 outline-none placeholder:text-maroon-900/40"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="-mr-2 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-maroon-900/40 hover:bg-sandal-100"
-                aria-label="Clear search"
-              >
-                <X size={16} />
-              </button>
-            )}
-          </label>
-
-          {/* Filter chips */}
-          <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 py-1 scrollbar-none sm:mx-0 sm:px-0">
-            <button onClick={() => setUnreadOnly(false)} className={chipCls(!unreadOnly)}>
-              All
-            </button>
-            <button onClick={() => setUnreadOnly(true)} className={chipCls(unreadOnly)}>
-              Unread
-              {unreadChats > 0 && (
-                <span className={`rounded-full px-1.5 text-[11px] font-bold ${unreadOnly ? 'bg-white/25 text-white' : 'bg-brand-600 text-white'}`}>{unreadChats}</span>
-              )}
-            </button>
-          </div>
-
           {/* Conversations */}
           {shown.length === 0 ? (
             <div className="mt-3 rounded-3xl bg-white px-6 py-10 text-center ring-1 ring-sandal-200">

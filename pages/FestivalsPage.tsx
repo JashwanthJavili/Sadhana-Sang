@@ -1,3 +1,4 @@
+import CollapsibleSearch from '../components/CollapsibleSearch';
 import React, { useState, useEffect, lazy, Suspense, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/firebase';
@@ -216,29 +217,20 @@ const FestivalsPage: React.FC = () => {
           )}
 
           {/* Search + actions */}
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <label className="flex flex-1 items-center gap-2 rounded-2xl bg-white px-4 ring-1 ring-sandal-200 focus-within:ring-marigold-400">
-              <Search size={17} className="text-maroon-900/35" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search festivals"
-                className="w-full bg-transparent py-3 text-sm text-maroon-900 outline-none placeholder:text-maroon-900/35"
-              />
-            </label>
+          <div className="flex items-center justify-end gap-2">
             <div className="flex gap-2">
               {user && user.uid !== 'guest' && (
-                <button onClick={() => setShowRequestModal(true)} className="btn-secondary flex-1 sm:flex-none">
-                  <Plus size={15} /> Suggest a festival
+                <button onClick={() => setShowRequestModal(true)} className="btn-secondary btn-sm">
+                  <Plus size={15} /> Suggest
                 </button>
               )}
               {userIsAdmin && (
-                <button onClick={() => setShowAddModal(true)} className="btn-primary flex-1 sm:flex-none">
+                <button onClick={() => setShowAddModal(true)} className="btn-primary btn-sm">
                   <Plus size={15} /> Add
                 </button>
               )}
             </div>
+            <CollapsibleSearch value={search} onChange={setSearch} placeholder="Search festivals" />
           </div>
 
           {/* Upcoming by month */}

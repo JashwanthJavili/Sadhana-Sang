@@ -15,7 +15,7 @@ import {
 } from '../services/chat';
 import { removeConnection } from '../services/connections';
 import { decryptMessage, isEncrypted } from '../services/encryption';
-import { ArrowLeft, Send, Smile, MoreVertical, Lock, MessageCircle, X, CornerUpLeft } from 'lucide-react';
+import { ArrowLeft, Send, Smile, MoreVertical, Lock, MessageCircle, X, CornerUpLeft, Check, CheckCheck } from 'lucide-react';
 import Avatar from '../components/Avatar';
 import { PageLoader } from '../components/LoadingScreen';
 import UserProfileModal from '../components/UserProfileModal';
@@ -243,7 +243,7 @@ const ChatWindow: React.FC = () => {
       : new Date(ts).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
 
   return (
-    <div className="mx-auto flex h-[calc(100dvh-4rem)] max-w-3xl flex-col overflow-hidden bg-sandal-50 sm:h-[calc(100dvh-72px-2rem)] sm:rounded-3xl sm:shadow-card sm:ring-1 sm:ring-sandal-200">
+    <div className="mx-auto flex h-[100dvh] max-w-3xl flex-col overflow-hidden bg-sandal-50 sm:h-[calc(100dvh-2rem)] sm:rounded-3xl sm:shadow-card sm:ring-1 sm:ring-sandal-200">
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-sandal-200 bg-white px-3 py-2.5 sm:px-4">
         <button onClick={() => navigate('/chats')} className="icon-btn" aria-label="Back to messages">
@@ -256,12 +256,14 @@ const ChatWindow: React.FC = () => {
               <span className="block h-10 w-10 overflow-hidden rounded-full ring-2 ring-amber-100">
                 <Avatar gender={otherUser.gender} name={otherUser.userName} className="h-full w-full" />
               </span>
-              <span className={`absolute bottom-0 right-0 h-3 w-3 rounded-full ring-2 ring-white ${otherUser.isOnline ? 'bg-emerald-500' : 'bg-stone-300'}`} />
+              {otherUser.showLastSeen !== false && (
+                <span className={`absolute bottom-0 right-0 h-3 w-3 rounded-full ring-2 ring-white ${otherUser.isOnline ? 'bg-emerald-500' : 'bg-stone-300'}`} />
+              )}
             </span>
             <span className="min-w-0">
               <span className="block truncate text-[15px] font-semibold text-maroon-900">{otherUser.userName || 'Devotee'}</span>
               <span className={`block text-xs font-medium ${isOtherUserTyping ? 'text-brand-600' : otherUser.isOnline ? 'text-emerald-600' : 'text-maroon-900/45'}`}>
-                {isOtherUserTyping ? 'typing…' : otherUser.isOnline ? 'Online' : 'Offline'}
+                {isOtherUserTyping ? 'typing…' : otherUser.showLastSeen === false ? '\u00a0' : otherUser.isOnline ? 'Online' : 'Offline'}
               </span>
             </span>
           </button>
@@ -327,7 +329,12 @@ const ChatWindow: React.FC = () => {
                       <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">{decryptedMessages.get(message.id) || '…'}</p>
                       <div className={`mt-0.5 flex items-center justify-end gap-1.5 text-[11px] ${own ? 'text-white/85' : 'text-maroon-900/40'}`}>
                         <span>{new Date(message.timestamp).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })}</span>
-                        {own && <span aria-label={message.read ? 'Seen' : 'Sent'}>{message.read ? '✓✓' : '✓'}</span>}
+                        {own &&
+                          (message.read ? (
+                            <CheckCheck size={15} strokeWidth={2.4} className="text-white" aria-label="Seen" />
+                          ) : (
+                            <Check size={15} strokeWidth={2.4} className="text-white/60" aria-label="Sent" />
+                          ))}
                       </div>
                     </div>
                     <button
