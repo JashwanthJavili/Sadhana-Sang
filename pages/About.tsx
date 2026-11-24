@@ -78,24 +78,31 @@ const GuruCard: React.FC<{ image: string; name: string; role: string }> = ({ ima
 
         {showing && (
           <div className="pointer-events-none absolute inset-0 overflow-hidden rounded-[28px]" aria-hidden="true" key={'f' + offered}>
-            {Array.from({ length: 24 }).map((_, i) => {
-              const size = 18 + ((i * 7) % 5) * 5; // 18–38px
+            {Array.from({ length: 14 }).map((_, i) => {
+              const size = 16 + ((i * 7) % 4) * 4; // 16–28px
               return (
                 <span
                   key={i}
-                  className="absolute animate-[petalFall_linear_forwards] motion-reduce:hidden"
-                  style={
-                    {
-                      left: `${(i * 37 + 4) % 92}%`,
-                      fontSize: size,
-                      animationDuration: `${3.6 + (i % 5) * 0.6}s`,
-                      animationDelay: `${(i % 8) * 0.18}s`,
-                      '--dx': `${((i % 2 ? 1 : -1) * (14 + ((i * 11) % 28)))}px`,
-                      '--rot': `${(i % 2 ? 1 : -1) * (180 + ((i * 53) % 360))}deg`,
-                    } as React.CSSProperties
-                  }
+                  className="absolute inset-y-0 motion-reduce:hidden"
+                  style={{
+                    left: `${(i * 29 + 6) % 88}%`,
+                    opacity: 0,
+                    animation: `petalDrop ${5 + (i % 4) * 0.7}s cubic-bezier(.35,.1,.45,1) ${(i % 7) * 0.3}s forwards`,
+                    willChange: 'transform, opacity',
+                  }}
                 >
-                  {PETALS[i % PETALS.length]}
+                  <span
+                    className="inline-block"
+                    style={
+                      {
+                        fontSize: size,
+                        '--dx': `${(i % 2 ? 1 : -1) * (10 + ((i * 11) % 18))}px`,
+                        animation: `petalSway ${2.4 + (i % 3) * 0.5}s ease-in-out infinite alternate`,
+                      } as React.CSSProperties
+                    }
+                  >
+                    {PETALS[i % PETALS.length]}
+                  </span>
                 </span>
               );
             })}
@@ -119,12 +126,15 @@ const About: React.FC = () => {
   return (
     <div className="mx-auto max-w-2xl animate-fadeIn space-y-8 pb-10">
       <style>{`
-        @keyframes petalFall {
-          0%   { top: -12%; opacity: 0; transform: translateX(0) rotate(0deg) scale(.6) }
-          12%  { opacity: 1; transform: translateX(calc(var(--dx) * .2)) rotate(calc(var(--rot) * .1)) scale(1) }
-          50%  { top: 50%; transform: translateX(var(--dx)) rotate(calc(var(--rot) * .5)) scale(1) }
-          75%  { transform: translateX(calc(var(--dx) * -.6)) rotate(calc(var(--rot) * .8)) scale(.95) }
-          100% { top: 108%; opacity: 0; transform: translateX(calc(var(--dx) * .5)) rotate(var(--rot)) scale(.8) }
+        @keyframes petalDrop {
+          0%   { transform: translateY(-15%); opacity: 0 }
+          12%  { opacity: .95 }
+          80%  { opacity: .9 }
+          100% { transform: translateY(100%); opacity: 0 }
+        }
+        @keyframes petalSway {
+          from { transform: translateX(calc(var(--dx) * -1)) rotate(-25deg) }
+          to   { transform: translateX(var(--dx)) rotate(25deg) }
         }
         @keyframes portraitGlow { 0% { filter: brightness(1) } 25% { filter: brightness(1.12) saturate(1.1) } 100% { filter: brightness(1) } }
       `}</style>

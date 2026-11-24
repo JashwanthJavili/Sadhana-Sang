@@ -20,17 +20,17 @@ const input =
 const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onComplete, prefillName }) => {
   const [step, setStep] = useState(1);
   const [userName, setUserName] = useState(prefillName || '');
-  const [gender, setGender] = useState<'male' | 'female'>('male');
+  const [gender, setGender] = useState<'male' | 'female' | null>(null);
   const [guruName, setGuruName] = useState('');
   const [iskconCenter, setIskconCenter] = useState('');
 
   if (!isOpen) return null;
 
   const canProceed =
-    step === 1 ? userName.trim().length > 0 : step === 2 ? true : step === 3 ? guruName.trim().length > 0 : iskconCenter.trim().length > 0;
+    step === 1 ? userName.trim().length > 0 : step === 2 ? gender !== null : step === 3 ? guruName.trim().length > 0 : iskconCenter.trim().length > 0;
 
   const next = () => {
-    if (!canProceed) return;
+    if (!canProceed || !gender) return;
     if (step < TOTAL) setStep(step + 1);
     else onComplete({ userName: userName.trim(), gender, guruName: guruName.trim(), iskconCenter: iskconCenter.trim() });
   };
@@ -48,12 +48,8 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onComplete, p
     'Your local ISKCON center. Write N/A if none.',
   ];
 
-  const STEP_COLORS = [
-    'from-marigold-400 to-brand-500',
-    'from-rose-400 to-pink-500',
-    'from-violet-400 to-purple-500',
-    'from-emerald-400 to-teal-500',
-  ];
+  const COLOR = 'from-marigold-400 to-brand-500';
+  const STEP_COLORS = [COLOR, COLOR, COLOR, COLOR];
 
   const genderCard = (g: 'male' | 'female', label: string, honorific: string, img: string) => (
     <button
@@ -76,7 +72,7 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onComplete, p
   );
 
   return createPortal(
-    <div className="fixed inset-0 z-[150] flex items-center justify-center p-5" role="dialog" aria-modal="true" aria-label="Set up your profile">
+    <div className="fixed inset-0 z-[150] flex items-start justify-center overflow-y-auto p-5 pt-[8dvh]" role="dialog" aria-modal="true" aria-label="Set up your profile">
       <div className="absolute inset-0 animate-fadeIn bg-maroon-900/50 backdrop-blur-sm" />
 
       <div className="relative w-full max-w-sm animate-scale-in overflow-hidden rounded-[32px] bg-white shadow-lift">

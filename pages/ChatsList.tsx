@@ -108,7 +108,7 @@ const ChatsList: React.FC = () => {
         </div>
         {chats.length > 0 && <CollapsibleSearch value={searchTerm} onChange={setSearchTerm} placeholder="Search chats" />}
         <button
-          onClick={() => navigate('/community')}
+          onClick={() => navigate('/community', { state: { view: 'explore' } })}
           className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-white px-4 text-sm font-semibold text-brand-700 shadow-soft ring-1 ring-amber-200 transition hover:bg-amber-50 active:scale-95"
           style={{ minHeight: 0 }}
         >
@@ -126,7 +126,7 @@ const ChatsList: React.FC = () => {
           <p className="mx-auto mt-1 max-w-xs text-sm text-maroon-900/60">
             Connect with devotees in the community, then start a conversation here.
           </p>
-          <button onClick={() => navigate('/community')} className="btn-primary mt-6 h-11 px-5">
+          <button onClick={() => navigate('/community', { state: { view: 'explore' } })} className="btn-primary mt-6 h-11 px-5">
             <UserPlus size={17} /> Explore
           </button>
         </div>

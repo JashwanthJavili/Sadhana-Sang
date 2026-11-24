@@ -5,7 +5,7 @@ import { getAllUsers, searchUsers, createOrGetChat } from '../services/chat';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserData } from '../contexts/UserDataContext';
 import { Users, Search, MessageCircle, X, UserPlus, UserCheck, UserMinus, Check, HelpCircle, MapPin, BookOpen, ChevronDown } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import UserProfileModal from '../components/UserProfileModal';
 import Avatar from '../components/Avatar';
 import CollapsibleSearch from '../components/CollapsibleSearch';
@@ -35,7 +35,10 @@ const Community: React.FC = () => {
   });
   const [loading, setLoading] = useState(true);
   const [openUid, setOpenUid] = useState<string | null>(null);
-  const [view, setView] = useState<'connected' | 'explore'>('connected');
+  const location = useLocation();
+  const [view, setView] = useState<'connected' | 'explore'>(
+    (location.state as { view?: 'connected' | 'explore' } | null)?.view === 'explore' ? 'explore' : 'connected'
+  );
   const [connectionStatuses, setConnectionStatuses] = useState<{ [key: string]: ConnectionStatus }>({});
   const [connectedUserIds, setConnectedUserIds] = useState<string[]>([]);
   const [pendingRequestCount, setPendingRequestCount] = useState(0);

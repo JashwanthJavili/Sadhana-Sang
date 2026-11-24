@@ -68,11 +68,6 @@ const NamaskarGreeting: React.FC = () => {
 
           {/* Content with proper padding */}
           <div className="relative z-10 text-center space-y-3 sm:space-y-4 p-6 sm:p-8">
-            {/* Monk emoji with animation */}
-            <div className="text-6xl sm:text-8xl animate-bounce-slow inline-block">
-              🙏
-            </div>
-
             {/* Main greeting */}
             <div className="space-y-1 sm:space-y-2">
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-orange-800 font-serif">

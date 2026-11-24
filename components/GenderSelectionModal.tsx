@@ -12,7 +12,7 @@ interface GenderSelectionModalProps {
 }
 
 const GenderSelectionModal: React.FC<GenderSelectionModalProps> = ({ isOpen, onComplete }) => {
-  const [gender, setGender] = useState<'male' | 'female'>('male');
+  const [gender, setGender] = useState<'male' | 'female' | null>(null);
   if (!isOpen) return null;
 
   const card = (g: 'male' | 'female', label: string, honorific: string, img: string) => (
@@ -41,7 +41,7 @@ const GenderSelectionModal: React.FC<GenderSelectionModalProps> = ({ isOpen, onC
 
       <div className="relative w-full max-w-sm animate-scale-in overflow-hidden rounded-[32px] bg-white shadow-lift">
         {/* Header */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-rose-400 to-pink-500 px-6 pb-7 pt-7">
+        <div className="relative overflow-hidden bg-gradient-to-br from-marigold-400 to-brand-500 px-6 pb-7 pt-7">
           <div className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-white/10" />
           <h2 className="relative text-2xl font-bold leading-tight text-white">How may we address you?</h2>
           <p className="relative mt-1 text-sm text-white/70">So we can greet you as Prabhuji or Mataji.</p>
@@ -55,8 +55,9 @@ const GenderSelectionModal: React.FC<GenderSelectionModalProps> = ({ isOpen, onC
           </div>
           <button
             type="button"
-            onClick={() => onComplete(gender)}
-            className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-rose-400 to-pink-500 py-3.5 text-[15px] font-semibold text-white shadow-lg transition active:scale-[0.99]"
+            onClick={() => gender && onComplete(gender)}
+            disabled={!gender}
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-marigold-400 to-brand-500 py-3.5 text-[15px] font-semibold text-white shadow-lg transition active:scale-[0.99] disabled:opacity-50"
           >
             Continue
           </button>

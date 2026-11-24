@@ -407,7 +407,7 @@ export default function ChantingCounter() {
         {live.beads}
       </span>
       <span className="mt-1.5 text-xs font-medium text-maroon-900/50">
-        of {settings.perRound} · Round {todayTotal + 1}
+        of {settings.perRound}
       </span>
     </>
   );
@@ -531,9 +531,12 @@ export default function ChantingCounter() {
       </section>
 
       {/* Recent */}
-      {sessions.some((s) => s.rounds > 0 || s.beads > 0) && (
+      {(
         <div className="rounded-3xl bg-white p-4 shadow-soft ring-1 ring-sandal-200">
           <p className="mb-2 text-sm font-semibold text-maroon-900">Recent</p>
+          {!sessions.some((s) => s.rounds > 0 || s.beads > 0) && (
+            <p className="py-3 text-center text-sm text-maroon-900/50">No recent japa</p>
+          )}
           <ul className="divide-y divide-sandal-200/70">
             {sessions.filter((s) => s.rounds > 0 || s.beads > 0).slice(0, 4).map((s) => (
               <li key={s.id} className="flex items-center justify-between py-2.5 text-sm">
