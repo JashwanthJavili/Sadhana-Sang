@@ -422,11 +422,12 @@ const Community: React.FC = () => {
                 key={profile.uid}
                 className={`rounded-2xl bg-white ring-1 transition-shadow duration-200 ${open ? 'shadow-card ring-amber-200' : 'shadow-soft ring-sandal-200'}`}
               >
+                <div className="flex items-center gap-1.5 pr-3">
                 <button
                   type="button"
                   onClick={() => setOpenUid(open ? null : profile.uid)}
                   aria-expanded={open}
-                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left"
+                  className="flex min-w-0 flex-1 items-center gap-2.5 py-2 pl-3 text-left"
                   style={{ minHeight: 0 }}
                 >
                   <div className="relative shrink-0">
@@ -443,8 +444,45 @@ const Community: React.FC = () => {
                       <p className="truncate text-[11px] leading-tight text-maroon-900/45">{temple || 'Devotee'}</p>
                     )}
                   </div>
-                  <ChevronDown size={17} className={`shrink-0 text-maroon-900/40 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
                 </button>
+
+                {/* Quick action — always visible, no need to expand the card */}
+                {connectionStatuses[profile.uid] === 'connected' ? (
+                  <button
+                    type="button"
+                    onClick={() => handleStartChat(profile.uid)}
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-50 text-brand-700 ring-1 ring-amber-200 transition hover:bg-amber-100 active:scale-95"
+                    aria-label="Message"
+                    title="Message"
+                    style={{ minHeight: 0 }}
+                  >
+                    <MessageCircle size={15} />
+                  </button>
+                ) : connectionStatuses[profile.uid] === 'pending' ? (
+                  <span className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-sandal-100 px-3 text-xs font-semibold text-maroon-700 ring-1 ring-sandal-200">
+                    <Check size={13} /> Sent
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleConnect(profile.uid, profile.userName, profile.photoURL)}
+                    className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full bg-brand-600 px-3.5 text-xs font-semibold text-white transition hover:bg-brand-700 active:scale-95"
+                    style={{ minHeight: 0 }}
+                  >
+                    <UserPlus size={13} /> Connect
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setOpenUid(open ? null : profile.uid)}
+                  className="flex h-8 w-7 shrink-0 items-center justify-center text-maroon-900/40"
+                  aria-label={open ? 'Collapse' : 'Expand'}
+                  style={{ minHeight: 0 }}
+                >
+                  <ChevronDown size={17} className={`transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+                </button>
+                </div>
 
                 <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
                   <div className="min-h-0 overflow-hidden">
