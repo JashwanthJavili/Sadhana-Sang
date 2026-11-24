@@ -92,7 +92,7 @@ const EmptyHint: React.FC<{ icon: React.ReactNode; text: string }> = ({ icon, te
 );
 
 /** Circular progress ring (white-on-dark variant for the japa card) */
-const Ring: React.FC<{ value: number; max: number; size?: number }> = ({ value, max, size = 120 }) => {
+const Ring: React.FC<{ value: number; max: number; hasGoal?: boolean; size?: number }> = ({ value, max, hasGoal = true, size = 120 }) => {
   const stroke = 10;
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
@@ -122,7 +122,7 @@ const Ring: React.FC<{ value: number; max: number; size?: number }> = ({ value, 
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-4xl font-semibold leading-none text-maroon-900">{value}</span>
-        <span className="mt-1 text-xs font-medium text-maroon-900/50">of {max}</span>
+        {hasGoal && <span className="mt-1 text-xs font-medium text-maroon-900/50">of {max}</span>}
       </div>
     </div>
   );
@@ -349,7 +349,7 @@ const Dashboard: React.FC = () => {
             )}
           </div>
           <div className="relative mt-5 flex items-center gap-5">
-            <Ring value={roundsToday} max={goal || Math.max(roundsToday, 1)} />
+            <Ring value={roundsToday} max={goal || Math.max(roundsToday, 1)} hasGoal={goal > 0} />
             <div className="min-w-0">
               <p className="text-sm text-maroon-900/60">{goal ? `Your goal: ${goal} rounds` : 'Chanted today'}</p>
               <p className="text-2xl font-semibold leading-tight">
