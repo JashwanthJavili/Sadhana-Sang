@@ -351,12 +351,12 @@ const Community: React.FC = () => {
         </div>
         <button
           onClick={() => navigate('/connection-requests')}
-          title="Connection requests"
           aria-label="Connection requests"
-          className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-brand-600 shadow-soft ring-1 ring-sandal-200 transition hover:bg-amber-50"
+          className="relative flex h-12 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-2xl bg-white text-brand-700 shadow-soft ring-1 ring-sandal-200 transition hover:bg-amber-50"
           style={{ minHeight: 0 }}
         >
           <UserCheck size={18} />
+          <span className="text-[10px] font-semibold leading-none">Requests</span>
           {pendingRequestCount > 0 && (
             <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-600 px-1.5 text-[11px] font-bold text-white ring-2 ring-white">
               {pendingRequestCount}
@@ -446,15 +446,18 @@ const Community: React.FC = () => {
                 <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
                   <div className="min-h-0 overflow-hidden">
                     <div className="space-y-2 border-t border-sandal-200/70 px-3 pb-3 pt-2.5">
-                      <div className="space-y-1.5 text-[13px] text-maroon-900/75">
-                        <p className="flex items-center gap-2">
-                          <MapPin size={14} className="shrink-0 text-marigold-500" />
-                          <span className="truncate">{temple || 'Not shared'}</span>
-                        </p>
-                        <p className="flex items-center gap-2">
-                          <BookOpen size={14} className="shrink-0 text-marigold-500" />
-                          <span className="truncate">{teacher || 'Not shared'}</span>
-                        </p>
+                      <div className="space-y-1 text-[13px] text-maroon-900/75">
+                        {teacher && (
+                          <p>
+                            Guided by <span className="font-semibold text-maroon-900">{teacher}</span>
+                          </p>
+                        )}
+                        {temple && (
+                          <p>
+                            Connected to <span className="font-semibold text-maroon-900">{temple}</span>
+                          </p>
+                        )}
+                        {!teacher && !temple && <p className="text-maroon-900/45">No details shared yet</p>}
                       </div>
                       {profile.bio && <p className="text-[13px] leading-relaxed text-maroon-900/60">{profile.bio}</p>}
                       <div className="flex items-center gap-2 pt-1">
