@@ -83,6 +83,12 @@ const playBell = () => {
   }
 };
 
+const pad = (n: number, w = 2) => String(Math.max(0, Math.floor(n))).padStart(w, '0');
+const clock = (ms: number) => {
+  const s = Math.floor(Math.max(0, ms) / 1000);
+  return `${pad(s / 3600)}:${pad((s % 3600) / 60)}:${pad(s % 60)}`;
+};
+
 const buzz = (pattern: number | number[]) => {
   try {
     navigator.vibrate?.(pattern);
@@ -180,6 +186,14 @@ export default function ChantingCounter() {
   const [showSettings, setShowSettings] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [pulse, setPulse] = useState(0);
+  // sitting timer: starts with the first bead of this sitting
+  const [sitStart, setSitStart] = useState<number | null>(null);
+  const [nowTs, setNowTs] = useState(() => Date.now());
+  useEffect(() => {
+    if (!sitStart) return;
+    const t = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [sitStart]);
 
   const setLive = useCallback(
     (next: Live) => {
@@ -237,6 +251,10 @@ export default function ChantingCounter() {
     const now = Date.now();
     let l = { ...liveRef.current };
     if (!l.startedAt) l = { ...l, startedAt: now, roundStartedAt: now };
+    setSitStart((s) => {
+      if (!s) setNowTs(now);
+      return s || now;
+    });
 
     if (l.beads + 1 >= settings.perRound) {
       const rounds = l.rounds + 1;
@@ -246,7 +264,7 @@ export default function ChantingCounter() {
       if (settings.goal && savedTodayRef.current + rounds === settings.goal) showSuccess('Goal reached!', 'Hare Krishna');
     } else {
       l = { ...l, beads: l.beads + 1 };
-      if (settings.vibrate) buzz(18);
+      if (settings.vibrate) buzz(35);
     }
     setLive(l);
     setPulse((p) => p + 1);
@@ -260,6 +278,7 @@ export default function ChantingCounter() {
 
   const reset = () => {
     setLive(EMPTY);
+    setSitStart(null);
     setConfirmReset(false);
     setShowSettings(false);
   };
@@ -352,32 +371,24 @@ export default function ChantingCounter() {
     <div className="mx-auto max-w-md space-y-4">
       <style>{`@keyframes japaPop { 0% { transform: scale(0.9); opacity: .6 } 100% { transform: scale(1); opacity: 1 } }`}</style>
 
-      {/* Today */}
-      <div className="rounded-3xl bg-white p-4 shadow-soft ring-1 ring-sandal-200">
-        <div className="flex items-baseline justify-between">
-          <p className="text-sm font-semibold text-maroon-900">Today</p>
-          <p className="text-sm text-maroon-900/60">
-            <span className="text-lg font-semibold text-brand-600">{todayTotal}</span> round{todayTotal === 1 ? '' : 's'}
-            {goal > 0 && <span> of {goal}</span>}
+      {/* Beads and timer */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-3xl bg-white p-4 shadow-soft ring-1 ring-sandal-200">
+          <p className="text-xs font-medium text-maroon-900/55">Beads</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-maroon-900">
+            {pad(todayTotal, 3)}
+            <span className="px-0.5 text-maroon-900/30">:</span>
+            <span className="text-brand-600">{pad(live.beads, 3)}</span>
+          </p>
+          <p className="mt-0.5 text-[11px] text-maroon-900/45">
+            {goal > 0 ? `${left ? `${left} rounds to goal` : 'Goal reached'}` : 'rounds : this round'}
           </p>
         </div>
-        {goal > 0 && (
-          <div className="mt-2.5 h-2.5 overflow-hidden rounded-full bg-sandal-200">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-amber-300 via-marigold-400 to-brand-500 transition-all duration-500"
-              style={{ width: `${Math.min((todayTotal / goal) * 100, 100)}%` }}
-            />
-          </div>
-        )}
-        <p className="mt-2 text-xs text-maroon-900/55">
-          {goal > 0
-            ? left
-              ? `${left} more to reach your goal`
-              : 'Goal reached — Hare Krishna'
-            : todayTotal
-              ? 'Every round is precious'
-              : 'Even one round is a beautiful start'}
-        </p>
+        <div className="rounded-3xl bg-white p-4 shadow-soft ring-1 ring-sandal-200">
+          <p className="text-xs font-medium text-maroon-900/55">Time</p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-maroon-900">{clock(sitStart ? nowTs - sitStart : 0)}</p>
+          <p className="mt-0.5 text-[11px] text-maroon-900/45">hr : min : sec</p>
+        </div>
       </div>
 
       {/* Counter */}

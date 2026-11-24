@@ -97,7 +97,7 @@ const ChatsList: React.FC = () => {
           className="inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-white px-4 text-sm font-semibold text-brand-700 shadow-soft ring-1 ring-amber-200 transition hover:bg-amber-50 active:scale-95"
           style={{ minHeight: 0 }}
         >
-          <Users size={16} /> Devotees
+          <Users size={16} /> Explore
         </button>
       </div>
 
@@ -112,7 +112,7 @@ const ChatsList: React.FC = () => {
             Connect with devotees in the community, then start a conversation here.
           </p>
           <button onClick={() => navigate('/community')} className="btn-primary mt-6 h-11 px-5">
-            <UserPlus size={17} /> Find devotees
+            <UserPlus size={17} /> Explore
           </button>
         </div>
       ) : (

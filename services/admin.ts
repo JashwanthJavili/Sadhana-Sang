@@ -248,7 +248,7 @@ export const getAllUsersAdmin = async () => {
       email: userEmail,
       guruName: userData.guruName || userData.settings?.guruName || 'N/A',
       iskconCenter: userData.iskconCenter || userData.settings?.iskconCenter || 'N/A',
-      gender: userData.gender || userData.settings?.gender || null,
+      gender: userData.settings?.gender || userData.gender || null,
       joinedDate: userData.usage?.firstLogin || userData.joinedDate || Date.now(),
       lastActive: userData.usage?.lastActive || userData.lastSeen || 0,
       loginCount: userData.usage?.loginCount || 0,

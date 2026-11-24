@@ -331,7 +331,7 @@ const Community: React.FC = () => {
           {(
             [
               { id: 'connected', label: 'Connections', count: connectedUsers.length },
-              { id: 'explore', label: 'Find devotees', count: exploreUsers.length },
+              { id: 'explore', label: 'Explore', count: exploreUsers.length },
             ] as const
           ).map((t) => (
             <button
@@ -391,7 +391,7 @@ const Community: React.FC = () => {
               <h2 className="mt-4 text-base font-semibold text-maroon-900">No connections yet</h2>
               <p className="mx-auto mt-1 max-w-xs text-sm text-maroon-900/60">Find devotees near you or from your temple and send them a request.</p>
               <button onClick={() => setView('explore')} className="btn-primary mt-5 h-11 px-5">
-                <UserPlus size={17} /> Find devotees
+                <UserPlus size={17} /> Explore
               </button>
             </>
           ) : (
