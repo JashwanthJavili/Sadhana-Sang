@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Undo2, Maximize2, X, Settings2, Minus, Plus, RotateCcw, Vibrate, Bell } from 'lucide-react';
+import { Undo2, Maximize2, X, Settings2, RotateCcw, Vibrate, Bell, Info } from 'lucide-react';
+import { Wheel, WheelGroup } from '../components/planner/Wheel';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { ChantingSession, loadSessions, saveSession } from '../services/japa';
@@ -44,6 +45,12 @@ const writeJSON = (key: string, value: unknown) => {
   } catch {
     /* storage blocked */
   }
+};
+
+const time12 = (hhmm: string) => {
+  const [h, m] = (hhmm || '').split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return hhmm;
+  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`;
 };
 
 const mins = (sec: number) => {
@@ -115,29 +122,6 @@ const Switch: React.FC<{ on: boolean; onChange: (v: boolean) => void; label: str
   </button>
 );
 
-const MiniStepper: React.FC<{ value: number; onChange: (v: number) => void; max: number }> = ({ value, onChange, max }) => (
-  <div className="inline-flex items-center gap-1.5">
-    {[
-      { d: -1, Icon: Minus, label: 'Decrease', off: value <= 0 },
-      { d: 1, Icon: Plus, label: 'Increase', off: value >= max },
-    ].map(({ d, Icon, label, off }, i) => (
-      <React.Fragment key={label}>
-        {i === 1 && <span className="min-w-[2.5rem] text-center text-base font-semibold tabular-nums text-maroon-900">{value}</span>}
-        <button
-          type="button"
-          onClick={() => onChange(Math.min(max, Math.max(0, value + d)))}
-          disabled={off}
-          className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-maroon-800 ring-1 ring-sandal-300 transition active:scale-95 disabled:opacity-40"
-          aria-label={label}
-          style={{ minHeight: 0 }}
-        >
-          <Icon size={15} />
-        </button>
-      </React.Fragment>
-    ))}
-  </div>
-);
-
 /** Simple round tap target with a thin progress line around it */
 const TapCircle: React.FC<{ value: number; total: number; className?: string; children: React.ReactNode }> = ({ value, total, className = '', children }) => {
   const r = 46;
@@ -175,7 +159,7 @@ export default function ChantingCounter() {
   const uid = user?.uid || 'guest';
   const liveKey = `ss_japa_live_${uid}`;
 
-  const [settings, setSettings] = useState<JapaSettings>(() => readJSON(SETTINGS_KEY, DEFAULT_SETTINGS));
+  const [settings, setSettings] = useState<JapaSettings>(() => ({ ...readJSON(SETTINGS_KEY, DEFAULT_SETTINGS), perRound: 108 }));
   const [live, setLiveState] = useState<Live>(() => readJSON(liveKey, EMPTY));
   const liveRef = useRef(live);
   const [sessions, setSessions] = useState<ChantingSession[]>([]);
@@ -186,14 +170,81 @@ export default function ChantingCounter() {
   const [showSettings, setShowSettings] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [pulse, setPulse] = useState(0);
-  // sitting timer: starts with the first bead of this sitting
-  const [sitStart, setSitStart] = useState<number | null>(null);
+  const [showInfo, setShowInfo] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
+
+  // Sitting timer. Time already sat is kept; it pauses when you leave this page
+  // and picks up again with the next bead (or a tap on the Time tile).
+  const timeKey = `ss_japa_time_${uid}`;
+  const [elapsed, setElapsed] = useState(() => Number(localStorage.getItem(timeKey)) || 0);
+  const [runStart, setRunStart] = useState<number | null>(null);
   const [nowTs, setNowTs] = useState(() => Date.now());
+  const timerRef = useRef({ elapsed, runStart });
+  timerRef.current = { elapsed, runStart };
+  const saveElapsed = (ms: number) => {
+    try {
+      localStorage.setItem(timeKey, String(Math.round(ms)));
+    } catch {
+      /* storage blocked */
+    }
+  };
+  const startTimer = useCallback(() => {
+    if (timerRef.current.runStart) return;
+    const now = Date.now();
+    timerRef.current.runStart = now;
+    setNowTs(now);
+    setRunStart(now);
+  }, []);
+  const pauseTimer = useCallback(() => {
+    const { elapsed: e, runStart: r } = timerRef.current;
+    if (!r) return;
+    const total = e + (Date.now() - r);
+    timerRef.current = { elapsed: total, runStart: null };
+    setElapsed(total);
+    setRunStart(null);
+    saveElapsed(total);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeKey]);
+  const resetTimer = () => {
+    timerRef.current = { elapsed: 0, runStart: null };
+    setElapsed(0);
+    setRunStart(null);
+    saveElapsed(0);
+  };
   useEffect(() => {
-    if (!sitStart) return;
+    if (!runStart) return;
     const t = setInterval(() => setNowTs(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [sitStart]);
+  }, [runStart]);
+  // leaving the page pauses the timer
+  useEffect(
+    () => () => {
+      const { elapsed: e, runStart: r } = timerRef.current;
+      if (r) saveElapsed(e + (Date.now() - r));
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [timeKey]
+  );
+  const timeMs = elapsed + (runStart ? nowTs - runStart : 0);
+
+  // long press on the Time tile resets it, a short tap starts / pauses
+  const pressTimer = useRef<number | undefined>(undefined);
+  const longPressed = useRef(false);
+  const onTimePressStart = () => {
+    longPressed.current = false;
+    window.clearTimeout(pressTimer.current);
+    pressTimer.current = window.setTimeout(() => {
+      longPressed.current = true;
+      resetTimer();
+      buzz(60);
+    }, 650);
+  };
+  const onTimePressEnd = () => window.clearTimeout(pressTimer.current);
+  const onTimeClick = () => {
+    if (longPressed.current) return;
+    if (timerRef.current.runStart) pauseTimer();
+    else startTimer();
+  };
 
   const setLive = useCallback(
     (next: Live) => {
@@ -251,10 +302,7 @@ export default function ChantingCounter() {
     const now = Date.now();
     let l = { ...liveRef.current };
     if (!l.startedAt) l = { ...l, startedAt: now, roundStartedAt: now };
-    setSitStart((s) => {
-      if (!s) setNowTs(now);
-      return s || now;
-    });
+    startTimer();
 
     if (l.beads + 1 >= settings.perRound) {
       const rounds = l.rounds + 1;
@@ -268,7 +316,7 @@ export default function ChantingCounter() {
     }
     setLive(l);
     setPulse((p) => p + 1);
-  }, [settings, setLive, showSuccess]);
+  }, [settings, setLive, showSuccess, startTimer]);
 
   const undo = useCallback(() => {
     const l = liveRef.current;
@@ -278,7 +326,7 @@ export default function ChantingCounter() {
 
   const reset = () => {
     setLive(EMPTY);
-    setSitStart(null);
+    resetTimer();
     setConfirmReset(false);
     setShowSettings(false);
   };
@@ -372,24 +420,63 @@ export default function ChantingCounter() {
       <style>{`@keyframes japaPop { 0% { transform: scale(0.9); opacity: .6 } 100% { transform: scale(1); opacity: 1 } }`}</style>
 
       {/* Beads and timer */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-3xl bg-white p-4 shadow-soft ring-1 ring-sandal-200">
+      <div className="flex items-stretch gap-2">
+        <button
+          type="button"
+          onClick={() => setShowPicker(true)}
+          className="min-w-0 flex-1 rounded-3xl bg-white p-4 text-left shadow-soft ring-1 ring-sandal-200 transition active:scale-[0.98]"
+          aria-label="Beads — tap to set the count"
+          style={{ minHeight: 0 }}
+        >
           <p className="text-xs font-medium text-maroon-900/55">Beads</p>
           <p className="mt-1 text-2xl font-semibold tabular-nums text-maroon-900">
             {pad(todayTotal, 3)}
             <span className="px-0.5 text-maroon-900/30">:</span>
             <span className="text-brand-600">{pad(live.beads, 3)}</span>
           </p>
-          <p className="mt-0.5 text-[11px] text-maroon-900/45">
-            {goal > 0 ? `${left ? `${left} rounds to goal` : 'Goal reached'}` : 'rounds : this round'}
+        </button>
+        <button
+          type="button"
+          onPointerDown={onTimePressStart}
+          onPointerUp={onTimePressEnd}
+          onPointerLeave={onTimePressEnd}
+          onPointerCancel={onTimePressEnd}
+          onContextMenu={(e) => e.preventDefault()}
+          onClick={onTimeClick}
+          className="min-w-0 flex-1 select-none rounded-3xl bg-white p-4 text-left shadow-soft ring-1 ring-sandal-200 transition active:scale-[0.98] [-webkit-touch-callout:none]"
+          aria-label="Time — tap to start or pause, hold to reset"
+          style={{ minHeight: 0 }}
+        >
+          <p className="flex items-center gap-1.5 text-xs font-medium text-maroon-900/55">
+            Time {runStart && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />}
           </p>
-        </div>
-        <div className="rounded-3xl bg-white p-4 shadow-soft ring-1 ring-sandal-200">
-          <p className="text-xs font-medium text-maroon-900/55">Time</p>
-          <p className="mt-1 text-2xl font-semibold tabular-nums text-maroon-900">{clock(sitStart ? nowTs - sitStart : 0)}</p>
-          <p className="mt-0.5 text-[11px] text-maroon-900/45">hr : min : sec</p>
-        </div>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-maroon-900">{clock(timeMs)}</p>
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowInfo((v) => !v)}
+          className={`flex h-9 w-9 shrink-0 items-center justify-center self-center rounded-full ring-1 transition ${showInfo ? 'bg-amber-100 text-brand-700 ring-amber-300' : 'bg-white text-maroon-900/55 ring-sandal-200'}`}
+          aria-label="What do these mean?"
+          style={{ minHeight: 0 }}
+        >
+          <Info size={17} />
+        </button>
       </div>
+      {showInfo && (
+        <div className="animate-fadeIn space-y-1.5 rounded-2xl bg-amber-50 p-3.5 text-xs leading-relaxed text-maroon-900/75 ring-1 ring-amber-200">
+          <p>
+            <b className="text-maroon-900">Beads</b> — rounds done today : the bead you are on. Tap it to set the count.
+          </p>
+          <p>
+            <b className="text-maroon-900">Time</b> — hours : minutes : seconds. Tap to start or pause, hold to reset. It pauses when you leave this page.
+          </p>
+          {goal > 0 && (
+            <p>
+              <b className="text-maroon-900">Goal</b> — {left ? `${left} round${left === 1 ? '' : 's'} to go` : 'reached for today'}.
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Counter */}
       <section className="relative overflow-hidden rounded-[28px] bg-gradient-to-b from-amber-50 via-white to-orange-50 p-4 sm:p-5 shadow-card ring-1 ring-amber-200/70">
@@ -445,17 +532,17 @@ export default function ChantingCounter() {
       </section>
 
       {/* Recent */}
-      {sessions.length > 0 && (
+      {sessions.some((s) => s.rounds > 0 || s.beads > 0) && (
         <div className="rounded-3xl bg-white p-4 shadow-soft ring-1 ring-sandal-200">
           <p className="mb-2 text-sm font-semibold text-maroon-900">Recent</p>
           <ul className="divide-y divide-sandal-200/70">
-            {sessions.slice(0, 4).map((s) => (
+            {sessions.filter((s) => s.rounds > 0 || s.beads > 0).slice(0, 4).map((s) => (
               <li key={s.id} className="flex items-center justify-between py-2.5 text-sm">
                 <span className="text-maroon-900/70">
-                  {dayName(s.timestamp)} · {s.startTime}
+                  {dayName(s.timestamp)} · {time12(s.startTime)}
                 </span>
                 <span className="font-semibold text-maroon-900">
-                  {s.rounds} round{s.rounds === 1 ? '' : 's'}
+                  {s.rounds > 0 ? `${s.rounds} round${s.rounds === 1 ? '' : 's'}` : `${s.beads} beads`}
                   {s.duration ? <span className="ml-1.5 font-normal text-maroon-900/45">({mins(s.duration)})</span> : null}
                 </span>
               </li>
@@ -535,26 +622,6 @@ export default function ChantingCounter() {
                   </div>
                 </div>
 
-                <div>
-                  <p className="mb-2 text-sm font-semibold text-maroon-900">Beads in one round</p>
-                  <div className="flex gap-2">
-                    {[27, 54, 108].map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        onClick={() => {
-                          updateSettings({ perRound: n });
-                          if (liveRef.current.beads >= n) setLive({ ...liveRef.current, beads: n - 1 });
-                        }}
-                        className={`rounded-full px-4 py-1.5 text-sm font-semibold transition ${settings.perRound === n ? 'bg-brand-500 text-white' : 'bg-sandal-100 text-maroon-800/75'}`}
-                        style={{ minHeight: 0 }}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 <div className="space-y-3 rounded-2xl bg-sandal-50 p-4">
                   {[
                     { key: 'vibrate' as const, label: 'Vibrate', Icon: Vibrate },
@@ -569,42 +636,95 @@ export default function ChantingCounter() {
                   ))}
                 </div>
 
-                <div className="space-y-2 rounded-2xl bg-sandal-50 p-4">
-                  <p className="text-sm font-semibold text-maroon-900">Change the count</p>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-maroon-900/70">Rounds</span>
-                    <MiniStepper value={live.rounds} max={200} onChange={(v) => setLive({ ...liveRef.current, rounds: v, laps: liveRef.current.laps.slice(0, v) })} />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-maroon-900/70">Beads</span>
-                    <MiniStepper value={live.beads} max={settings.perRound - 1} onChange={(v) => setLive({ ...liveRef.current, beads: v })} />
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setConfirmReset(true)}
+                  disabled={!hasCount && timeMs === 0}
+                  className="flex w-full items-center gap-3 rounded-2xl bg-rose-50 p-3.5 text-left ring-1 ring-rose-200 transition active:scale-[0.99] disabled:opacity-40"
+                  style={{ minHeight: 0 }}
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
+                    <RotateCcw size={18} />
+                  </span>
+                  <span>
+                    <span className="block text-sm font-semibold text-rose-700">Start again</span>
+                    <span className="block text-xs text-rose-700/70">Clear the current count and timer</span>
+                  </span>
+                </button>
 
-                <div className="flex items-center gap-2">
-                  {confirmReset ? (
-                    <>
-                      <span className="flex-1 text-sm font-medium text-rose-700">Clear the count?</span>
-                      <button type="button" onClick={() => setConfirmReset(false)} className="btn-ghost btn-sm">
-                        No
-                      </button>
-                      <button type="button" onClick={reset} className="btn-sm inline-flex items-center gap-1.5 rounded-xl bg-rose-500 px-3 font-semibold text-white">
-                        Yes, clear
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <button type="button" onClick={() => setConfirmReset(true)} disabled={!hasCount} className="btn-ghost btn-sm text-rose-600 disabled:opacity-30">
-                        <RotateCcw size={14} /> Start again
-                      </button>
-                      <div className="flex-1" />
-                      <button type="button" onClick={() => setShowSettings(false)} className="btn-primary btn-sm">
-                        Done
-                      </button>
-                    </>
-                  )}
-                </div>
+                <button type="button" onClick={() => setShowSettings(false)} className="btn-primary w-full">
+                  Done
+                </button>
               </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* ===================== Confirm start again ===================== */}
+      {confirmReset &&
+        createPortal(
+          <div className="fixed inset-0 z-[160] flex items-center justify-center p-5" role="alertdialog" aria-modal="true" aria-label="Start again">
+            <div className="absolute inset-0 animate-fadeIn bg-maroon-900/30" onClick={() => setConfirmReset(false)} />
+            <div className="relative w-full max-w-sm animate-scale-in rounded-[28px] bg-white p-6 text-center">
+              <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-100 text-rose-600">
+                <RotateCcw size={22} />
+              </span>
+              <h3 className="mt-3 text-lg font-semibold text-maroon-900">Start again?</h3>
+              <p className="mt-1.5 text-sm text-maroon-900/60">The current bead count and timer will be cleared. Rounds already saved stay in your history.</p>
+              <div className="mt-5 flex gap-2">
+                <button type="button" onClick={() => setConfirmReset(false)} className="btn-secondary flex-1">
+                  Keep counting
+                </button>
+                <button type="button" onClick={reset} className="flex-1 rounded-xl bg-rose-500 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-rose-600">
+                  Start again
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* ===================== Set the count ===================== */}
+      {showPicker &&
+        createPortal(
+          <div className="fixed inset-0 z-[130] flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="Set the count">
+            <div className="absolute inset-0 animate-fadeIn bg-maroon-900/25" onClick={() => setShowPicker(false)} />
+            <div style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }} className="relative w-full animate-rise-in rounded-t-[28px] bg-white p-5 sm:max-w-sm sm:rounded-[28px]">
+              <div className="mb-1 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-maroon-900">Set your count</h3>
+                <button type="button" onClick={() => setShowPicker(false)} className="icon-btn" aria-label="Close">
+                  <X size={18} />
+                </button>
+              </div>
+              <p className="mb-2 text-xs text-maroon-900/50">Scroll to choose rounds and the bead you are on.</p>
+              <WheelGroup>
+                <Wheel
+                  label="Rounds"
+                  width={96}
+                  options={Array.from({ length: 65 }, (_, i) => ({ value: String(savedToday + i), label: String(savedToday + i) }))}
+                  value={String(todayTotal)}
+                  onChange={(v) => {
+                    const rounds = Math.max(Number(v) - savedTodayRef.current, 0);
+                    setLive({ ...liveRef.current, rounds, laps: liveRef.current.laps.slice(0, rounds) });
+                  }}
+                />
+                <span className="relative px-1 text-xl font-semibold text-maroon-900/40">:</span>
+                <Wheel
+                  label="Beads"
+                  width={96}
+                  options={Array.from({ length: settings.perRound }, (_, i) => ({ value: String(i), label: String(i) }))}
+                  value={String(live.beads)}
+                  onChange={(v) => setLive({ ...liveRef.current, beads: Number(v) })}
+                />
+              </WheelGroup>
+              <div className="mt-1 flex justify-around text-xs font-medium text-maroon-900/45">
+                <span>Rounds</span>
+                <span>Beads</span>
+              </div>
+              <button type="button" onClick={() => setShowPicker(false)} className="btn-primary mt-4 w-full">
+                Done
+              </button>
             </div>
           </div>,
           document.body

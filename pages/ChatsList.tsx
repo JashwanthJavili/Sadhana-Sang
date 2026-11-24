@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Chat } from '../types/chat';
-import { getUserChats } from '../services/chat';
+import { getUserChats, getLastMessagePreview } from '../services/chat';
 import { MessageCircle, Search, UserPlus, Lock, X, Users } from 'lucide-react';
 import Avatar from '../components/Avatar';
 import CollapsibleSearch from '../components/CollapsibleSearch';
@@ -50,6 +50,21 @@ const ChatsList: React.FC = () => {
       clearTimeout(timeout);
     };
   }, [user]);
+
+  // readable last-message text, keyed by chat id + timestamp
+  const [previews, setPreviews] = useState<Record<string, string>>({});
+  const fetched = React.useRef<Set<string>>(new Set());
+  useEffect(() => {
+    allChats.forEach((c) => {
+      if (!c.lastMessage) return;
+      const key = c.id + ':' + c.lastMessage.timestamp;
+      if (fetched.current.has(key)) return;
+      fetched.current.add(key);
+      getLastMessagePreview(c.id)
+        .then((t) => t && setPreviews((p) => ({ ...p, [c.id]: t })))
+        .catch(() => fetched.current.delete(key));
+    });
+  }, [allChats]);
 
   // a chat with no message yet is not a conversation — leave it out
   const chats = useMemo(() => allChats.filter((c) => !!c.lastMessage), [allChats]);
@@ -130,7 +145,8 @@ const ChatsList: React.FC = () => {
                 if (!o) return null;
                 const unread = unreadOf(chat);
                 const last = chat.lastMessage;
-                const locked = !!last && (last.text === '[Encrypted Message]' || isEncrypted(last.text || ''));
+                const text = previews[chat.id];
+                const locked = !!last && !text && (last.text === '[Encrypted Message]' || isEncrypted(last.text || ''));
                 const temple = !isBlank(o.iskconCenter) ? o.iskconCenter : '';
                 return (
                   <li key={chat.id}>
@@ -157,7 +173,7 @@ const ChatsList: React.FC = () => {
                                     <span className="truncate">Message</span>
                                   </>
                                 ) : (
-                                  <span className="truncate">{last.text}</span>
+                                  <span className="truncate">{text || last.text}</span>
                                 )}
                               </>
                             ) : (

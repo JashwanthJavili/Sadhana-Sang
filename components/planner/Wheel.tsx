@@ -86,7 +86,7 @@ export const Wheel: React.FC<{ options: WheelOption[]; value: string; onChange: 
 };
 
 /** Lays wheels side by side with one shared highlight band across the chosen row */
-const WheelGroup: React.FC<{ children: ReactNode }> = ({ children }) => (
+export const WheelGroup: React.FC<{ children: ReactNode }> = ({ children }) => (
   <div className="relative flex items-center justify-center gap-1 px-1" style={{ height: WHEEL_H }}>
     <div
       aria-hidden="true"

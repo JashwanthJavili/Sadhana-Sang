@@ -1,4 +1,4 @@
-import { ref, push, set, get, onValue, off, update, query, orderByChild, serverTimestamp, onDisconnect, remove } from 'firebase/database';
+import { ref, push, set, get, onValue, off, update, query, orderByChild, limitToLast, serverTimestamp, onDisconnect, remove } from 'firebase/database';
 import { database } from './firebase';
 import { UserProfile, Chat, ChatMessage, TypingStatus } from '../types/chat';
 import { encryptMessage, decryptMessage, isEncrypted } from './encryption';
@@ -615,5 +615,22 @@ export const exportChatMessages = async (chatId: string, currentUserId: string, 
   } catch (error) {
     console.error('Error exporting chat:', error);
     throw error;
+  }
+};
+
+/** Last message of a chat as readable text (for the chat list preview). */
+export const getLastMessagePreview = async (chatId: string): Promise<string | null> => {
+  const snap = await get(query(ref(database, `messages/${chatId}`), orderByChild('timestamp'), limitToLast(1)));
+  let msg: ChatMessage | null = null;
+  snap.forEach((c) => {
+    msg = c.val();
+  });
+  if (!msg) return null;
+  const m = msg as ChatMessage;
+  if (!isEncrypted(m.text || '')) return m.text || null;
+  try {
+    return await decryptMessage(m.text, m.senderId);
+  } catch {
+    return null;
   }
 };
