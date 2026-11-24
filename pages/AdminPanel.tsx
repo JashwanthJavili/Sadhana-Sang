@@ -948,47 +948,23 @@ const AdminPanel: React.FC = () => {
             <p className="mt-2 text-xs text-maroon-900/50">{filteredUsers.length} of {users.length} users</p>
           </div>
 
-          {selectedUsers.size > 0 && (
-            <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
-              <span className="text-sm font-semibold text-brand-700">{selectedUsers.size} selected</span>
-              <button
-                onClick={() => setSelectedUsers(new Set())}
-                className="rounded-full bg-white px-3.5 py-1.5 text-sm font-semibold text-maroon-900/70 ring-1 ring-sandal-200"
-                style={{ minHeight: 0 }}
-              >
-                Clear
-              </button>
-            </div>
-          )}
-
           {/* One card per user */}
           <ul className="grid gap-2.5 lg:grid-cols-2">
             {filteredUsers.map((u) => (
               <li key={u.uid} className="rounded-2xl border border-sandal-200 bg-white p-4 shadow-soft">
                 <div className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={selectedUsers.has(u.uid)}
-                    onChange={() => {
-                      const s = new Set(selectedUsers);
-                      if (s.has(u.uid)) s.delete(u.uid);
-                      else s.add(u.uid);
-                      setSelectedUsers(s);
-                    }}
-                    className="mt-1 h-5 w-5 shrink-0"
-                  />
                   <div className="min-w-0 flex-1">
                     <p className="flex flex-wrap items-center gap-1.5 font-semibold text-maroon-900">
-                      <span className="truncate">{u.userName}</span>
+                      <span className="break-words">{u.userName}</span>
                       {u.isAdmin && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">ADMIN</span>}
                     </p>
-                    <p className="truncate text-xs text-maroon-900/55">{u.email}</p>
+                    <p className="break-all text-xs text-maroon-900/55">{u.email}</p>
                   </div>
                   <div className="shrink-0">{renderUserActions(u)}</div>
                 </div>
                 <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
-                  <div className="min-w-0"><dt className="text-maroon-900/40">Guru</dt><dd className="truncate font-medium text-maroon-900/80">{u.guruName || '—'}</dd></div>
-                  <div className="min-w-0"><dt className="text-maroon-900/40">Center</dt><dd className="truncate font-medium text-maroon-900/80">{u.iskconCenter || '—'}</dd></div>
+                  <div className="min-w-0"><dt className="text-maroon-900/40">Guru</dt><dd className="break-words font-medium text-maroon-900/80">{u.guruName || '—'}</dd></div>
+                  <div className="min-w-0"><dt className="text-maroon-900/40">Center</dt><dd className="break-words font-medium text-maroon-900/80">{u.iskconCenter || '—'}</dd></div>
                   <div><dt className="text-maroon-900/40">Joined</dt><dd className="font-medium text-maroon-900/80">{formatDate(u.joinedDate)}</dd></div>
                   <div>
                     <dt className="text-maroon-900/40">Last active</dt>

@@ -66,15 +66,15 @@ export function useConfirm() {
                 />
               </label>
             )}
-            <div className="mt-6 flex gap-2">
-              <button type="button" onClick={() => finish(false)} className="btn-secondary flex-1">
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row">
+              <button type="button" onClick={() => finish(false)} className="btn-secondary w-full justify-center text-center sm:flex-1">
                 {opts.cancelLabel || 'Cancel'}
               </button>
               <button
                 type="button"
                 onClick={() => finish(true)}
                 disabled={!canConfirm}
-                className={`flex-1 disabled:opacity-40 ${opts.danger ? 'inline-flex h-11 items-center justify-center rounded-xl bg-rose-600 px-4 font-semibold text-white transition hover:bg-rose-700 active:scale-[0.98]' : 'btn-primary'}`}
+                className={`w-full justify-center text-center disabled:opacity-40 sm:flex-1 ${opts.danger ? 'inline-flex min-h-[2.75rem] items-center rounded-xl bg-rose-600 px-4 py-2 font-semibold leading-tight text-white transition hover:bg-rose-700 active:scale-[0.98]' : 'btn-primary'}`}
               >
                 {opts.confirmLabel || 'Confirm'}
               </button>
