@@ -19,9 +19,7 @@ import {
   ADMIN_EMAIL,
   getAllAdmins,
   grantAdminAccess,
-  revokeAdminAccess,
-  setUserGenderAdmin,
-} from '../services/admin';
+  revokeAdminAccess,} from '../services/admin';
 import { migrateAllUserProfiles } from '../scripts/migrateUserProfiles';
 import { ref, set, push, get, remove, update } from 'firebase/database';
 import { db } from '../services/firebase';
@@ -615,10 +613,10 @@ const AdminPanel: React.FC = () => {
   // Password Authentication Screen
   if (!isAuthenticated) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-orange-50 via-amber-50 to-red-50">
-        <div className="bg-white rounded-2xl shadow-card border-2 border-orange-300 p-8 max-w-md w-full mx-4">
+      <div className="flex items-center justify-center min-h-screen bg-sandal-50">
+        <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-8 max-w-md w-full mx-4">
           <div className="text-center mb-6">
-            <Shield className="mx-auto mb-4 text-red-600" size={64} />
+            <Shield className="mx-auto mb-4 text-brand-600" size={48} />
             <h1 className="text-3xl font-bold text-stone-800 mb-2">Admin Panel Access</h1>
             <p className="text-stone-600">Enter password to continue</p>
           </div>
@@ -646,7 +644,7 @@ const AdminPanel: React.FC = () => {
             
             <button
               type="submit"
-              className="w-full px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 text-white rounded-xl font-bold hover:from-orange-700 hover:to-red-700 transition-all shadow-lg"
+              className="w-full px-6 py-3 bg-brand-600 text-white rounded-xl font-semibold hover:bg-brand-700 transition-all"
             >
               Access Admin Panel
             </button>
@@ -664,204 +662,89 @@ const AdminPanel: React.FC = () => {
 
   if (loading) return <PageLoader label="Loading admin panel…" />;
 
+  const tabItems: { id: typeof activeTab; label: string; Icon: React.ElementType; count?: number; superOnly?: boolean }[] = [
+    { id: 'overview', label: 'Overview', Icon: BarChart3 },
+    { id: 'users', label: 'Users', Icon: Users, count: users.length },
+    { id: 'admins', label: 'Admins', Icon: Shield, count: admins.length, superOnly: true },
+    { id: 'content', label: 'Moderation', Icon: Flag },
+    { id: 'feedback', label: 'Feedback', Icon: MessageCircle },
+    { id: 'ekadashi', label: 'Ekadashi', Icon: Moon },
+    { id: 'requests', label: 'Requests', Icon: Send },
+    { id: 'announcements', label: 'Announce', Icon: Bell, superOnly: true },
+    { id: 'system', label: 'System', Icon: Database, superOnly: true },
+    { id: 'settings', label: 'Settings', Icon: Zap },
+  ];
+  const statTiles = stats
+    ? [
+        { label: 'Total users', value: stats.totalUsers, Icon: Users, tone: 'bg-marigold-100 text-brand-700' },
+        { label: 'Active (24h)', value: stats.activeUsers, Icon: Activity, tone: 'bg-emerald-100 text-emerald-700' },
+        { label: 'Chats', value: stats.totalChats, Icon: MessageSquare, tone: 'bg-sky-100 text-sky-700' },
+        { label: 'Questions', value: stats.totalQuestions, Icon: HelpCircle, tone: 'bg-amber-100 text-amber-700' },
+        { label: 'Answers', value: stats.totalAnswers, Icon: BarChart3, tone: 'bg-rose-100 text-rose-700' },
+      ]
+    : [];
+
   return (
-    <div className="min-h-full space-y-4 sm:space-y-6 max-w-7xl mx-auto animate-fadeIn">
+    <div className="mx-auto min-h-full max-w-7xl animate-fadeIn space-y-4">
       {/* Header */}
-      <div className="bg-gradient-to-r from-red-700 via-orange-600 to-red-700 rounded-lg sm:rounded-xl md:rounded-2xl p-4 sm:p-6 shadow-card border-2 border-red-400">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
-          <div>
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-serif font-bold text-white mb-1 sm:mb-2 flex items-center gap-2 sm:gap-3">
-              <Shield className="text-white" size={24} />
-              Admin Control Panel
-            </h1>
-            <p className="text-red-100 text-sm sm:text-base md:text-lg">Welcome, {user?.email}</p>
+      <div className="flex items-center justify-between gap-3 rounded-3xl border border-sandal-200 bg-white p-4 shadow-soft sm:p-5">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-marigold-400 to-brand-500 text-white">
+            <Shield size={22} />
+          </span>
+          <div className="min-w-0">
+            <h1 className="text-lg font-bold leading-tight text-maroon-900 sm:text-xl">Admin dashboard</h1>
+            <p className="truncate text-xs text-maroon-900/55 sm:text-sm">{user?.email}</p>
           </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
           <button
             onClick={loadData}
-            className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-white text-red-700 rounded-lg sm:rounded-xl text-sm sm:text-base font-bold hover:bg-red-50 transition-all shadow-lg whitespace-nowrap"
+            className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
+            style={{ minHeight: 0 }}
           >
-            <RefreshCw size={16} className="sm:w-5 sm:h-5" />
+            <RefreshCw size={16} />
             Refresh
           </button>
         </div>
       </div>
 
-      {/* Statistics Cards */}
+      {/* Statistics */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-6 text-white shadow-lg">
-            <Users size={32} className="mb-2" />
-            <p className="text-3xl font-bold">{stats.totalUsers}</p>
-            <p className="text-blue-100">Total Users</p>
-          </div>
-          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg">
-            <Activity size={32} className="mb-2" />
-            <p className="text-3xl font-bold">{stats.activeUsers}</p>
-            <p className="text-green-100">Active (24h)</p>
-          </div>
-          <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-6 text-white shadow-lg">
-            <MessageSquare size={32} className="mb-2" />
-            <p className="text-3xl font-bold">{stats.totalChats}</p>
-            <p className="text-purple-100">Chats</p>
-          </div>
-          <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl p-6 text-white shadow-lg">
-            <HelpCircle size={32} className="mb-2" />
-            <p className="text-3xl font-bold">{stats.totalQuestions}</p>
-            <p className="text-orange-100">Questions</p>
-          </div>
-          <div className="bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl p-6 text-white shadow-lg">
-            <BarChart3 size={32} className="mb-2" />
-            <p className="text-3xl font-bold">{stats.totalAnswers}</p>
-            <p className="text-pink-100">Answers</p>
-          </div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+          {statTiles.map(({ label, value, Icon, tone }) => (
+            <div key={label} className="rounded-2xl border border-sandal-200 bg-white p-4 shadow-soft">
+              <span className={`mb-2 flex h-9 w-9 items-center justify-center rounded-xl ${tone}`}>
+                <Icon size={18} />
+              </span>
+              <p className="text-2xl font-bold text-maroon-900">{value}</p>
+              <p className="text-xs font-medium text-maroon-900/55">{label}</p>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Admin Actions */}
-      <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
-        <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-          <Shield size={28} className="text-red-600" />
-          Admin Actions
-        </h2>
-        <div className="flex flex-wrap gap-4">
-          <button
-            onClick={handleMigrateProfiles}
-            disabled={migrationStatus === 'running'}
-            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold shadow-lg transition-all ${
-              migrationStatus === 'running'
-                ? 'bg-gray-400 cursor-not-allowed'
-                : migrationStatus === 'success'
-                ? 'bg-green-600 text-white'
-                : 'bg-indigo-600 text-white hover:bg-indigo-700'
-            }`}
-          >
-            <Users size={20} />
-            {migrationStatus === 'running' ? 'Migrating...' : 
-             migrationStatus === 'success' ? '✅ Complete!' : 
-             'Migrate All Profiles'}
-          </button>
-        </div>
-      </div>
-
-      {/* Navigation Tabs */}
-      <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-2">
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setActiveTab('overview')}
-            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-              activeTab === 'overview'
-                ? 'bg-brand-600 text-white shadow-soft'
-                : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
-            }`}
-          >
-            <BarChart3 className="inline mr-2" size={20} />
-            Overview & Analytics
-          </button>
-          <button
-            onClick={() => setActiveTab('users')}
-            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-              activeTab === 'users'
-                ? 'bg-brand-600 text-white shadow-soft'
-                : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
-            }`}
-          >
-            <Users className="inline mr-2" size={20} />
-            Users ({users.length})
-          </button>
-          {isSuperAdmin && (
-            <button
-              onClick={() => setActiveTab('admins')}
-              className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                activeTab === 'admins'
-                  ? 'bg-brand-600 text-white shadow-soft'
-                  : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
-              }`}
-            >
-              <Shield className="inline mr-2" size={20} />
-              Admins ({admins.length})
-            </button>
-          )}
-          <button
-            onClick={() => setActiveTab('content')}
-            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-              activeTab === 'content'
-                ? 'bg-brand-600 text-white shadow-soft'
-                : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
-            }`}
-          >
-            <Flag className="inline mr-2" size={20} />
-            Content Moderation
-          </button>
-          <button
-            onClick={() => setActiveTab('feedback')}
-            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-              activeTab === 'feedback'
-                ? 'bg-gradient-to-r from-pink-600 to-rose-600 text-white shadow-lg'
-                : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
-            }`}
-          >
-            <MessageCircle className="inline mr-2" size={20} />
-            User Feedback
-          </button>
-          <button
-            onClick={() => setActiveTab('ekadashi')}
-            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-              activeTab === 'ekadashi'
-                ? 'bg-gradient-to-r from-brand-500 to-amber-500 text-white shadow-lg'
-                : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
-            }`}
-          >
-            <Moon className="inline mr-2" size={20} />
-            Ekadashi
-          </button>
-          <button
-            onClick={() => setActiveTab('requests')}
-            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-              activeTab === 'requests'
-                ? 'bg-gradient-to-r from-orange-500 to-pink-500 text-white shadow-lg'
-                : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
-            }`}
-          >
-            <Send className="inline mr-2" size={20} />
-            Content Requests
-          </button>
-          {isSuperAdmin && (
-            <button
-              onClick={() => setActiveTab('announcements')}
-              className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                activeTab === 'announcements'
-                  ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-lg'
-                  : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
-              }`}
-            >
-              <Bell className="inline mr-2" size={20} />
-              Announcements
-            </button>
-          )}
-          {isSuperAdmin && (
-            <button
-              onClick={() => setActiveTab('system')}
-              className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-                activeTab === 'system'
-                  ? 'bg-brand-600 text-white shadow-soft'
-                  : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
-              }`}
-            >
-              <Database className="inline mr-2" size={20} />
-              System Health
-            </button>
-          )}
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={`px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${
-              activeTab === 'settings'
-                ? 'bg-brand-600 text-white shadow-soft'
-                : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
-            }`}
-          >
-            <Zap className="inline mr-2" size={20} />
-            App Settings
-          </button>
+      {/* Navigation */}
+      <div className="sticky top-0 z-10 -mx-1 overflow-x-auto bg-sandal-50/90 px-1 py-2 backdrop-blur" style={{ scrollbarWidth: 'none' }}>
+        <div className="flex w-max gap-2">
+          {tabItems
+            .filter((t) => !t.superOnly || isSuperAdmin)
+            .map(({ id, label, Icon, count }) => (
+              <button
+                key={id}
+                onClick={() => setActiveTab(id)}
+                style={{ minHeight: 0 }}
+                className={`flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition ${
+                  activeTab === id ? 'bg-brand-600 text-white shadow-soft' : 'border border-sandal-200 bg-white text-maroon-900/70 hover:bg-sandal-100'
+                }`}
+              >
+                <Icon size={16} />
+                {label}
+                {count !== undefined && (
+                  <span className={`rounded-full px-1.5 text-xs ${activeTab === id ? 'bg-white/25' : 'bg-sandal-100'}`}>{count}</span>
+                )}
+              </button>
+            ))}
         </div>
       </div>
 
@@ -874,7 +757,7 @@ const AdminPanel: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* User Activity Chart */}
             <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
-              <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <h3 className="text-base font-bold text-maroon-900 mb-4 flex items-center gap-2">
                 <TrendingUp className="text-blue-600" size={24} />
                 User Activity (Last 7 Days)
               </h3>
@@ -885,7 +768,7 @@ const AdminPanel: React.FC = () => {
                   <YAxis stroke="#888888" tickLine={true} />
                   <Tooltip />
                   <Legend />
-                  <Line type="monotone" dataKey="active" stroke="#3b82f6" strokeWidth={2} name="Active Users" />
+                  <Line type="monotone" dataKey="active" stroke="#d97706" strokeWidth={2} name="Active Users" />
                   <Line type="monotone" dataKey="new" stroke="#10b981" strokeWidth={2} name="New Users" />
                 </LineChart>
               </ResponsiveContainer>
@@ -893,7 +776,7 @@ const AdminPanel: React.FC = () => {
 
             {/* Center Distribution */}
             <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
-              <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+              <h3 className="text-base font-bold text-maroon-900 mb-4 flex items-center gap-2">
                 <Users className="text-green-600" size={24} />
                 Top ISKCON Centers
               </h3>
@@ -903,7 +786,7 @@ const AdminPanel: React.FC = () => {
                   <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} fontSize={12} stroke="#888888" tickLine={true} />
                   <YAxis stroke="#888888" tickLine={true} />
                   <Tooltip />
-                  <Bar dataKey="value" fill="#10b981" name="Users" />
+                  <Bar dataKey="value" fill="#ee9a1e" radius={[6,6,0,0]} name="Users" />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -911,7 +794,7 @@ const AdminPanel: React.FC = () => {
 
           {/* Engagement Pie Chart */}
           <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
-            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+            <h3 className="text-base font-bold text-maroon-900 mb-4 flex items-center gap-2">
               <Activity className="text-purple-600" size={24} />
               User Engagement Levels
             </h3>
@@ -950,8 +833,8 @@ const AdminPanel: React.FC = () => {
           </div>
 
           {/* Broadcast Announcement */}
-          <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl shadow-soft border-2 border-orange-300 p-6">
-            <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+          <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
+            <h3 className="text-base font-bold text-maroon-900 mb-4 flex items-center gap-2">
               <Bell className="text-orange-600" size={24} />
               Broadcast Announcement to All Users
             </h3>
@@ -1167,30 +1050,6 @@ const AdminPanel: React.FC = () => {
                               
                               <div className="border-t border-stone-200 my-1" />
                               
-                              {/* Gender */}
-                              {(['male', 'female'] as const).map((g) => (
-                                <button
-                                  key={g}
-                                  onClick={async () => {
-                                    setOpenDropdown(null);
-                                    try {
-                                      await setUserGenderAdmin(u.uid, g);
-                                      setUsers((list) => list.map((x) => (x.uid === u.uid ? { ...x, gender: g } : x)));
-                                      alert(`${u.userName} is now set as ${g === 'male' ? 'Male (Prabhuji)' : 'Female (Mataji)'}`);
-                                    } catch (e) {
-                                      console.error(e);
-                                      alert('Could not change the gender. Please try again.');
-                                    }
-                                  }}
-                                  className="w-full px-4 py-2 text-left hover:bg-amber-50 transition-all flex items-center gap-2 text-stone-700 font-semibold"
-                                >
-                                  <Users size={16} />
-                                  Set as {g === 'male' ? 'Male (Prabhuji)' : 'Female (Mataji)'}
-                                  {u.gender === g && <span className="ml-auto text-xs text-emerald-600">current</span>}
-                                </button>
-                              ))}
-                              <div className="border-t border-stone-200 my-1" />
-
                               {/* View Profile */}
                               <button
                                 onClick={() => {

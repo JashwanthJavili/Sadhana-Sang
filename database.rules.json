@@ -7,7 +7,7 @@
     "users": {
       ".read": "auth != null",
       "$userId": {
-        ".write": "auth != null && (auth.uid == $userId || root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
+        ".write": "auth != null && (auth.uid == $userId || (!newData.exists() && (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')))",
         ".read": "auth != null && (auth.uid == $userId || root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
         "email": {
           ".write": "auth != null && auth.uid == $userId",
@@ -55,7 +55,7 @@
         },
         "settings": {
           ".read": "auth != null",
-          ".write": "auth != null && (auth.uid == $userId || root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
+          ".write": "auth != null && auth.uid == $userId",
           ".validate": "newData.hasChildren(['userName', 'guruName', 'iskconCenter', 'themeColor', 'language'])",
           "messagingPrivacy": {
             ".read": "auth != null"

@@ -261,17 +261,6 @@ export const getAllUsersAdmin = async () => {
 };
 
 /**
- * ADMIN ONLY: set a user's gender (used for greetings and their avatar)
- */
-export const setUserGenderAdmin = async (uid: string, gender: 'male' | 'female') => {
-  verifyAdminAccess();
-  await update(ref(database), {
-    [`users/${uid}/gender`]: gender,
-    [`users/${uid}/settings/gender`]: gender,
-  });
-};
-
-/**
  * ADMIN ONLY: Get statistics about the app
  */
 export const getAppStatistics = async () => {

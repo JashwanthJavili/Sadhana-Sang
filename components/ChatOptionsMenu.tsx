@@ -35,19 +35,18 @@ const ChatOptionsMenu: React.FC<ChatOptionsMenuProps> = ({ otherUserName, isOpen
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="Chat options">
-      <div className="absolute inset-0 animate-fadeIn bg-maroon-900/25 backdrop-blur-[2px]" onClick={confirm ? () => setConfirm(null) : onClose} />
+    <div className={`fixed inset-0 z-[120] flex ${confirm ? 'items-center justify-center' : 'items-start justify-end'}`} role="dialog" aria-modal="true" aria-label="Chat options">
+      <div className="absolute inset-0 animate-fadeIn bg-maroon-900/20" onClick={confirm ? () => setConfirm(null) : onClose} />
 
       {!confirm ? (
         <div
-          style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
-          className="relative w-full animate-rise-in rounded-t-[28px] bg-white p-4 sm:max-w-sm sm:rounded-[28px] sm:p-5"
+          style={{ marginTop: 'calc(env(safe-area-inset-top) + 3.75rem)' }}
+          className="relative mx-3 w-[calc(100%-1.5rem)] max-w-xs animate-scale-in rounded-2xl border border-sandal-200 bg-white p-2 shadow-xl"
         >
-          <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-sandal-300 sm:hidden" />
-          <div className="mb-2 flex items-center justify-between px-1">
-            <h3 className="text-base font-semibold text-maroon-900">Chat options</h3>
-            <button onClick={onClose} className="icon-btn" aria-label="Close">
-              <X size={18} />
+          <div className="mb-1 flex items-center justify-between px-2 pt-1">
+            <h3 className="text-sm font-semibold text-maroon-900">Chat options</h3>
+            <button onClick={onClose} className="icon-btn" aria-label="Close" style={{ minHeight: 0 }}>
+              <X size={16} />
             </button>
           </div>
           <ul>

@@ -339,12 +339,12 @@ const Community: React.FC = () => {
               role="tab"
               aria-selected={view === t.id}
               onClick={() => setView(t.id)}
-              className={`flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-sm font-semibold transition sm:px-4 ${
+              className={`flex h-9 min-w-0 items-center justify-center gap-1.5 rounded-xl px-1.5 text-[13px] font-semibold transition sm:px-4 sm:text-sm ${
                 view === t.id ? 'bg-white text-maroon-900 shadow-soft' : 'text-maroon-900/55 hover:text-maroon-900'
               }`}
               style={{ minHeight: 0 }}
             >
-              <span className="truncate">{t.label}</span>
+              <span className="whitespace-nowrap">{t.label}</span>
               <span className={`text-xs font-medium ${view === t.id ? 'text-brand-600' : 'text-maroon-900/40'}`}>{t.count}</span>
             </button>
           ))}
