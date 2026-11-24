@@ -287,9 +287,9 @@ const SlokasLibrary: React.FC = () => {
     <div className="mx-auto max-w-3xl space-y-5 pb-4">
       {/* Actions — the page title is already in the top bar */}
       <div className="flex items-center justify-end gap-2">
-        {signedIn && (
+        {signedIn && !userIsAdmin && (
           <button onClick={() => setShowRequest(true)} className="btn-secondary btn-sm">
-            <Lightbulb size={15} /> Suggest
+            <Plus size={15} /> Add a mantra
           </button>
         )}
         {userIsAdmin && (
@@ -346,7 +346,6 @@ const SlokasLibrary: React.FC = () => {
                     style={{ minHeight: 0 }}
                   >
                     <span className="min-w-0 flex-1">
-                      {s.category && <span className="block text-[10.5px] font-semibold uppercase tracking-wider text-brand-600/80">{s.category}</span>}
                       <span className="block text-[15px] font-semibold leading-snug text-maroon-900">{s.title}</span>
                       {!isOpen && <span className="block truncate text-xs text-maroon-900/45">{s.mantra.split('\n')[0]}</span>}
                     </span>
@@ -360,17 +359,11 @@ const SlokasLibrary: React.FC = () => {
                 <div className="min-h-0 overflow-hidden">
                 {/* The mantra */}
                 <div className="px-3 pt-1 sm:px-5">
-                  <div className="mb-2 flex justify-end">
-                    <LangPicker
-                      value={v.lang}
-                      options={langOptions}
-                      onChange={(l) => setLangs((x) => ({ ...x, [s.id]: l }))}
-                      onRequest={() => (signedIn ? setRequestLang(true) : alert('Please sign in to request a language.'))}
-                    />
-                  </div>
                   {v.missing ? (
-                    <div className="flex items-center justify-between gap-3 rounded-2xl bg-sandal-50 px-4 py-3 ring-1 ring-sandal-200">
-                      <p className="text-sm text-maroon-900/60">No {langName} version yet</p>
+                    <div className="flex flex-col items-start gap-3 rounded-2xl bg-sandal-50 px-4 py-4 ring-1 ring-sandal-200 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-sm leading-relaxed text-maroon-900/65">
+                        The {langName} version is not here yet. If you know it, please add it. It will help other devotees too.
+                      </p>
                       <button
                         onClick={() => (signedIn ? setTranslateFor({ sloka: s, lang: v.lang, langName }) : alert('Please sign in to add a version.'))}
                         className="btn-primary btn-sm shrink-0"
@@ -380,19 +373,30 @@ const SlokasLibrary: React.FC = () => {
                     </div>
                   ) : (
                     <div key={v.lang} className="animate-fadeIn rounded-2xl bg-gradient-to-b from-amber-50 to-orange-50/40 px-3 py-4 text-center font-medium text-maroon-900 ring-1 ring-amber-100 sm:px-6">
-                      <MantraText text={v.mantra} lines={s.lines} />
+                      <MantraText text={v.mantra} lines={v.lang === 'en' ? s.lines : 0} />
                     </div>
                   )}
                 </div>
 
-                {/* Who added this version */}
-                {!v.missing && v.by && (
-                  <p className="flex items-center gap-1.5 px-4 pt-2.5 text-xs text-maroon-900/50 sm:px-5">
-                    <UserRound size={13} className="text-brand-500/70" />
-                    {v.lang === 'en' ? 'Added by' : `${langName} version by`}
-                    <span className="font-semibold text-maroon-900/70">{v.by}</span>
+                {/* Under the mantra: who added it (left) and the language (right) */}
+                <div className="flex items-center justify-between gap-3 px-4 pt-2.5 sm:px-5">
+                  <p className="flex min-w-0 items-center gap-1.5 text-xs text-maroon-900/50">
+                    {!v.missing && v.by && (
+                      <>
+                        <UserRound size={13} className="shrink-0 text-brand-500/70" />
+                        <span className="truncate">
+                          {v.lang === 'en' ? 'Added by' : `${langName} version by`} <span className="font-semibold text-maroon-900/70">{v.by}</span>
+                        </span>
+                      </>
+                    )}
                   </p>
-                )}
+                  <LangPicker
+                    value={v.lang}
+                    options={langOptions}
+                    onChange={(l) => setLangs((x) => ({ ...x, [s.id]: l }))}
+                    onRequest={() => (signedIn ? setRequestLang(true) : alert('Please sign in to request a language.'))}
+                  />
+                </div>
 
                 {/* Meaning */}
                 {!v.missing && v.meaning && (
@@ -484,7 +488,7 @@ const SlokasLibrary: React.FC = () => {
       {/* My suggestions */}
       {requests.length > 0 && (
         <section className="rounded-3xl bg-white p-4 shadow-soft ring-1 ring-sandal-200 sm:p-5">
-          <h3 className="text-sm font-semibold text-maroon-900">Your suggestions</h3>
+          <h3 className="text-sm font-semibold text-maroon-900">Your requests</h3>
           <p className="mb-3 text-xs text-maroon-900/50">Mantras and versions you sent for review.</p>
           <ul className="divide-y divide-sandal-200/70">
             {requests.map((r) => (

@@ -347,6 +347,7 @@ export const reviewSlokaRequest = async (
           mantra: request.sanskrit,
           meaning: request.translation || '',
           category: request.category || '',
+          lines: 0, // keep the lines and gaps exactly as the devotee typed them
           addedBy: request.requesterId,
           addedByName: request.requesterName,
           timestamp: Date.now(),

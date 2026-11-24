@@ -24,7 +24,7 @@ const getInitials = (name?: string | null) =>
 
 /** Devotee avatar — a friendly illustration by gender (initials if gender is unknown). */
 const Avatar: React.FC<AvatarProps> = ({ name, gender, className = 'h-10 w-10', textClassName = 'text-sm' }) => {
-  if (gender === 'male' || gender === 'female') {
+  if (name !== undefined || gender) {
     return (
       <img
         src={gender === 'female' ? femaleAvatar : maleAvatar}

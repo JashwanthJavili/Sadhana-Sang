@@ -4,7 +4,7 @@ import { UserProfile, ConnectionStatus } from '../types/chat';
 import { getAllUsers, searchUsers, createOrGetChat } from '../services/chat';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserData } from '../contexts/UserDataContext';
-import { Users, Search, MessageCircle, X, UserPlus, UserMinus, Check, HelpCircle, MapPin, BookOpen, ChevronDown } from 'lucide-react';
+import { Users, Search, MessageCircle, X, UserPlus, UserCheck, UserMinus, Check, HelpCircle, MapPin, BookOpen, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import UserProfileModal from '../components/UserProfileModal';
 import Avatar from '../components/Avatar';
@@ -356,7 +356,7 @@ const Community: React.FC = () => {
           className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-brand-600 shadow-soft ring-1 ring-sandal-200 transition hover:bg-amber-50"
           style={{ minHeight: 0 }}
         >
-          <UserPlus size={18} />
+          <UserCheck size={18} />
           {pendingRequestCount > 0 && (
             <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-600 px-1.5 text-[11px] font-bold text-white ring-2 ring-white">
               {pendingRequestCount}

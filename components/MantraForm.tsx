@@ -48,7 +48,7 @@ interface Props {
 }
 
 const TEXT = {
-  suggest: { title: 'Suggest a mantra', sub: 'The team checks it, then it is added for everyone.', button: 'Send for review', icon: Send },
+  suggest: { title: 'Add a mantra', sub: 'The team checks it, then it is added for everyone.', button: 'Send for review', icon: Send },
   admin: { title: 'Add a mantra', sub: 'It shows in the library straight away.', button: 'Add mantra', icon: Check },
   edit: { title: 'Edit mantra', sub: 'Changes show for everyone straight away.', button: 'Save changes', icon: Check },
 };

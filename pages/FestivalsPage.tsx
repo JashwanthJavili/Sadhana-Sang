@@ -221,7 +221,7 @@ const FestivalsPage: React.FC = () => {
             <div className="flex gap-2">
               {user && user.uid !== 'guest' && (
                 <button onClick={() => setShowRequestModal(true)} className="btn-secondary btn-sm">
-                  <Plus size={15} /> Suggest
+                  <Plus size={15} /> Add festival
                 </button>
               )}
               {userIsAdmin && (
@@ -274,7 +274,7 @@ const FestivalsPage: React.FC = () => {
           {/* My suggestions */}
           {userRequests.length > 0 && (
             <section className="rounded-3xl bg-white p-4 ring-1 ring-sandal-200 sm:p-5">
-              <h3 className="mb-3 text-sm font-semibold text-maroon-900">Your suggestions</h3>
+              <h3 className="mb-3 text-sm font-semibold text-maroon-900">Your requests</h3>
               <ul className="space-y-2">
                 {userRequests.map((r) => (
                   <li key={r.id} className="rounded-2xl bg-sandal-50 p-3">

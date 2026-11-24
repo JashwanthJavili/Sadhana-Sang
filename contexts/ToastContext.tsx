@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { CheckCircle, XCircle, AlertTriangle, Info, X } from 'lucide-react';
 
 interface Toast {
@@ -40,6 +40,19 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Auto remove after 5 seconds
     setTimeout(() => removeToast(id), 5000);
   }, [removeToast]);
+
+  // Notices that used the browser's alert() appear as in-app toasts instead
+  useEffect(() => {
+    const original = window.alert;
+    window.alert = (message?: unknown) => {
+      const text = String(message ?? '').trim();
+      const first = text.split(/\r?\n/)[0];
+      showToast({ type: /fail|error|could not|unable|invalid|denied/i.test(text) ? 'error' : 'info', title: first.slice(0, 120), message: text.slice(first.length).trim() || undefined });
+    };
+    return () => {
+      window.alert = original;
+    };
+  }, [showToast]);
 
   const showSuccess = useCallback((title: string, message?: string) => {
     showToast({ type: 'success', title, message });

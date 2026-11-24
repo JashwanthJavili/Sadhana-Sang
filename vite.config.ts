@@ -30,6 +30,8 @@ export default defineConfig(({ mode }) => {
           '@': path.resolve(__dirname, '.'),
         }
       },
+      // No debug output in the shipped app
+      esbuild: mode === 'production' ? { drop: ['console', 'debugger'] } : {},
       build: {
         // Cache busting - add hash to filenames
         rollupOptions: {

@@ -8,14 +8,14 @@ interface SlokaRequestFormProps {
   onClose: () => void;
 }
 
-/** "Suggest a mantra" for devotees — goes to the admins for review. */
+/** "Add a mantra" for devotees — goes to the admins for review. */
 export default function SlokaRequestForm({ onClose }: SlokaRequestFormProps) {
   const { user } = useAuth();
   const { showError, showSuccess } = useToast();
 
   const send = async (v: MantraFormValues) => {
     if (!user || user.uid === 'guest') {
-      showError('Please sign in to suggest a mantra');
+      showError('Please sign in to add a mantra');
       throw new Error('not signed in');
     }
     await submitSlokaRequest({

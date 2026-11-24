@@ -84,12 +84,17 @@ export const knownTranslation = (english: string, lang: 'hi' | 'te'): string | n
   return out && out !== key ? out : null;
 };
 
-/** Lines as the writer typed them (empty lines dropped) */
-export const typedLines = (raw: string) =>
-  raw
-    .split(/\r?\n/)
-    .map((l) => l.replace(/\s+/g, ' ').trim())
-    .filter(Boolean);
+/** Lines as the writer typed them. A blank line is kept (once) as a gap between verses. */
+export const typedLines = (raw: string) => {
+  const out: string[] = [];
+  raw.split(/\r?\n/).forEach((l) => {
+    const line = l.replace(/[ \t]+/g, ' ').trim();
+    if (line) out.push(line);
+    else if (out.length && out[out.length - 1] !== '') out.push('');
+  });
+  while (out.length && out[out.length - 1] === '') out.pop();
+  return out;
+};
 
 /** Line choices an admin can set for a mantra. 0 = keep the lines as typed. */
 export const LINE_CHOICES: { value: number | undefined; label: string }[] = [

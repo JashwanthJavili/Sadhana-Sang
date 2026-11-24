@@ -83,8 +83,8 @@ const MantraText: React.FC<Props> = ({ text, lines: wanted, className = '' }) =>
   return (
     <div ref={box} className={`scrollbar-none w-full overflow-x-auto ${className}`}>
       {lines.map((l, i) => (
-        <div key={i} className="whitespace-nowrap" style={{ fontFamily: FONT_STACK, fontSize: size, lineHeight: 1.85 }}>
-          {l}
+        <div key={i} className="whitespace-nowrap" style={{ fontFamily: FONT_STACK, fontSize: size, lineHeight: l ? 1.85 : 0.9 }}>
+          {l || '\u00a0'}
         </div>
       ))}
     </div>

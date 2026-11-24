@@ -336,146 +336,77 @@ const Dashboard: React.FC = () => {
           </div>
         </section>
 
-        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-50 via-white to-orange-50 p-6 text-maroon-900 shadow-[0_1px_2px_rgba(67,27,17,0.04),0_8px_24px_-12px_rgba(67,27,17,0.12)] ring-1 ring-amber-200/70 sm:p-7">
-          <div className="pointer-events-none absolute -right-14 -top-14 h-48 w-48 rounded-full bg-marigold-400/20 blur-2xl" />
-          <div className="relative flex items-center justify-between">
+        <section className="flex flex-col justify-between rounded-3xl bg-gradient-to-br from-amber-50 via-white to-orange-50 p-5 text-maroon-900 shadow-soft ring-1 ring-amber-200/70 sm:p-6">
+          <div>
             <h2 className="flex items-center gap-2 text-[15px] font-semibold text-maroon-900">
               <span className="text-brand-600"><MalaIcon size={18} /></span> Today's japa
             </h2>
-            {goal > 0 && (
-              <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-brand-700">
-                {roundsToday >= goal ? 'Goal reached' : `${remaining} to go`}
-              </span>
+            <p className="mt-4 text-5xl font-semibold leading-none tabular-nums">
+              {roundsToday}
+              <span className="ml-2 text-base font-medium text-maroon-900/50">round{roundsToday === 1 ? '' : 's'}</span>
+            </p>
+            {goal > 0 ? (
+              <>
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-amber-100">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-marigold-400 to-brand-500 transition-all duration-700"
+                    style={{ width: `${Math.min((roundsToday / goal) * 100, 100)}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-maroon-900/55">
+                  {roundsToday >= goal ? `Goal of ${goal} reached` : `${remaining} more to reach your goal of ${goal}`}
+                </p>
+              </>
+            ) : (
+              roundsToday > 0 && <p className="mt-3 text-xs text-maroon-900/50">{(roundsToday * 108).toLocaleString('en-IN')} holy names</p>
             )}
           </div>
-          <div className="relative mt-5 flex items-center gap-5">
-            <Ring value={roundsToday} max={goal || Math.max(roundsToday, 1)} hasGoal={goal > 0} />
-            <div className="min-w-0">
-              <p className="text-sm text-maroon-900/60">{goal ? `Your goal: ${goal} rounds` : 'Chanted today'}</p>
-              <p className="text-2xl font-semibold leading-tight">
-                {roundsToday} round{roundsToday === 1 ? '' : 's'}
-              </p>
-              {roundsToday > 0 && <p className="mt-1 text-xs text-maroon-900/45">{(roundsToday * 108).toLocaleString('en-IN')} holy names</p>}
-            </div>
-          </div>
-          <button
-            onClick={() => navigate('/chanting')}
-            className="btn-primary relative mt-6 w-full rounded-2xl py-3"
-          >
+          <button onClick={() => navigate('/chanting')} className="btn-primary mt-5 w-full rounded-2xl py-3">
             {roundsToday > 0 ? 'Continue chanting' : 'Start chanting'} <ArrowRight size={16} />
           </button>
         </section>
       </div>
 
-      {/* ===================== Consistency + Upcoming ===================== */}
-      <div className="grid gap-5 sm:gap-6 md:grid-cols-2">
-        <Card className="flex flex-col">
-          <CardTitle icon={<Trophy size={17} />} title="Consistency" />
-          <div className="flex items-end gap-6">
-            <div>
-              <p className="text-4xl font-semibold leading-none text-maroon-900">
-                {streak}
-                <span className="ml-1.5 text-base font-medium text-maroon-900/45">{streak === 1 ? 'day' : 'days'}</span>
-              </p>
-              <p className="mt-1.5 text-xs text-maroon-900/50">Current streak</p>
-            </div>
-            <div className="pb-0.5">
-              <p className="text-lg font-semibold leading-none text-maroon-900/80">{bestStreak}</p>
-              <p className="mt-1.5 text-xs text-maroon-900/50">Best</p>
-            </div>
+      {/* ===================== Upcoming ===================== */}
+      <Card>
+        <CardTitle icon={<CalendarDays size={17} />} title="Upcoming" action={<TextLink to="/festivals">Calendar</TextLink>} />
+        {ekadashi.loading && (isGuest || festivals === null) ? (
+          <div className="space-y-2">
+            <div className="skeleton h-14 rounded-2xl" />
+            <div className="skeleton h-14 rounded-2xl" />
           </div>
-
-          <div className="mt-5 flex flex-1 flex-col justify-end">
-            <div className="mb-2 flex items-baseline justify-between">
-              <p className="text-xs font-semibold uppercase tracking-[0.1em] text-maroon-900/40">This week</p>
-              <p className="text-xs text-maroon-900/50">{weekTotal} rounds</p>
-            </div>
-            <div className="relative flex h-20 items-end gap-2">
-              {goal > 0 && (
-                <div
-                  className="pointer-events-none absolute inset-x-0 border-t border-dashed border-brand-300"
-                  style={{ bottom: `${(goal / weekMax) * 100}%` }}
-                />
-              )}
-              {week.map((d) => (
-                <div key={d.key} className="flex h-full flex-1 flex-col items-center justify-end" title={`${d.rounds} rounds`}>
-                  <div
-                    className={`w-full max-w-[26px] rounded-lg transition-all duration-700 ${
-                      d.rounds > 0 && d.rounds >= (goal || 1)
-                        ? 'bg-gradient-to-t from-brand-600 to-marigold-400'
-                        : d.rounds > 0
-                          ? 'bg-marigold-400/60'
-                          : 'bg-sandal-200'
-                    }`}
-                    style={{ height: `${Math.max((d.rounds / weekMax) * 100, 5)}%` }}
-                  />
-                </div>
-              ))}
-            </div>
-            <div className="mt-1.5 flex gap-2">
-              {week.map((d) => (
-                <span key={d.key} className={`flex-1 text-center text-[11px] font-medium ${d.isToday ? 'text-brand-700' : 'text-maroon-900/40'}`}>
-                  {d.label}
-                </span>
-              ))}
-            </div>
-          </div>
-        </Card>
-
-        <Card>
-          <CardTitle icon={<CalendarDays size={17} />} title="Upcoming" action={<TextLink to="/festivals">Calendar</TextLink>} />
-          {ekadashi.loading && (isGuest || festivals === null) ? (
-            <div className="space-y-3">
-              <div className="skeleton h-[72px] rounded-2xl" />
-              <div className="skeleton h-10 rounded-xl" />
-              <div className="skeleton h-10 rounded-xl" />
-            </div>
-          ) : !nextEkadasi && nextFestivals.length === 0 ? (
-            <EmptyHint icon={<Moon size={18} />} text="No upcoming dates added yet." />
-          ) : (
-            <div className="space-y-3">
-              {nextEkadasi && (
-                <Link
-                  to={nextEkadasi.to}
-                  className="flex items-center gap-3 rounded-2xl bg-gradient-to-br from-sky-50 to-indigo-50 p-3.5 ring-1 ring-indigo-100 transition hover:ring-indigo-200"
-                  style={{ minHeight: 0 }}
-                >
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-indigo-600 shadow-sm">
-                    <Moon size={19} />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[11px] font-semibold uppercase tracking-[0.08em] text-indigo-600/80">Next Ekadasi</span>
-                    <span className="block truncate text-sm font-semibold text-maroon-900">{nextEkadasi.name}</span>
-                    <span className="block text-xs text-maroon-900/50">{formatDate(nextEkadasi.date)}</span>
-                  </span>
-                  <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-indigo-700 shadow-sm">
-                    {formatCountdown(nextEkadasi.date)}
-                  </span>
-                </Link>
-              )}
-              <ul className="space-y-1">
-                {nextFestivals.map((f) => (
-                  <li key={f.id}>
-                    <Link to={`/festival/${f.id}`} className="flex items-center gap-3 rounded-xl px-1 py-2 transition hover:bg-sandal-100/60" style={{ minHeight: 0 }}>
-                      <span className="flex w-11 shrink-0 flex-col items-center rounded-lg bg-sandal-100 py-1 leading-none">
-                        <span className="text-[10px] font-semibold uppercase text-brand-700">
-                          {parseDateKey(f.date).toLocaleDateString('en-IN', { month: 'short' })}
-                        </span>
-                        <span className="mt-0.5 text-base font-semibold text-maroon-900">{parseDateKey(f.date).getDate()}</span>
+        ) : !nextEkadasi && nextFestivals.length === 0 ? (
+          <EmptyHint icon={<Moon size={18} />} text="No upcoming dates added yet." />
+        ) : (
+          <ul className="divide-y divide-sandal-200/70">
+            {[
+              ...(nextEkadasi ? [{ id: 'ek', name: nextEkadasi.name, date: nextEkadasi.date, to: nextEkadasi.to, tag: 'Ekadashi' }] : []),
+              ...nextFestivals.map((f) => ({ id: f.id, name: f.name, date: f.date, to: `/festival/${f.id}`, tag: '' })),
+            ]
+              .sort((x, y) => x.date.localeCompare(y.date))
+              .map((it) => (
+                <li key={it.id}>
+                  <Link to={it.to} className="flex items-center gap-3.5 py-3 transition hover:bg-sandal-50/70" style={{ minHeight: 0 }}>
+                    <span className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-2xl bg-amber-50 leading-none ring-1 ring-amber-100">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-brand-700">
+                        {parseDateKey(it.date).toLocaleDateString('en-IN', { month: 'short' })}
                       </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium text-maroon-900">{f.name}</span>
-                        <span className="block text-xs text-maroon-900/45">{formatCountdown(f.date)}</span>
+                      <span className="mt-0.5 text-lg font-semibold text-maroon-900">{parseDateKey(it.date).getDate()}</span>
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[15px] font-medium text-maroon-900">{it.name}</span>
+                      <span className="block text-xs text-maroon-900/50">
+                        {formatDate(it.date)}
+                        {it.tag && <span className="ml-1.5 rounded-full bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">{it.tag}</span>}
                       </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </Card>
-
-      </div>
+                    </span>
+                    <span className="shrink-0 text-xs font-semibold text-brand-700">{formatCountdown(it.date)}</span>
+                  </Link>
+                </li>
+              ))}
+          </ul>
+        )}
+      </Card>
     </div>
   );
 };

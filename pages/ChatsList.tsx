@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { Chat } from '../types/chat';
 import { getUserChats } from '../services/chat';
-import { MessageCircle, Search, UserPlus, Lock, X } from 'lucide-react';
+import { MessageCircle, Search, UserPlus, Lock, X, Users } from 'lucide-react';
 import Avatar from '../components/Avatar';
 import CollapsibleSearch from '../components/CollapsibleSearch';
 import { PageLoader } from '../components/LoadingScreen';
@@ -99,7 +99,7 @@ const ChatsList: React.FC = () => {
           title="Find devotees"
           style={{ minHeight: 0 }}
         >
-          <UserPlus size={18} />
+          <Users size={18} />
         </button>
       </div>
 

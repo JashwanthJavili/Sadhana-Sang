@@ -201,6 +201,7 @@ const Toggle: React.FC<{ checked: boolean; onChange: (v: boolean) => void; label
     aria-checked={checked}
     aria-label={label}
     onClick={() => onChange(!checked)}
+    style={{ minHeight: 0 }}
     className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 ${
       checked ? 'bg-brand-600' : 'bg-stone-300'
     }`}

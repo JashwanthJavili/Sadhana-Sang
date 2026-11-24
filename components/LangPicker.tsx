@@ -20,14 +20,17 @@ interface Props {
  * clipped by (or drawn behind) the mantra card it belongs to.
  */
 const LangPicker: React.FC<Props> = ({ value, options, onChange, onRequest }) => {
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; right: number } | null>(null);
   const btn = useRef<HTMLButtonElement>(null);
 
   const close = () => setPos(null);
   const toggle = () => {
     if (pos) return close();
     const r = btn.current?.getBoundingClientRect();
-    if (r) setPos({ top: r.bottom + 6, right: Math.max(window.innerWidth - r.right, 8) });
+    if (!r) return;
+    const right = Math.max(window.innerWidth - r.right, 8);
+    // open upwards when there is not enough room below
+    setPos(window.innerHeight - r.bottom < 260 ? { bottom: window.innerHeight - r.top + 6, right } : { top: r.bottom + 6, right });
   };
 
   useEffect(() => {
@@ -76,7 +79,7 @@ const LangPicker: React.FC<Props> = ({ value, options, onChange, onRequest }) =>
             data-lang-menu
             role="listbox"
             aria-label="Choose language"
-            style={{ top: pos.top, right: pos.right }}
+            style={{ top: pos.top, bottom: pos.bottom, right: pos.right }}
             className="fixed z-[110] max-h-[60vh] min-w-[10rem] animate-scale-in overflow-y-auto rounded-2xl bg-white p-1.5 shadow-lift ring-1 ring-sandal-200"
           >
             {options.map((l) => {
