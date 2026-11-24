@@ -90,15 +90,14 @@ const LangPicker: React.FC<{ value: Lang; onChange: (l: Lang) => void }> = ({ va
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={`Language: ${current.name}`}
-        className={`flex items-center gap-1.5 rounded-full py-1.5 pl-2.5 pr-2 text-[13px] font-semibold ring-1 transition ${open ? 'bg-amber-50 text-brand-700 ring-amber-300' : 'bg-white text-maroon-800 ring-sandal-200 hover:bg-sandal-50'}`}
+        className={`flex items-center gap-1 rounded-full py-1 pl-2.5 pr-1.5 text-xs font-semibold ring-1 transition ${open ? 'bg-amber-50 text-brand-700 ring-amber-300' : 'bg-white text-maroon-800 ring-sandal-200 hover:bg-sandal-50'}`}
         style={{ minHeight: 0 }}
       >
-        <Languages size={14} className="text-brand-500" />
         {current.label}
-        <ChevronDown size={14} className={`text-maroon-900/40 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown size={13} className={`text-maroon-900/40 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <ul role="listbox" aria-label="Choose language" className="absolute right-0 top-full z-30 mt-1.5 w-48 animate-scale-in overflow-hidden rounded-2xl bg-white p-1.5 shadow-lift ring-1 ring-sandal-200">
+        <ul role="listbox" aria-label="Choose language" className="absolute right-0 top-full z-30 mt-1.5 w-40 animate-scale-in overflow-hidden rounded-2xl bg-white p-1.5 shadow-lift ring-1 ring-sandal-200">
           {LANG_OPTIONS.map((l) => {
             const on = l.code === value;
             return (
@@ -111,7 +110,7 @@ const LangPicker: React.FC<{ value: Lang; onChange: (l: Lang) => void }> = ({ va
                     onChange(l.code);
                     setOpen(false);
                   }}
-                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left transition ${on ? 'bg-amber-50' : 'hover:bg-sandal-50'}`}
+                  className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left transition ${on ? 'bg-amber-50' : 'hover:bg-sandal-50'}`}
                   style={{ minHeight: 0 }}
                 >
                   <span className="min-w-0 flex-1">
@@ -410,20 +409,12 @@ const SlokasLibrary: React.FC = () => {
                     className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl px-2 py-1.5 text-left"
                     style={{ minHeight: 0 }}
                   >
-                    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 transition-colors ${isOpen ? 'bg-amber-100 text-brand-600 ring-amber-200' : 'bg-amber-50 text-brand-500 ring-amber-100'}`}>
-                      <BookHeart size={18} />
-                    </span>
                     <span className="min-w-0 flex-1">
                       {s.category && <span className="block text-[10.5px] font-semibold uppercase tracking-wider text-brand-600/80">{s.category}</span>}
-                      <span className="block truncate text-[15px] font-semibold leading-snug text-maroon-900">{s.title}</span>
+                      <span className="block text-[15px] font-semibold leading-snug text-maroon-900">{s.title}</span>
                       {!isOpen && <span className="block truncate text-xs text-maroon-900/45">{s.mantra.split('\n')[0]}</span>}
                     </span>
                   </button>
-                  {isOpen && (
-                    <div className="animate-fadeIn">
-                      <LangPicker value={v.lang} onChange={(l) => setLangs((x) => ({ ...x, [s.id]: l }))} />
-                    </div>
-                  )}
                   <button onClick={toggle} className="icon-btn shrink-0" aria-label={isOpen ? 'Collapse' : 'Expand'}>
                     <ChevronDown size={18} className={`text-maroon-900/45 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`} />
                   </button>
@@ -433,6 +424,9 @@ const SlokasLibrary: React.FC = () => {
                 <div className="min-h-0 overflow-hidden">
                 {/* The mantra */}
                 <div className="px-3 pt-1 sm:px-5">
+                  <div className="mb-2 flex justify-end">
+                    <LangPicker value={v.lang} onChange={(l) => setLangs((x) => ({ ...x, [s.id]: l }))} />
+                  </div>
                   {v.missing ? (
                     <div className="flex items-center justify-between gap-3 rounded-2xl bg-sandal-50 px-4 py-3 ring-1 ring-sandal-200">
                       <p className="text-sm text-maroon-900/60">No {langName} version yet</p>

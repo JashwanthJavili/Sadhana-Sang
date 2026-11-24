@@ -40,7 +40,7 @@ export const updateUserProfile = async (uid: string, updates: Partial<UserProfil
 // (entries, chantingSessions, feedbacks…). Fetch only the fields we need
 // instead of downloading the whole user node.
 const PROFILE_FIELDS = [
-  'uid', 'userName', 'guruName', 'iskconCenter', 'photoURL', 'isOnline', 'lastSeen', 'bio',
+  'uid', 'userName', 'guruName', 'iskconCenter', 'photoURL', 'gender', 'isOnline', 'lastSeen', 'bio',
   'joinedDate', 'createdAt', 'email', 'showGuruName', 'showIskconCenter', 'showLastSeen',
   'showEmail', 'messagingPrivacy', 'connections', 'connectionCount',
 ] as const;
@@ -86,6 +86,7 @@ export const getAllUsers = (callback: (users: UserProfile[]) => void) => {
           guruName: data.guruName || 'Not Specified',
           iskconCenter: data.iskconCenter || 'Not Specified',
           photoURL: data.photoURL,
+          gender: data.gender,
           bio: data.bio,
           isOnline: data.isOnline || false,
           lastSeen: data.lastSeen || Date.now(),
@@ -199,12 +200,14 @@ export const createOrGetChat = async (currentUserId: string, otherUserId: string
         [currentUserId]: {
           userName: currentUser.userName,
           photoURL: currentUser.photoURL,
+          gender: currentUser.gender ?? null,
           guruName: currentUser.guruName,
           iskconCenter: currentUser.iskconCenter,
         },
         [otherUserId]: {
           userName: otherUser.userName,
           photoURL: otherUser.photoURL,
+          gender: otherUser.gender ?? null,
           guruName: otherUser.guruName,
           iskconCenter: otherUser.iskconCenter,
         },
@@ -444,6 +447,7 @@ export const searchUsers = async (
         guruName: data.guruName,
         iskconCenter: data.iskconCenter,
         photoURL: data.photoURL,
+        gender: data.gender,
         bio: data.bio,
         isOnline: data.isOnline,
         lastSeen: data.lastSeen,

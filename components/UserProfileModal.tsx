@@ -10,6 +10,8 @@ interface UserProfileModalProps {
   onClose: () => void;
   onStartChat?: (userId: string) => void;
   showChatButton?: boolean;
+  /** Online / last-seen is only for devotees who are connected */
+  showStatus?: boolean;
 }
 
 const known = (v?: string) => (v && v.toLowerCase() !== 'n/a' && v !== 'Not Specified' ? v : '');
@@ -22,7 +24,7 @@ const timeAgo = (ts: number) => {
   return `${Math.floor(s / 86400)} days ago`;
 };
 
-const UserProfileModal: React.FC<UserProfileModalProps> = ({ profile, isOpen, onClose, onStartChat, showChatButton = true }) => {
+const UserProfileModal: React.FC<UserProfileModalProps> = ({ profile, isOpen, onClose, onStartChat, showChatButton = true, showStatus = true }) => {
   if (!isOpen || !profile) return null;
 
   const showGuru = profile.showGuruName !== false;
@@ -49,12 +51,14 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({ profile, isOpen, on
         <div className="bg-gradient-to-b from-amber-100 via-orange-50 to-white px-6 pb-4 pt-8 text-center">
           <div className="relative mx-auto h-24 w-24">
             <span className="block h-24 w-24 overflow-hidden rounded-full ring-4 ring-white shadow-card">
-              <Avatar src={profile.photoURL} name={profile.userName} className="h-full w-full" />
+              <Avatar gender={profile.gender} name={profile.userName} className="h-full w-full" />
             </span>
-            <span className={`absolute bottom-1 right-1 h-5 w-5 rounded-full ring-4 ring-white ${profile.isOnline ? 'bg-emerald-500' : 'bg-stone-300'}`} />
+            {showStatus && profile.showLastSeen !== false && (
+              <span className={`absolute bottom-1 right-1 h-5 w-5 rounded-full ring-4 ring-white ${profile.isOnline ? 'bg-emerald-500' : 'bg-stone-300'}`} />
+            )}
           </div>
           <h3 className="mt-3 text-xl font-semibold text-maroon-900">{profile.userName || 'Devotee'}</h3>
-          {profile.showLastSeen !== false && (
+          {showStatus && profile.showLastSeen !== false && (
             <p className={`mt-0.5 text-sm font-medium ${profile.isOnline ? 'text-emerald-600' : 'text-maroon-900/45'}`}>
               {profile.isOnline ? 'Online now' : `Last seen ${timeAgo(profile.lastSeen)}`}
             </p>

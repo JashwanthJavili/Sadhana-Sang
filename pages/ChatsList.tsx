@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { Chat } from '../types/chat';
 import { getUserChats } from '../services/chat';
 import { MessageCircle, Search, UserPlus, Lock, X } from 'lucide-react';
-import SelectField from '../components/SelectField';
 import Avatar from '../components/Avatar';
 import { PageLoader } from '../components/LoadingScreen';
 import { isEncrypted } from '../services/encryption';
@@ -37,7 +36,6 @@ const ChatsList: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
   const [unreadOnly, setUnreadOnly] = useState(false);
-  const [filters, setFilters] = useState({ iskconCenter: 'All', guruName: 'All' });
 
   useEffect(() => {
     if (!user) return;
@@ -63,21 +61,13 @@ const ChatsList: React.FC = () => {
   const totalUnread = chats.reduce((sum, c) => sum + unreadOf(c), 0);
   const unreadChats = chats.filter((c) => unreadOf(c) > 0).length;
 
-  const uniqueCenters = useMemo(() => Array.from(new Set(chats.map((c) => other(c)?.iskconCenter).filter((v): v is string => !!v && !isBlank(v)))), [chats]);
-  const uniqueGurus = useMemo(() => Array.from(new Set(chats.map((c) => other(c)?.guruName).filter((v): v is string => !!v && !isBlank(v)))), [chats]);
-  const hasNoCenter = chats.some((c) => isBlank(other(c)?.iskconCenter));
-  const activeFilters = (filters.iskconCenter !== 'All' ? 1 : 0) + (filters.guruName !== 'All' ? 1 : 0);
-
   const shown = chats.filter((chat) => {
     const o = other(chat);
     if (!o) return false;
     if (unreadOnly && unreadOf(chat) === 0) return false;
     const q = searchTerm.trim().toLowerCase();
     const matchesSearch = !q || o.userName.toLowerCase().includes(q) || (o.guruName || '').toLowerCase().includes(q) || (o.iskconCenter || '').toLowerCase().includes(q);
-    const matchesCenter =
-      filters.iskconCenter === 'All' || (filters.iskconCenter === 'Not Specified' ? isBlank(o.iskconCenter) : o.iskconCenter === filters.iskconCenter);
-    const matchesGuru = filters.guruName === 'All' || o.guruName === filters.guruName;
-    return matchesSearch && matchesCenter && matchesGuru;
+    return matchesSearch;
   });
 
   if (loading) return <PageLoader label="Opening your messages…" />;
@@ -125,7 +115,7 @@ const ChatsList: React.FC = () => {
             <input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by name or temple"
+              placeholder="Search by name"
               className="w-full min-w-0 bg-transparent text-[15px] text-maroon-900 outline-none placeholder:text-maroon-900/40"
             />
             {searchTerm && (
@@ -150,48 +140,13 @@ const ChatsList: React.FC = () => {
                 <span className={`rounded-full px-1.5 text-[11px] font-bold ${unreadOnly ? 'bg-white/25 text-white' : 'bg-brand-600 text-white'}`}>{unreadChats}</span>
               )}
             </button>
-            {uniqueCenters.length > 0 && (
-              <SelectField
-                aria-label="Filter by temple"
-                value={filters.iskconCenter}
-                onChange={(e) => setFilters({ ...filters, iskconCenter: e.target.value })}
-                className={filters.iskconCenter !== 'All' ? 'bg-amber-100 text-maroon-900 ring-marigold-400' : 'bg-white text-maroon-800 ring-sandal-300'}
-              >
-                <option value="All">Any temple</option>
-                {uniqueCenters.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-                {hasNoCenter && <option value="Not Specified">Not specified</option>}
-              </SelectField>
-            )}
-            {uniqueGurus.length > 0 && (
-              <SelectField
-                aria-label="Filter by teacher"
-                value={filters.guruName}
-                onChange={(e) => setFilters({ ...filters, guruName: e.target.value })}
-                className={filters.guruName !== 'All' ? 'bg-amber-100 text-maroon-900 ring-marigold-400' : 'bg-white text-maroon-800 ring-sandal-300'}
-              >
-                <option value="All">Any teacher</option>
-                {uniqueGurus.map((g) => (
-                  <option key={g} value={g}>{g}</option>
-                ))}
-              </SelectField>
-            )}
-            {activeFilters > 0 && (
-              <button
-                onClick={() => setFilters({ guruName: 'All', iskconCenter: 'All' })}
-                className="inline-flex h-9 shrink-0 items-center gap-1 rounded-full px-3 text-sm font-medium text-brand-700 hover:bg-amber-50"
-              >
-                <X size={14} /> Clear
-              </button>
-            )}
           </div>
 
           {/* Conversations */}
           {shown.length === 0 ? (
             <div className="mt-3 rounded-3xl bg-white px-6 py-10 text-center ring-1 ring-sandal-200">
               <p className="text-sm font-medium text-maroon-900/70">{unreadOnly ? 'You are all caught up' : 'No conversation found'}</p>
-              <p className="mt-1 text-xs text-maroon-900/45">{unreadOnly ? 'There are no unread messages.' : 'Try a different search or clear the filters.'}</p>
+              <p className="mt-1 text-xs text-maroon-900/45">{unreadOnly ? 'There are no unread messages.' : 'Try a different search.'}</p>
             </div>
           ) : (
             <ul className="mt-3 overflow-hidden rounded-3xl bg-white shadow-card ring-1 ring-sandal-200">
@@ -208,7 +163,7 @@ const ChatsList: React.FC = () => {
                       onClick={() => navigate(`/chat/${chat.id}`)}
                       className={`flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-sandal-50 active:bg-sandal-100 ${unread ? 'bg-amber-50/50' : ''}`}
                     >
-                      <Avatar src={o.photoURL} name={o.userName} className="h-12 w-12 ring-2 ring-amber-100" textClassName="text-base" />
+                      <Avatar gender={o.gender} name={o.userName} className="h-12 w-12 ring-2 ring-amber-100" textClassName="text-base" />
                       <span className="flex min-w-0 flex-1 flex-col py-0.5">
                         <span className="flex items-baseline justify-between gap-2">
                           <span className={`truncate text-[15px] text-maroon-900 ${unread ? 'font-semibold' : 'font-medium'}`}>{o.userName}</span>

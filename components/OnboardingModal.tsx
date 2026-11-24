@@ -1,242 +1,155 @@
 import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
+import { useKeyboardSafe } from './useKeyboardSafe';
+// @ts-ignore
+import maleAvatar from '../utils/Images/avatar-male.png';
+// @ts-ignore
+import femaleAvatar from '../utils/Images/avatar-female.png';
 
 interface OnboardingModalProps {
   isOpen: boolean;
   onComplete: (data: { userName: string; gender: 'male' | 'female'; guruName: string; iskconCenter: string }) => void;
 }
 
+const TOTAL = 4;
+
+const input =
+  'block w-full rounded-2xl border border-sandal-300 bg-white px-4 py-3.5 text-base text-maroon-900 placeholder:text-maroon-900/30 transition focus:border-marigold-400 focus:outline-none focus:ring-4 focus:ring-marigold-400/20';
+
 const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onComplete }) => {
+  const kb = useKeyboardSafe();
   const [step, setStep] = useState(1);
   const [userName, setUserName] = useState('');
   const [gender, setGender] = useState<'male' | 'female'>('male');
   const [guruName, setGuruName] = useState('');
   const [iskconCenter, setIskconCenter] = useState('');
 
-  console.log('OnboardingModal render - isOpen:', isOpen);
-
   if (!isOpen) return null;
 
-  const handleNext = () => {
-    if (step === 1 && userName.trim()) {
-      setStep(2);
-    } else if (step === 2) {
-      setStep(3);
-    } else if (step === 3 && guruName.trim()) {
-      setStep(4);
-    } else if (step === 4 && iskconCenter.trim()) {
-      handleComplete();
-    }
+  const canProceed =
+    step === 1 ? userName.trim().length > 0 : step === 2 ? true : step === 3 ? guruName.trim().length > 0 : iskconCenter.trim().length > 0;
+
+  const next = () => {
+    if (!canProceed) return;
+    if (step < TOTAL) setStep(step + 1);
+    else onComplete({ userName: userName.trim(), gender, guruName: guruName.trim(), iskconCenter: iskconCenter.trim() });
   };
 
-  const handleComplete = () => {
-    onComplete({ userName, gender, guruName, iskconCenter });
-  };
+  const titles = [
+    'What should we call you?',
+    'How may we address you?',
+    'Who is your spiritual guide?',
+    'Which temple are you connected with?',
+  ];
+  const hints = [
+    'Your name, as devotees will see it.',
+    'So we can greet you as Prabhuji or Mataji.',
+    'The person you learn from. Write N/A if none.',
+    'Your local ISKCON center. Write N/A if none.',
+  ];
 
-  const canProceed = () => {
-    if (step === 1) return userName.trim().length > 0;
-    if (step === 2) return true; // Gender is always selected
-    if (step === 3) return guruName.trim().length > 0;
-    if (step === 4) return iskconCenter.trim().length > 0;
-    return false;
-  };
-
-  const labels = {
-    welcome: { 
-      en: 'Welcome to Sadhana Lifeforce!', 
-      hi: 'साधना लाइफफोर्स में आपका स्वागत है!',
-      te: 'సాధన లైఫ్‌ఫోర్స్‌కు స్వాగతం!'
-    },
-    subtitle: {
-      en: "Let's personalize your spiritual journey",
-      hi: 'आइए अपनी आध्यात्मिक यात्रा को व्यक्तिगत बनाएं',
-      te: 'మీ ఆధ్యాత్మిక ప్రయాణాన్ని వ్యక్తిగతీకరించుకుందాం'
-    },
-    yourName: {
-      en: 'What should we call you?',
-      hi: 'हम आपको क्या कहें?',
-      te: 'మేము మిమ్మల్ని ఏమని పిలవాలి?'
-    },
-    namePlaceholder: {
-      en: 'Enter your name',
-      hi: 'अपना नाम दर्ज करें',
-      te: 'మీ పేరు నమోదు చేయండి'
-    },
-    spiritual: {
-      en: 'Who is your spiritual guide?',
-      hi: 'आपके आध्यात्मिक मार्गदर्शक कौन हैं?',
-      te: 'మీ ఆధ్యాత్మిక మార్గదర్శి ఎవరు?'
-    },
-    spiritualPlaceholder: {
-      en: 'e.g. HG Pranavananda Das Prabhu',
-      hi: 'जैसे HG प्रणवानंद दास प्रभु',
-      te: 'ఉదా. HG ప్రణవానంద దాస్ ప్రభు'
-    },
-    center: {
-      en: 'Which ISKCON center do you associate with?',
-      hi: 'आप किस इस्कॉन केंद्र से जुड़े हैं?',
-      te: 'మీరు ఏ ఇస్కాన్ కేంద్రంతో అనుబంధంగా ఉన్నారు?'
-    },
-    centerPlaceholder: {
-      en: 'e.g. ISKCON Hyderabad',
-      hi: 'जैसे इस्कॉन हैदराबाद',
-      te: 'ఉదా. ఇస్కాన్ హైదరాబాద్'
-    },
-    languageSelect: {
-      en: 'Choose your preferred language',
-      hi: 'अपनी पसंदीदा भाषा चुनें',
-      te: 'మీ ఇష్టపడే భాషను ఎంచుకోండి'
-    },
-    next: { en: 'Next', hi: 'अगला', te: 'తదుపరి' },
-    finish: { en: 'Get Started!', hi: 'शुरू करें!', te: 'ప్రారంభించండి!' }
-  };
+  const genderCard = (g: 'male' | 'female', label: string, honorific: string, img: string) => (
+    <button
+      type="button"
+      onClick={() => setGender(g)}
+      aria-pressed={gender === g}
+      className={`relative flex flex-col items-center rounded-3xl border-2 px-3 pb-4 pt-5 transition-all duration-200 ${
+        gender === g ? 'border-marigold-400 bg-amber-50 shadow-card' : 'border-sandal-200 bg-white hover:border-marigold-300'
+      }`}
+    >
+      <img src={img} alt="" className="h-24 w-24 rounded-full" draggable={false} />
+      <span className="mt-3 text-[15px] font-semibold text-maroon-900">{label}</span>
+      <span className="text-xs text-maroon-900/50">{honorific}</span>
+      {gender === g && (
+        <span className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-white">
+          <Check size={14} strokeWidth={3} />
+        </span>
+      )}
+    </button>
+  );
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-60 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 space-y-6">
-        {/* Header */}
-        <div className="text-center">
-          <div className="bg-orange-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-3xl">🙏</span>
+    <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-6" style={kb} role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-maroon-900/40 backdrop-blur-sm" />
+      <div
+        style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
+        className="relative flex max-h-full w-full animate-rise-in flex-col overflow-hidden rounded-t-[32px] bg-sandal-50 shadow-lift sm:max-w-md sm:rounded-[32px]"
+      >
+        {/* Progress */}
+        <div className="px-6 pt-6">
+          <div className="flex items-center justify-between text-xs font-semibold text-maroon-900/45">
+            <span>Welcome to Sadhana Sang</span>
+            <span>
+              {step} / {TOTAL}
+            </span>
           </div>
-          <h2 className="text-2xl font-serif font-bold text-stone-900 mb-2">
-            {step === 1 && 'Welcome to Sadhana Lifeforce!'}
-            {step === 2 && 'How may we address you?'}
-            {step === 3 && 'Who is your spiritual guide?'}
-            {step === 4 && 'Your ISKCON Center'}
-          </h2>
-          {step === 1 && (
-            <p className="text-stone-500">Let's personalize your spiritual journey</p>
-          )}
-        </div>
-
-        {/* Step Indicator */}
-        <div className="flex justify-center gap-2">
-          {[1, 2, 3, 4].map((s) => (
+          <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-sandal-200">
             <div
-              key={s}
-              className={`h-2 w-10 rounded-full transition-colors ${
-                s === step ? 'bg-orange-600' : s < step ? 'bg-orange-300' : 'bg-stone-200'
-              }`}
+              className="h-full rounded-full bg-gradient-to-r from-marigold-400 to-brand-600 transition-all duration-500 ease-out"
+              style={{ width: `${(step / TOTAL) * 100}%` }}
             />
-          ))}
+          </div>
         </div>
 
-        {/* Content */}
-        <div className="space-y-4">
-          {step === 1 && (
-            <div>
-              <label className="block text-sm font-medium text-stone-700 mb-2">
-                What should we call you?
-              </label>
+        <div className="flex-1 overflow-y-auto overscroll-contain px-6 pb-2 pt-7">
+          <h2 key={step} className="animate-fadeIn font-elegant text-[26px] font-semibold leading-tight text-maroon-900">
+            {titles[step - 1]}
+          </h2>
+          <p className="mt-1.5 text-sm text-maroon-900/55">{hints[step - 1]}</p>
+
+          <div key={`f${step}`} className="mt-6 animate-fadeIn">
+            {step === 1 && (
               <input
                 type="text"
                 value={userName}
                 onChange={(e) => setUserName(e.target.value)}
-                placeholder="Enter your name"
-                className="w-full p-3 border-2 border-stone-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none text-lg"
+                placeholder="Your name"
+                className={input}
                 autoFocus
-                onKeyPress={(e) => e.key === 'Enter' && canProceed() && handleNext()}
+                autoComplete="name"
+                onKeyDown={(e) => e.key === 'Enter' && next()}
               />
-            </div>
-          )}
-
-          {step === 2 && (
-            <div>
-              <label className="block text-sm font-medium text-stone-700 mb-3">
-                Please select your gender
-                <span className="block text-xs text-stone-500 font-normal mt-1">
-                  (So we can address you respectfully as Prabhuji or Mataji)
-                </span>
-              </label>
-              <div className="grid grid-cols-2 gap-4">
-                <button
-                  onClick={() => setGender('male')}
-                  className={`p-4 border-2 rounded-lg transition-all ${
-                    gender === 'male'
-                      ? 'border-orange-600 bg-orange-50 shadow-md'
-                      : 'border-stone-300 hover:border-orange-300'
-                  }`}
-                >
-                  <div className="text-3xl mb-2">👨</div>
-                  <div className="font-semibold">Male</div>
-                  <div className="text-xs text-stone-500">Prabhuji</div>
-                </button>
-                <button
-                  onClick={() => setGender('female')}
-                  className={`p-4 border-2 rounded-lg transition-all ${
-                    gender === 'female'
-                      ? 'border-orange-600 bg-orange-50 shadow-md'
-                      : 'border-stone-300 hover:border-orange-300'
-                  }`}
-                >
-                  <div className="text-3xl mb-2">👩</div>
-                  <div className="font-semibold">Female</div>
-                  <div className="text-xs text-stone-500">Mataji</div>
-                </button>
+            )}
+            {step === 2 && (
+              <div className="grid grid-cols-2 gap-3">
+                {genderCard('male', 'Male', 'Prabhuji', maleAvatar)}
+                {genderCard('female', 'Female', 'Mataji', femaleAvatar)}
               </div>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div>
-              <label className="block text-sm font-medium text-stone-700 mb-2">
-                Who is your spiritual guide?
-                <span className="block text-xs text-stone-500 font-normal mt-1">
-                  (From whom you are learning about God. If none, enter N/A)
-                </span>
-              </label>
+            )}
+            {step === 3 && (
               <input
                 type="text"
                 value={guruName}
                 onChange={(e) => setGuruName(e.target.value)}
-                placeholder="e.g. HG Pranavananda Das Prabhu or N/A"
-                className="w-full p-3 border-2 border-stone-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none text-lg"
+                placeholder="e.g. HG Pranavananda Das Prabhu"
+                className={input}
                 autoFocus
-                onKeyPress={(e) => e.key === 'Enter' && canProceed() && handleNext()}
+                onKeyDown={(e) => e.key === 'Enter' && next()}
               />
-            </div>
-          )}
-
-          {step === 4 && (
-            <div>
-              <label className="block text-sm font-medium text-stone-700 mb-2">
-                Which ISKCON center do you associate with?
-                <span className="block text-xs text-stone-500 font-normal mt-1">
-                  (Your local ISKCON temple. If not connected, enter N/A)
-                </span>
-              </label>
+            )}
+            {step === 4 && (
               <input
                 type="text"
                 value={iskconCenter}
                 onChange={(e) => setIskconCenter(e.target.value)}
-                placeholder="e.g. ISKCON Hyderabad or N/A"
-                className="w-full p-3 border-2 border-stone-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none text-lg"
+                placeholder="e.g. ISKCON Hyderabad"
+                className={input}
                 autoFocus
-                onKeyPress={(e) => e.key === 'Enter' && canProceed() && handleComplete()}
+                onKeyDown={(e) => e.key === 'Enter' && next()}
               />
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
-        {/* Navigation */}
-        <div className="flex gap-3 pt-4">
+        <div className="flex gap-2 px-6 pt-4">
           {step > 1 && (
-            <button
-              type="button"
-              onClick={() => setStep(step - 1)}
-              className="flex-1 px-6 py-3 border-2 border-stone-300 text-stone-700 rounded-lg font-medium hover:bg-stone-50 transition-colors"
-            >
-              Back
+            <button type="button" onClick={() => setStep(step - 1)} className="btn-secondary px-4" aria-label="Back">
+              <ArrowLeft size={18} />
             </button>
           )}
-          <button
-            type="button"
-            onClick={handleNext}
-            disabled={!canProceed()}
-            className="flex-1 px-6 py-3 bg-orange-600 text-white rounded-lg font-medium hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg"
-          >
-            {step === 4 ? 'Get Started!' : 'Next'}
+          <button type="button" onClick={next} disabled={!canProceed} className="btn-primary btn-lg flex-1 disabled:opacity-50">
+            {step === TOTAL ? 'Get started' : 'Continue'}
+            {step < TOTAL && <ArrowRight size={18} />}
           </button>
         </div>
       </div>

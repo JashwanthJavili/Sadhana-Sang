@@ -254,7 +254,7 @@ const ChatWindow: React.FC = () => {
           <button onClick={() => setShowProfileModal(true)} className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl px-1 py-1 text-left transition hover:bg-sandal-50" style={{ minHeight: 0 }}>
             <span className="relative shrink-0">
               <span className="block h-10 w-10 overflow-hidden rounded-full ring-2 ring-amber-100">
-                <Avatar src={otherUser.photoURL} name={otherUser.userName} className="h-full w-full" />
+                <Avatar gender={otherUser.gender} name={otherUser.userName} className="h-full w-full" />
               </span>
               <span className={`absolute bottom-0 right-0 h-3 w-3 rounded-full ring-2 ring-white ${otherUser.isOnline ? 'bg-emerald-500' : 'bg-stone-300'}`} />
             </span>

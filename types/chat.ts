@@ -26,6 +26,7 @@ export interface UserProfile {
   guruName: string;
   iskconCenter: string;
   photoURL?: string;
+  gender?: 'male' | 'female';
   isOnline: boolean;
   lastSeen: number;
   bio?: string;
@@ -66,6 +67,7 @@ export interface Chat {
     [uid: string]: {
       userName: string;
       photoURL?: string;
+      gender?: 'male' | 'female' | null;
       guruName: string;
       iskconCenter: string;
     };

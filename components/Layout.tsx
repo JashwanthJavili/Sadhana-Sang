@@ -15,7 +15,7 @@ import {
   PenTool,
   Users,
   BookHeart,
-  BarChart3,
+  CalendarDays,
 } from 'lucide-react';
 import { subscribeToUnreadCount } from '../services/chat';
 import { UserSettings } from '../types';
@@ -179,7 +179,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       }`}
     >
       <div className="flex items-center gap-3 border-b border-sandal-200 px-4 py-3.5">
-        <Avatar src={user.photoURL} name={plainName} className="h-10 w-10" />
+        <Avatar gender={settings?.gender} name={plainName} className="h-10 w-10" />
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-maroon-900">{displayName}</p>
           <p className="truncate text-xs text-maroon-900/50">{isGuest ? 'Guest mode' : user.email}</p>
@@ -187,7 +187,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       </div>
       <div className="p-1.5">
         {ACCOUNT_ITEMS.map((item) => (
-          <button key={item.to} onClick={() => navigate(item.to)} className="menu-row">
+          <button key={item.to} onClick={() => navigate(item.to)} className="menu-row lg:hidden">
             <item.icon size={16} className="text-maroon-900/40" /> {item.label}
           </button>
         ))}
@@ -324,6 +324,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           })}
         </nav>
 
+        {/* Pinned: Settings & About */}
+        <div className={`shrink-0 space-y-0.5 border-t border-sandal-200/70 px-3 py-2`}>
+          {ACCOUNT_ITEMS.map((item) => renderNavItem({ ...item, locked: false }, compact))}
+        </div>
+
         {/* Footer — profile card with account menu */}
         <div className={`shrink-0 border-t border-sandal-200/80 p-3 ${compact ? 'space-y-2' : 'flex items-center gap-1.5'}`}>
           <div className={`relative ${compact ? '' : 'min-w-0 flex-1'}`} ref={isMobile ? drawerAccountRef : sidebarAccountRef}>
@@ -335,7 +340,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               aria-label="Account menu"
               title={compact ? displayName : undefined}
             >
-              <Avatar src={user.photoURL} name={plainName} className="h-9 w-9" />
+              <Avatar gender={settings?.gender} name={plainName} className="h-9 w-9" />
               {!compact && (
                 <>
                   <span className="min-w-0 flex-1">
@@ -466,7 +471,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                   aria-label="Account menu"
                   style={{ minHeight: 0 }}
                 >
-                  <Avatar src={user.photoURL} name={plainName} className="h-8 w-8" textClassName="text-xs" />
+                  <Avatar gender={settings?.gender} name={plainName} className="h-8 w-8" textClassName="text-xs" />
                 </button>
                 {accountOpen === 'topbar' && renderAccountMenu('down')}
               </div>
@@ -506,9 +511,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             {renderBottomTab('/', 'Home', Home)}
             {renderBottomTab('/planner', 'Planner', PenTool)}
             {renderBottomTab('/chanting', 'Japa', MalaIcon)}
-            {renderBottomTab('/slokas', 'Mantras', BookHeart, ['/slokas', '/festivals', '/festival/', '/ekadashi/'])}
+            {renderBottomTab('/slokas', 'Mantras', BookHeart, isGuest ? ['/slokas'] : ['/slokas', '/festivals', '/festival/', '/ekadashi/'])}
             {isGuest
-              ? renderBottomTab('/analytics', 'Progress', BarChart3, ['/analytics', '/history'])
+              ? renderBottomTab('/festivals', 'Calendar', CalendarDays, ['/festivals', '/festival/', '/ekadashi/'])
               : renderBottomTab('/chats', 'Messages', MessageCircle, ['/chats', '/chat/'], unreadCount > 0)}
           </div>
         </nav>

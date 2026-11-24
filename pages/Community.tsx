@@ -4,7 +4,7 @@ import { UserProfile, ConnectionStatus } from '../types/chat';
 import { getAllUsers, searchUsers, createOrGetChat } from '../services/chat';
 import { useAuth } from '../contexts/AuthContext';
 import { useUserData } from '../contexts/UserDataContext';
-import { Users, Search, MessageCircle, X, UserPlus, UserMinus, Check, HelpCircle, MapPin, BookOpen } from 'lucide-react';
+import { Users, Search, MessageCircle, X, UserPlus, UserMinus, Check, HelpCircle, MapPin, BookOpen, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import UserProfileModal from '../components/UserProfileModal';
 import Avatar from '../components/Avatar';
@@ -33,6 +33,7 @@ const Community: React.FC = () => {
     iskconCenter: 'All',
   });
   const [loading, setLoading] = useState(true);
+  const [openUid, setOpenUid] = useState<string | null>(null);
   const [view, setView] = useState<'connected' | 'explore'>('connected');
   const [connectionStatuses, setConnectionStatuses] = useState<{ [key: string]: ConnectionStatus }>({});
   const [connectedUserIds, setConnectedUserIds] = useState<string[]>([]);
@@ -102,7 +103,7 @@ const Community: React.FC = () => {
 
         // Apply online filter
         if (filters.onlineOnly) {
-          filtered = filtered.filter(u => u.isOnline);
+          filtered = filtered.filter(u => u.isOnline && u.showLastSeen !== false && connectionStatuses[u.uid] === 'connected');
         }
 
         // Apply guru filter
@@ -132,7 +133,7 @@ const Community: React.FC = () => {
     };
 
     applyFilters();
-  }, [searchTerm, filters, users, connectedUserIds, view]);
+  }, [searchTerm, filters, users, connectedUserIds, view, connectionStatuses]);
 
   // Load connections and statuses
   useEffect(() => {
@@ -316,7 +317,8 @@ const Community: React.FC = () => {
   const displayUsers = filteredUsers; // already filtered for the current tab
   const activeFilters = filters.onlineOnly ? 1 : 0;
   const known = (v?: string) => (v && v.toLowerCase() !== 'n/a' && v !== 'Not Specified' ? v : '');
-  const onlineCount = users.filter((u) => u.isOnline).length;
+  const canSeeStatus = (u: UserProfile) => connectionStatuses[u.uid] === 'connected' && u.showLastSeen !== false;
+  const onlineCount = users.filter((u) => u.isOnline && canSeeStatus(u)).length;
 
   if (loading) return <PageLoader label="Finding devotees…" />;
 
@@ -406,7 +408,7 @@ const Community: React.FC = () => {
           style={{ minHeight: 0 }}
         >
           <span className="h-2 w-2 rounded-full bg-emerald-500" />
-          Online
+          Connected & online
           {onlineCount > 0 && <span className="text-xs font-medium opacity-60">{onlineCount}</span>}
         </button>
       </div>
@@ -438,52 +440,69 @@ const Community: React.FC = () => {
           )}
         </div>
       ) : (
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-4 grid grid-cols-1 items-start gap-2 md:grid-cols-2 xl:grid-cols-3">
           {displayUsers.map((profile) => {
             const temple = known(profile.iskconCenter);
             const teacher = known(profile.guruName);
+            const open = openUid === profile.uid;
             return (
               <div
                 key={profile.uid}
-                onClick={() => {
-                  setSelectedProfile(profile);
-                  setShowProfileModal(true);
-                }}
-                className="flex cursor-pointer flex-col rounded-2xl bg-white p-3 shadow-soft ring-1 ring-sandal-200 transition hover:-translate-y-0.5 hover:shadow-card hover:ring-amber-200"
+                className={`rounded-2xl bg-white ring-1 transition-shadow duration-200 ${open ? 'shadow-card ring-amber-200' : 'shadow-soft ring-sandal-200'}`}
               >
-                <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setOpenUid(open ? null : profile.uid)}
+                  aria-expanded={open}
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left"
+                  style={{ minHeight: 0 }}
+                >
                   <div className="relative shrink-0">
-                    <Avatar src={profile.photoURL} name={profile.userName} className="h-11 w-11 ring-2 ring-amber-100" textClassName="text-base" />
-                    {profile.isOnline && <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white" />}
+                    <Avatar gender={profile.gender} name={profile.userName} className="h-9 w-9" textClassName="text-sm" />
+                    {canSeeStatus(profile) && profile.isOnline && <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-white" />}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <h3 className="truncate text-sm font-semibold text-maroon-900">{profile.userName || 'Devotee'}</h3>
-                    <p className={`text-[11px] ${profile.isOnline ? 'font-medium text-emerald-700' : 'text-maroon-900/45'}`}>
-                      {profile.isOnline ? 'Online now' : profile.lastSeen ? `Active ${getTimeAgo(profile.lastSeen)}` : 'Devotee'}
-                    </p>
-                  </div>
-                </div>
-
-                {(temple || teacher) && (
-                  <div className="mt-2 space-y-1 text-[12px] text-maroon-900/70">
-                    {temple && (
-                      <p className="flex items-center gap-1.5">
-                        <MapPin size={12} className="shrink-0 text-marigold-500" />
-                        <span className="truncate">{temple}</span>
+                    <h3 className="truncate text-sm font-semibold leading-tight text-maroon-900">{profile.userName || 'Devotee'}</h3>
+                    {canSeeStatus(profile) ? (
+                      <p className={`truncate text-[11px] leading-tight ${profile.isOnline ? 'font-medium text-emerald-700' : 'text-maroon-900/45'}`}>
+                        {profile.isOnline ? 'Online now' : profile.lastSeen ? `Active ${getTimeAgo(profile.lastSeen)}` : 'Connected'}
                       </p>
-                    )}
-                    {teacher && (
-                      <p className="flex items-center gap-1.5">
-                        <BookOpen size={12} className="shrink-0 text-marigold-500" />
-                        <span className="truncate">{teacher}</span>
-                      </p>
+                    ) : (
+                      <p className="truncate text-[11px] leading-tight text-maroon-900/45">{temple || 'Devotee'}</p>
                     )}
                   </div>
-                )}
-                {profile.bio && <p className="mt-1.5 line-clamp-2 text-[12px] text-maroon-900/55">{profile.bio}</p>}
+                  <ChevronDown size={17} className={`shrink-0 text-maroon-900/40 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
+                </button>
 
-                <div className="mt-auto pt-3" onClick={(e) => e.stopPropagation()}>
-                  {renderConnectionButton(profile)}
+                <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
+                  <div className="min-h-0 overflow-hidden">
+                    <div className="space-y-2 border-t border-sandal-200/70 px-3 pb-3 pt-2.5">
+                      <div className="space-y-1.5 text-[13px] text-maroon-900/75">
+                        <p className="flex items-center gap-2">
+                          <MapPin size={14} className="shrink-0 text-marigold-500" />
+                          <span className="truncate">{temple || 'Temple not shared'}</span>
+                        </p>
+                        <p className="flex items-center gap-2">
+                          <BookOpen size={14} className="shrink-0 text-marigold-500" />
+                          <span className="truncate">{teacher || 'Teacher not shared'}</span>
+                        </p>
+                      </div>
+                      {profile.bio && <p className="text-[13px] leading-relaxed text-maroon-900/60">{profile.bio}</p>}
+                      <div className="flex items-center gap-2 pt-1">
+                        <div className="min-w-0 flex-1">{renderConnectionButton(profile)}</div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedProfile(profile);
+                            setShowProfileModal(true);
+                          }}
+                          className="btn-secondary btn-sm shrink-0"
+                        >
+                          Full profile
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             );
@@ -500,6 +519,7 @@ const Community: React.FC = () => {
             setSelectedProfile(null);
           }}
           showChatButton={connectionStatuses[selectedProfile.uid] === 'connected'}
+          showStatus={connectionStatuses[selectedProfile.uid] === 'connected'}
           onStartChat={
             connectionStatuses[selectedProfile.uid] === 'connected'
               ? () => {

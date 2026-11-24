@@ -41,7 +41,7 @@ const About: React.FC = () => {
       `}</style>
       <div className="min-h-full w-full mx-auto space-y-6 animate-fadeIn pb-12 px-2 sm:px-4">
       {/* Header */}
-      <div className="bg-gradient-to-r from-orange-600 to-amber-600 rounded-2xl p-6 sm:p-8 text-white shadow-xl">
+      <div className="bg-gradient-to-br from-brand-500 via-brand-600 to-amber-600 rounded-3xl p-6 sm:p-8 text-white shadow-card">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="bg-white/20 p-2.5 rounded-xl">
@@ -57,7 +57,7 @@ const About: React.FC = () => {
       </div>
 
       {/* Humble Offering */}
-      <section className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl shadow-xl border-2 border-orange-300 p-6 sm:p-8">
+      <section className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-3xl shadow-soft border border-sandal-200 p-6 sm:p-8">
         <div className="text-center mb-6">
           <p className="text-2xl sm:text-3xl font-bold text-orange-800 mb-3">
             Om Sri Gurave Namah
@@ -103,7 +103,7 @@ const About: React.FC = () => {
       </section>
 
       {/* What is Sadhana Sang */}
-      <section className="bg-white rounded-2xl shadow-xl border-2 border-blue-300 overflow-hidden">
+      <section className="bg-white rounded-3xl shadow-soft border border-sandal-200 overflow-hidden">
         <details className="group" open>
           <summary className="flex items-center justify-between gap-3 p-5 sm:p-6 cursor-pointer hover:bg-blue-50 transition-colors list-none">
             <h2 className="text-lg sm:text-xl font-bold text-stone-900 flex items-center gap-2">
@@ -126,7 +126,7 @@ const About: React.FC = () => {
       </section>
 
       {/* Features */}
-      <section className="bg-white rounded-2xl shadow-xl border-2 border-green-300 overflow-hidden">
+      <section className="bg-white rounded-3xl shadow-soft border border-sandal-200 overflow-hidden">
         <details className="group">
           <summary className="flex items-center justify-between gap-3 p-5 sm:p-6 cursor-pointer hover:bg-green-50 transition-colors list-none">
             <h2 className="text-lg sm:text-xl font-bold text-stone-900">Key Features</h2>
@@ -138,8 +138,7 @@ const About: React.FC = () => {
                 'Daily Planning & Commitments',
                 'Timeline Management',
                 'Spiritual Metrics Tracking',
-                'Analytics & Progress Insights',
-                'Personal Reflections & Journal',
+                                'Personal Reflections & Journal',
                 'Goal Setting & Tracking',
                 'Cloud Synchronization',
                 'Customizable Interface',
@@ -157,7 +156,7 @@ const About: React.FC = () => {
               ))}
             </div>
 
-            <div className="mt-6 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 sm:p-5 border-2 border-purple-300 shadow-sm">
+            <div className="mt-6 bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 sm:p-5 border border-sandal-200 shadow-sm">
               <div className="flex flex-col sm:flex-row items-start sm:items-center sm:justify-between gap-4">
                 <div className="flex-1">
                   <h3 className="text-base sm:text-lg font-bold text-purple-900 mb-2 flex items-center gap-2">
@@ -181,7 +180,7 @@ const About: React.FC = () => {
       </section>
 
       {/* Spiritual Masters */}
-      <section className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl shadow-xl border-2 border-orange-300 p-6 sm:p-8">
+      <section className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-3xl shadow-soft border border-sandal-200 p-6 sm:p-8">
         <div className="text-center mb-6">
           <p className="text-2xl sm:text-3xl font-bold text-orange-800 mb-2">
             Om Sri Gurave Namah
@@ -193,7 +192,7 @@ const About: React.FC = () => {
         </div>
         
         {/* Param Gurumaharaj - HH Radhanath Swamy */}
-        <div className="mb-8 bg-white rounded-2xl p-5 sm:p-6 shadow-lg border-2 border-orange-200 relative overflow-hidden">
+        <div className="mb-8 bg-white rounded-3xl p-5 sm:p-6 shadow-lg border border-sandal-200 relative overflow-hidden">
           {/* Flower Animation */}
           {showFlowersParamGuru && (
             <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden">
@@ -221,8 +220,8 @@ const About: React.FC = () => {
 
           <div className="flex flex-col items-center mb-4">
             <div className="relative group w-full max-w-md">
-              <div className="absolute -inset-2 bg-gradient-to-br from-orange-400 to-amber-400 rounded-2xl blur-lg opacity-50 group-hover:opacity-75 transition"></div>
-              <div className="relative bg-gradient-to-br from-white to-orange-50 rounded-2xl p-3 sm:p-4 shadow-xl ring-2 ring-orange-400">
+              <div className="absolute -inset-2 bg-gradient-to-br from-orange-400 to-amber-400 rounded-3xl blur-lg opacity-50 group-hover:opacity-75 transition"></div>
+              <div className="relative bg-gradient-to-br from-white to-orange-50 rounded-3xl p-3 sm:p-4 shadow-soft ring-2 ring-orange-400">
                 <img 
                   src={guruMaharajImage}
                   alt="HH Radhanath Swamy Maharaj" 
@@ -239,7 +238,7 @@ const About: React.FC = () => {
             <p className="text-orange-800 font-bold text-sm sm:text-base mb-3">Param Gurumaharaj</p>
             <button
               onClick={() => offerFlowers('param')}
-              className="px-6 py-3 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-xl hover:from-pink-600 hover:to-rose-600 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2 mx-auto"
+              className="px-6 py-3 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-soft hover:from-pink-600 hover:to-rose-600 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2 mx-auto"
             >
               <Flower2 size={20} />
               Offer Flowers
@@ -262,7 +261,7 @@ const About: React.FC = () => {
               </p>
             </div>
 
-            <div className="bg-yellow-50 p-4 rounded-xl border-2 border-yellow-300">
+            <div className="bg-yellow-50 p-4 rounded-xl border border-sandal-200">
               <p className="text-yellow-900 font-bold text-center text-xs sm:text-sm">
                 By his causeless mercy alone, countless souls have found shelter at the lotus feet of Sri Krishna.
               </p>
@@ -271,7 +270,7 @@ const About: React.FC = () => {
         </div>
 
         {/* Gurudev - HG Pranavananda Dasa Prabhuji */}
-        <div className="bg-white rounded-2xl p-5 sm:p-6 shadow-lg border-2 border-orange-200 relative overflow-hidden">
+        <div className="bg-white rounded-3xl p-5 sm:p-6 shadow-lg border border-sandal-200 relative overflow-hidden">
           {/* Flower Animation */}
           {showFlowersGuru && (
             <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden">
@@ -299,8 +298,8 @@ const About: React.FC = () => {
 
           <div className="flex flex-col items-center mb-4">
             <div className="relative group w-full max-w-md">
-              <div className="absolute -inset-2 bg-gradient-to-br from-orange-400 to-amber-400 rounded-2xl blur-lg opacity-50 group-hover:opacity-75 transition"></div>
-              <div className="relative bg-gradient-to-br from-white to-orange-50 rounded-2xl p-3 sm:p-4 shadow-xl ring-2 ring-orange-400">
+              <div className="absolute -inset-2 bg-gradient-to-br from-orange-400 to-amber-400 rounded-3xl blur-lg opacity-50 group-hover:opacity-75 transition"></div>
+              <div className="relative bg-gradient-to-br from-white to-orange-50 rounded-3xl p-3 sm:p-4 shadow-soft ring-2 ring-orange-400">
                 <img 
                   src={guruImage}
                   alt="HG Pranavananda Das Prabhuji" 
@@ -320,7 +319,7 @@ const About: React.FC = () => {
             </p>
             <button
               onClick={() => offerFlowers('guru')}
-              className="mt-3 px-6 py-3 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-xl hover:from-pink-600 hover:to-rose-600 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2 mx-auto"
+              className="mt-3 px-6 py-3 bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-xl font-bold text-sm shadow-lg hover:shadow-soft hover:from-pink-600 hover:to-rose-600 transition-all transform hover:scale-105 active:scale-95 flex items-center gap-2 mx-auto"
             >
               <Flower2 size={20} />
               Offer Flowers
@@ -343,7 +342,7 @@ const About: React.FC = () => {
               </p>
             </div>
 
-            <div className="bg-gradient-to-r from-yellow-50 to-amber-50 p-4 rounded-xl border-2 border-yellow-300">
+            <div className="bg-gradient-to-r from-yellow-50 to-amber-50 p-4 rounded-xl border border-sandal-200">
               <p className="text-yellow-900 font-bold mb-2 text-xs sm:text-sm">His Divine Qualities:</p>
               <ul className="space-y-1.5 text-stone-700 text-xs sm:text-sm">
                 <li className="flex items-start gap-2">
@@ -369,7 +368,7 @@ const About: React.FC = () => {
               </ul>
             </div>
 
-            <div className="bg-orange-100 p-4 rounded-xl text-center border-2 border-orange-400">
+            <div className="bg-orange-100 p-4 rounded-xl text-center border border-sandal-200">
               <p className="text-orange-900 font-bold text-xs sm:text-sm italic">
                 Every good quality is his mercy, every fault is mine alone.
               </p>
@@ -398,13 +397,13 @@ const About: React.FC = () => {
       </section>
 
       {/* Developer Info */}
-      <section className="bg-white rounded-2xl shadow-xl border-2 border-blue-300 p-5 sm:p-6">
+      <section className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-5 sm:p-6">
         <h2 className="text-lg sm:text-xl font-bold text-stone-900 mb-4 flex items-center gap-2">
           <Heart className="text-orange-600" size={20} />
           An Insignificant Servant's Offering
         </h2>
         <div className="space-y-4">
-          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-5 rounded-xl border-2 border-blue-300 shadow-sm">
+          <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-5 rounded-xl border border-sandal-200 shadow-sm">
             <div className="flex items-start gap-3 mb-4">
               <div className="bg-blue-100 p-2 rounded-full">
                 <Code className="text-blue-600" size={18} />
@@ -506,7 +505,7 @@ const About: React.FC = () => {
       </section>
 
       {/* Privacy & Security Section - Collapsible */}
-      <section className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl sm:rounded-2xl shadow-2xl border-2 sm:border-3 border-green-400 overflow-hidden">
+      <section className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl sm:rounded-3xl shadow-2xl border-2 sm:border-3 border-green-400 overflow-hidden">
         <details className="group">
           <summary className="flex items-center justify-between gap-3 p-4 sm:p-6 md:p-8 cursor-pointer hover:bg-green-100/50 transition-colors list-none">
             <h2 className="text-base sm:text-lg md:text-xl font-serif font-bold text-stone-900 flex items-center gap-2 sm:gap-3">
@@ -518,7 +517,7 @@ const About: React.FC = () => {
             <ChevronDown className="text-green-600 flex-shrink-0 transition-transform group-open:rotate-180" size={24} />
           </summary>
           <div className="px-4 sm:px-6 md:px-8 pb-4 sm:pb-6 md:pb-8 space-y-3 sm:space-y-4">
-            <div className="bg-white p-3 sm:p-4 md:p-5 rounded-lg sm:rounded-xl border-2 border-green-300 shadow-lg">
+            <div className="bg-white p-3 sm:p-4 md:p-5 rounded-lg sm:rounded-xl border border-sandal-200 shadow-lg">
               <div className="flex items-start gap-2 sm:gap-3 mb-2 sm:mb-3">
                 <div className="bg-green-100 p-1.5 sm:p-2 rounded-full flex-shrink-0">
                   <Lock className="text-green-700" size={18} />
@@ -533,7 +532,7 @@ const About: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-              <div className="bg-white p-2.5 sm:p-3 md:p-4 rounded-lg sm:rounded-xl border-2 border-green-200 shadow-md">
+              <div className="bg-white p-2.5 sm:p-3 md:p-4 rounded-lg sm:rounded-xl border border-sandal-200 shadow-md">
                 <h4 className="font-bold text-stone-900 mb-1.5 sm:mb-2 flex items-center gap-2 text-xs sm:text-sm">
                   <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-600 rounded-full flex-shrink-0"></div>
                   Secure Data Storage
@@ -543,7 +542,7 @@ const About: React.FC = () => {
                 </p>
               </div>
 
-              <div className="bg-white p-2.5 sm:p-3 md:p-4 rounded-lg sm:rounded-xl border-2 border-green-200 shadow-md">
+              <div className="bg-white p-2.5 sm:p-3 md:p-4 rounded-lg sm:rounded-xl border border-sandal-200 shadow-md">
                 <h4 className="font-bold text-stone-900 mb-1.5 sm:mb-2 flex items-center gap-2 text-xs sm:text-sm">
                   <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-600 rounded-full flex-shrink-0"></div>
                   Privacy First
@@ -553,7 +552,7 @@ const About: React.FC = () => {
                 </p>
               </div>
 
-              <div className="bg-white p-2.5 sm:p-3 md:p-4 rounded-lg sm:rounded-xl border-2 border-green-200 shadow-md">
+              <div className="bg-white p-2.5 sm:p-3 md:p-4 rounded-lg sm:rounded-xl border border-sandal-200 shadow-md">
                 <h4 className="font-bold text-stone-900 mb-1.5 sm:mb-2 flex items-center gap-2 text-xs sm:text-sm">
                   <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-600 rounded-full flex-shrink-0"></div>
                   GDPR Compliant
@@ -563,7 +562,7 @@ const About: React.FC = () => {
                 </p>
               </div>
 
-              <div className="bg-white p-2.5 sm:p-3 md:p-4 rounded-lg sm:rounded-xl border-2 border-green-200 shadow-md">
+              <div className="bg-white p-2.5 sm:p-3 md:p-4 rounded-lg sm:rounded-xl border border-sandal-200 shadow-md">
                 <h4 className="font-bold text-stone-900 mb-1.5 sm:mb-2 flex items-center gap-2 text-xs sm:text-sm">
                   <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-600 rounded-full flex-shrink-0"></div>
                   Your Control
@@ -585,7 +584,7 @@ const About: React.FC = () => {
       </section>
 
       {/* Frequently Asked Questions - Collapsible */}
-      <section className="bg-gradient-to-br from-white to-purple-50 rounded-xl sm:rounded-2xl shadow-2xl border-2 sm:border-3 border-purple-300 p-4 sm:p-6 md:p-8 lg:p-10">
+      <section className="bg-gradient-to-br from-white to-purple-50 rounded-xl sm:rounded-3xl shadow-2xl border-2 sm:border-3 border-purple-300 p-4 sm:p-6 md:p-8 lg:p-10">
         <h2 className="text-base sm:text-lg md:text-xl font-serif font-bold text-stone-900 mb-4 sm:mb-6 md:mb-8 flex items-center gap-2 sm:gap-3">
           <div className="bg-gradient-to-br from-purple-500 to-indigo-600 p-2 sm:p-2.5 md:p-3 rounded-lg sm:rounded-xl shadow-lg">
             <Book className="text-white" size={20} />
@@ -601,11 +600,11 @@ const About: React.FC = () => {
             },
             {
               question: 'How do I track my progress over time?',
-              answer: 'Visit the Analytics page to see detailed graphs, trends, and insights about your sadhana. Track chanting rounds, study hours, discipline scores, and mood patterns over days, weeks, or months.'
+              answer: 'Use the Japa Counter to count your rounds — each completed round is saved automatically — and the Weekly Planner to keep your daily sadhana.'
             },
             {
               question: 'Is my spiritual data private?',
-              answer: 'Absolutely! Your weekly planner, journal, chanting counter, and analytics are completely private. Only your community profile and posts are visible to others. See Settings → Privacy & Data Control for details.'
+              answer: 'Absolutely! Your weekly planner, journal, chanting counter are completely private. Only your community profile and posts are visible to others. See Settings → Privacy & Data Control for details.'
             },
             {
               question: 'How do I use the Weekly Planner?',
@@ -648,7 +647,7 @@ const About: React.FC = () => {
               answer: 'Absolutely! We\'d love your feedback. Click "Submit Feedback" below or email us at jashwanthjavili7@gmail.com. Your ideas help serve the devotee community better.'
             }
           ].map((faq, idx) => (
-            <div key={idx} className="bg-white rounded-lg sm:rounded-xl border-2 border-purple-200 overflow-hidden shadow-sm hover:shadow-md transition-all">
+            <div key={idx} className="bg-white rounded-lg sm:rounded-xl border border-sandal-200 overflow-hidden shadow-sm hover:shadow-md transition-all">
               <details className="group">
                 <summary className="flex items-center justify-between gap-3 p-3 sm:p-4 md:p-5 cursor-pointer hover:bg-purple-50 transition-colors list-none">
                   <span className="font-bold text-purple-900 text-xs sm:text-sm md:text-base flex-1">{faq.question}</span>
@@ -682,7 +681,7 @@ const About: React.FC = () => {
       </section>
 
       {/* Feedback Section */}
-      <section className="bg-gradient-to-br from-orange-600 via-amber-600 to-orange-600 rounded-xl sm:rounded-2xl p-6 sm:p-7 md:p-8 text-white shadow-2xl border-2 border-orange-400">
+      <section className="bg-gradient-to-br from-orange-600 via-amber-600 to-orange-600 rounded-xl sm:rounded-3xl p-6 sm:p-7 md:p-8 text-white shadow-2xl border border-sandal-200">
         <h2 className="text-xl sm:text-2xl md:text-3xl font-serif font-bold mb-3 sm:mb-4">Share Your Feedback</h2>
         <p className="text-orange-50 mb-4 sm:mb-6 text-sm sm:text-base md:text-lg leading-relaxed">
           Your feedback helps us improve Sadhana Sang for the community.
@@ -691,7 +690,7 @@ const About: React.FC = () => {
           href="https://forms.zohopublic.in/jashwanthjashu684gm1/form/SadhanaTracerFeedbackForm/formperma/KOoeajQ20c3B6YQ6Bmmy76hxc3xkOC9-BAc-Lu7GEjU"
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 sm:gap-3 bg-white text-orange-700 px-6 sm:px-7 md:px-8 py-3 sm:py-3.5 md:py-4 rounded-lg sm:rounded-xl font-bold text-sm sm:text-base md:text-lg hover:bg-orange-50 transition-all duration-300 shadow-xl hover:shadow-2xl transform hover:scale-105 active:scale-95"
+          className="inline-flex items-center gap-2 sm:gap-3 bg-white text-orange-700 px-6 sm:px-7 md:px-8 py-3 sm:py-3.5 md:py-4 rounded-lg sm:rounded-xl font-bold text-sm sm:text-base md:text-lg hover:bg-orange-50 transition-all duration-300 shadow-soft hover:shadow-2xl transform hover:scale-105 active:scale-95"
         >
           <span>Submit Feedback</span>
           <ExternalLink size={20} />

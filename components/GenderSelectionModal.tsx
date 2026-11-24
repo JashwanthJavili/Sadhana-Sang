@@ -1,5 +1,9 @@
 import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import { Check } from 'lucide-react';
+// @ts-ignore
+import maleAvatar from '../utils/Images/avatar-male.png';
+// @ts-ignore
+import femaleAvatar from '../utils/Images/avatar-female.png';
 
 interface GenderSelectionModalProps {
   isOpen: boolean;
@@ -8,68 +12,43 @@ interface GenderSelectionModalProps {
 
 const GenderSelectionModal: React.FC<GenderSelectionModalProps> = ({ isOpen, onComplete }) => {
   const [gender, setGender] = useState<'male' | 'female'>('male');
-
   if (!isOpen) return null;
 
-  const handleComplete = () => {
-    onComplete(gender);
-  };
+  const card = (g: 'male' | 'female', label: string, honorific: string, img: string) => (
+    <button
+      type="button"
+      onClick={() => setGender(g)}
+      aria-pressed={gender === g}
+      className={`relative flex flex-col items-center rounded-3xl border-2 px-3 pb-4 pt-5 transition-all duration-200 ${
+        gender === g ? 'border-marigold-400 bg-amber-50 shadow-card' : 'border-sandal-200 bg-white hover:border-marigold-300'
+      }`}
+    >
+      <img src={img} alt="" className="h-24 w-24 rounded-full" draggable={false} />
+      <span className="mt-3 text-[15px] font-semibold text-maroon-900">{label}</span>
+      <span className="text-xs text-maroon-900/50">{honorific}</span>
+      {gender === g && (
+        <span className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full bg-brand-600 text-white">
+          <Check size={14} strokeWidth={3} />
+        </span>
+      )}
+    </button>
+  );
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black bg-opacity-60 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 space-y-6">
-        {/* Header */}
-        <div className="text-center">
-          <div className="bg-orange-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-3xl">🙏</span>
-          </div>
-          <h2 className="text-2xl font-serif font-bold text-stone-900 mb-2">
-            Welcome Back!
-          </h2>
-          <p className="text-stone-600 text-sm">
-            We've added a respectful addressing feature. Please select your gender so we can address you properly as Prabhuji or Mataji.
-          </p>
+    <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-maroon-900/40 backdrop-blur-sm" />
+      <div
+        style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
+        className="relative w-full animate-rise-in rounded-t-[32px] bg-sandal-50 px-6 pt-7 shadow-lift sm:max-w-md sm:rounded-[32px]"
+      >
+        <h2 className="font-elegant text-[26px] font-semibold leading-tight text-maroon-900">How may we address you?</h2>
+        <p className="mt-1.5 text-sm text-maroon-900/55">So we can greet you as Prabhuji or Mataji.</p>
+        <div className="mt-6 grid grid-cols-2 gap-3">
+          {card('male', 'Male', 'Prabhuji', maleAvatar)}
+          {card('female', 'Female', 'Mataji', femaleAvatar)}
         </div>
-
-        {/* Gender Selection */}
-        <div>
-          <label className="block text-sm font-medium text-stone-700 mb-3">
-            How may we address you?
-          </label>
-          <div className="grid grid-cols-2 gap-4">
-            <button
-              onClick={() => setGender('male')}
-              className={`p-4 border-2 rounded-lg transition-all ${
-                gender === 'male'
-                  ? 'border-orange-600 bg-orange-50 shadow-md'
-                  : 'border-stone-300 hover:border-orange-300'
-              }`}
-            >
-              <div className="text-3xl mb-2">👨</div>
-              <div className="font-semibold">Male</div>
-              <div className="text-xs text-stone-500">Prabhuji</div>
-            </button>
-            <button
-              onClick={() => setGender('female')}
-              className={`p-4 border-2 rounded-lg transition-all ${
-                gender === 'female'
-                  ? 'border-orange-600 bg-orange-50 shadow-md'
-                  : 'border-stone-300 hover:border-orange-300'
-              }`}
-            >
-              <div className="text-3xl mb-2">👩</div>
-              <div className="font-semibold">Female</div>
-              <div className="text-xs text-stone-500">Mataji</div>
-            </button>
-          </div>
-        </div>
-
-        {/* Submit Button */}
-        <button
-          onClick={handleComplete}
-          className="w-full px-6 py-3 bg-gradient-to-r from-orange-600 to-orange-700 text-white rounded-lg font-semibold hover:from-orange-700 hover:to-orange-800 transition-all shadow-lg hover:shadow-xl transform hover:scale-105 active:scale-95"
-        >
-          Continue 🚀
+        <button type="button" onClick={() => onComplete(gender)} className="btn-primary btn-lg mt-6 w-full">
+          Continue
         </button>
       </div>
     </div>

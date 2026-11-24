@@ -9,9 +9,43 @@ const MESSAGES = [
   'Bringing your sangha together…',
 ];
 
+const SPLASH_KEY = 'ss_splash_seen';
+// Decided once per page load, so the photo splash appears only when the app is
+// opened for the first time — later refreshes use the quick light loader.
+let showSplash = (() => {
+  try {
+    return sessionStorage.getItem(SPLASH_KEY) !== '1';
+  } catch {
+    return true;
+  }
+})();
+let splashMarked = false;
+
 /** Full-screen loader used while the session is being restored. */
 const LoadingScreen: React.FC = () => {
   const [index, setIndex] = useState(0);
+  const [splash] = useState(showSplash);
+
+  useEffect(() => {
+    if (splashMarked) return;
+    splashMarked = true;
+    try {
+      sessionStorage.setItem(SPLASH_KEY, '1');
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  if (!splash) {
+    return (
+      <div className="fixed inset-0 z-[200] flex items-center justify-center bg-sandal-100" role="status" aria-live="polite">
+        <div className="relative h-11 w-11">
+          <div className="absolute inset-0 rounded-full border-[3px] border-sandal-300/70" />
+          <div className="absolute inset-0 animate-spin rounded-full border-[3px] border-transparent border-t-brand-600 [animation-duration:0.9s]" />
+        </div>
+      </div>
+    );
+  }
 
   useEffect(() => {
     const t = setInterval(() => setIndex((i) => (i + 1) % MESSAGES.length), 1800);

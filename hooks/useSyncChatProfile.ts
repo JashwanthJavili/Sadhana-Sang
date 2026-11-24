@@ -33,6 +33,7 @@ export const useSyncChatProfile = () => {
             };
 
             if (user.photoURL) profileData.photoURL = user.photoURL;
+            if (settings.gender) profileData.gender = settings.gender;
 
             await createUserProfile(user.uid, profileData);
           }
@@ -42,6 +43,7 @@ export const useSyncChatProfile = () => {
             existingProfile.userName !== settings.userName ||
             existingProfile.guruName !== settings.guruName ||
             existingProfile.iskconCenter !== settings.iskconCenter ||
+            (!!settings.gender && existingProfile.gender !== settings.gender) ||
             existingProfile.userName === 'Bhakta' || // Force update if still using old default
             existingProfile.guruName === 'HG Pranavananda Das Prabhu' || // Old default
             existingProfile.iskconCenter === 'Local Center'; // Old default
@@ -55,6 +57,7 @@ export const useSyncChatProfile = () => {
             };
 
             if (user.photoURL) profileData.photoURL = user.photoURL;
+            if (settings.gender) profileData.gender = settings.gender;
 
             await createUserProfile(user.uid, profileData);
           }

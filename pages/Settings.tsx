@@ -573,7 +573,7 @@ const Settings: React.FC = () => {
       <section className="overflow-hidden rounded-2xl border border-sandal-200 bg-gradient-to-br from-sandal-50 via-white to-brand-50/60 shadow-card">
         {!isEditing ? (
           <div className="flex items-center gap-4 p-4 sm:p-5">
-            <Avatar src={user?.photoURL} name={displayName} className="h-16 w-16 ring-4 ring-white shadow-soft" textClassName="text-lg" />
+            <Avatar gender={settings?.gender} name={displayName} className="h-16 w-16 ring-4 ring-white shadow-soft" textClassName="text-lg" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-lg font-bold text-maroon-900">{displayName}</p>
               {profileLine && <p className="truncate text-sm text-maroon-900/60">{profileLine}</p>}
@@ -590,7 +590,7 @@ const Settings: React.FC = () => {
         ) : (
           <div className="space-y-4 p-4 sm:p-5">
             <div className="flex items-center gap-3">
-              <Avatar src={user?.photoURL} name={editedSettings?.userName || displayName} className="h-12 w-12" />
+              <Avatar gender={editedSettings?.gender ?? settings?.gender} name={editedSettings?.userName || displayName} className="h-12 w-12" />
               <div>
                 <p className="text-base font-bold text-maroon-900">Edit profile</p>
                 <p className="text-xs text-maroon-900/55">This is how other devotees see you.</p>

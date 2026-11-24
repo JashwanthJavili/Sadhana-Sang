@@ -20,8 +20,6 @@ import { X, Sparkles } from 'lucide-react';
 // Lazy load heavy pages for better performance
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const DailyPlanner = lazy(() => import('./pages/DailyPlanner'));
-const Analytics = lazy(() => import('./pages/Analytics'));
-const History = lazy(() => import('./pages/History'));
 const Settings = lazy(() => import('./pages/Settings'));
 const About = lazy(() => import('./pages/About'));
 const DevotionalJournal = lazy(() => import('./pages/DevotionalJournal'));
@@ -224,6 +222,7 @@ function AppContent() {
             guruName: data.guruName,
             iskconCenter: data.iskconCenter,
             photoURL: user.photoURL || undefined,
+            gender: data.gender,
           });
         }
       } catch (error) {
@@ -276,9 +275,7 @@ function AppContent() {
 
             <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
             <Route path="/planner" element={<PrivateRoute><DailyPlanner /></PrivateRoute>} />
-            <Route path="/analytics" element={<PrivateRoute><Analytics /></PrivateRoute>} />
             <Route path="/journal" element={<PrivateRoute><DevotionalJournal /></PrivateRoute>} />
-            <Route path="/history" element={<PrivateRoute><History /></PrivateRoute>} />
             <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
             <Route path="/about" element={<PrivateRoute><About /></PrivateRoute>} />
             <Route path="/community" element={<PrivateRoute><Community /></PrivateRoute>} />

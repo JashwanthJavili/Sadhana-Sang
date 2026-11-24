@@ -1,8 +1,6 @@
 import {
   Home,
   PenTool,
-  BarChart3,
-  History,
   Settings,
   Info,
   Heart,
@@ -58,16 +56,9 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Sadhana',
     items: [
-      { to: '/planner', label: 'Weekly Planner', description: 'Your sadhana card for the week', icon: PenTool, tone: 'bg-amber-50 text-amber-600', guestAllowed: true },
       { to: '/chanting', label: 'Japa Counter', description: 'Count your rounds', icon: MalaIcon, tone: 'bg-rose-50 text-rose-600', guestAllowed: true },
+      { to: '/planner', label: 'Weekly Planner', description: 'Your sadhana card for the week', icon: PenTool, tone: 'bg-amber-50 text-amber-600', guestAllowed: true },
       { to: '/journal', label: 'Journal', description: 'Devotional reflections', icon: Heart, tone: 'bg-pink-50 text-pink-600', guestAllowed: false },
-    ],
-  },
-  {
-    title: 'Progress',
-    items: [
-      { to: '/analytics', label: 'Analytics', description: 'Trends and charts', icon: BarChart3, tone: 'bg-cyan-50 text-cyan-600', guestAllowed: true },
-      { to: '/history', label: 'History', description: 'All past entries', icon: History, tone: 'bg-stone-100 text-stone-600', guestAllowed: true },
     ],
   },
   {
@@ -80,8 +71,8 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Sangha',
     items: [
-      { to: '/community', label: 'Devotees', description: 'Find and connect with devotees', icon: Users, tone: 'bg-indigo-50 text-indigo-600', guestAllowed: false },
       { to: '/chats', label: 'Messages', description: 'Your conversations', icon: MessageCircle, tone: 'bg-emerald-50 text-emerald-600', guestAllowed: false },
+      { to: '/community', label: 'Devotees', description: 'Find and connect with devotees', icon: Users, tone: 'bg-indigo-50 text-indigo-600', guestAllowed: false },
       { to: '/questions', label: 'Forum', description: 'Ask and answer spiritual questions', icon: MessagesSquare, tone: 'bg-teal-50 text-teal-600', guestAllowed: false },
       { to: '/connection-requests', label: 'Connection Requests', description: 'Pending requests', icon: UserPlus, tone: 'bg-blue-50 text-blue-600', guestAllowed: false, hidden: true },
     ],
@@ -94,7 +85,7 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-/** Account-level pages — live in the profile menu (sidebar footer), not the main list */
+/** Account-level pages — pinned at the bottom of the menu, below the main list */
 export const ACCOUNT_ITEMS: NavItem[] = [
   { to: '/settings', label: 'Settings', description: 'Profile and preferences', icon: Settings, tone: 'bg-stone-100 text-stone-600', guestAllowed: true },
   { to: '/about', label: 'About', description: 'About Sadhana Sang', icon: Info, tone: 'bg-stone-100 text-stone-600', guestAllowed: true },

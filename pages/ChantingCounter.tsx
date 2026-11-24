@@ -396,26 +396,40 @@ export default function ChantingCounter() {
           </TapCircle>
         </button>
 
-        <p className="relative mt-2 text-center text-xs text-maroon-900/45">Tap the circle to count · each round saves automatically</p>
+        {/* Hint only before the first bead — then the controls take over */}
+        {!hasCount && <p className="relative mt-3 text-center text-xs text-maroon-900/45">Tap the circle to start counting</p>}
 
-        {/* Buttons */}
-        <div className="relative mt-5 grid grid-cols-3 gap-2">
-          {[
-            { label: 'Undo', Icon: Undo2, onClick: undo, disabled: !hasCount },
-            { label: 'Full screen', Icon: Maximize2, onClick: () => setFocus(true) },
-            { label: 'Settings', Icon: Settings2, onClick: () => setShowSettings(true) },
-          ].map(({ label, Icon, onClick, disabled }) => (
+        <div className={`relative flex items-center justify-center gap-2 ${hasCount ? 'mt-4' : 'mt-3'}`}>
+          {hasCount && (
             <button
-              key={label}
               type="button"
-              onClick={onClick}
-              disabled={disabled}
-              className="flex flex-col items-center gap-1 rounded-2xl bg-white py-3 text-xs font-semibold text-maroon-800 ring-1 ring-sandal-200 transition hover:ring-marigold-400 active:scale-95 disabled:opacity-40"
+              onClick={undo}
+              className="inline-flex h-11 animate-fadeIn items-center gap-2 rounded-full bg-white px-5 text-sm font-semibold text-maroon-800 shadow-soft ring-1 ring-sandal-200 transition active:scale-95"
+              style={{ minHeight: 0 }}
             >
-              <Icon size={19} className="text-brand-500" />
-              {label}
+              <Undo2 size={17} className="text-brand-500" /> Undo
             </button>
-          ))}
+          )}
+          <button
+            type="button"
+            onClick={() => setFocus(true)}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-maroon-700 shadow-soft ring-1 ring-sandal-200 transition active:scale-95"
+            aria-label="Full screen"
+            title="Full screen"
+            style={{ minHeight: 0 }}
+          >
+            <Maximize2 size={18} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowSettings(true)}
+            className="flex h-11 w-11 items-center justify-center rounded-full bg-white text-maroon-700 shadow-soft ring-1 ring-sandal-200 transition active:scale-95"
+            aria-label="Settings"
+            title="Settings"
+            style={{ minHeight: 0 }}
+          >
+            <Settings2 size={18} />
+          </button>
         </div>
       </section>
 
