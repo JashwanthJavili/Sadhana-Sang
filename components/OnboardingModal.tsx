@@ -37,9 +37,9 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onComplete, p
     step === 1 ? userName.trim().length > 0 : step === 2 ? gender !== null : step === 3 ? guruName.trim().length > 0 : iskconCenter.trim().length > 0;
 
   const next = () => {
-    if (!canProceed || !gender) return;
+    if (!canProceed) return;
     if (step < TOTAL) setStep(step + 1);
-    else onComplete({ userName: userName.trim(), gender, guruName: guruName.trim(), iskconCenter: iskconCenter.trim() });
+    else if (gender) onComplete({ userName: userName.trim(), gender, guruName: guruName.trim(), iskconCenter: iskconCenter.trim() });
   };
 
   const titles = [

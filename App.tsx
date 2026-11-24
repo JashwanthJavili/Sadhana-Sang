@@ -103,10 +103,8 @@ function AppContent() {
   useEffect(() => {
     if (user) {
       const updateInfo = checkForUpdates();
-      if (updateInfo.hasUpdate) {
-        setVersionInfo(updateInfo);
-        setShowVersionUpdate(true);
-      }
+      // "What's new" popup is intentionally not shown — just record the version as seen.
+      if (updateInfo.hasUpdate) markVersionSeen();
     }
   }, [user]);
   // CRITICAL: Clear localStorage immediately for authenticated users
