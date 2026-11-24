@@ -17,6 +17,7 @@ import {
   Flag,
 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
+import { useConfirm, askText } from '../ConfirmDialog';
 import { PRESET_LOCATIONS, findPreset, DEFAULT_LOCATION_ID } from '../../utils/ekadashi/locations';
 import { calculateEkadashis, RULE_LABELS } from '../../utils/ekadashi/calendar';
 import { mergeObservances } from '../../utils/ekadashi/merge';
@@ -35,6 +36,16 @@ import {
   bundledContent,
 } from '../../services/ekadashi';
 import { StatusBadge } from './shared';
+
+const inputCls = 'block w-full h-11 rounded-xl border border-sandal-200 bg-white px-3 text-sm text-maroon-900 outline-none focus:ring-2 focus:ring-marigold-400/40';
+const areaCls = 'block w-full rounded-xl border border-sandal-200 bg-white px-3 py-2 text-sm text-maroon-900 outline-none focus:ring-2 focus:ring-marigold-400/40';
+const labelCls = 'mb-1 block text-xs text-maroon-900/50';
+const btnBase = 'inline-flex h-10 items-center justify-center gap-1.5 rounded-xl px-3.5 text-sm font-semibold disabled:opacity-50';
+const btnPrimary = `${btnBase} bg-brand-600 text-white`;
+const btnSecondary = `${btnBase} border border-sandal-200 bg-white text-maroon-900/80`;
+const btnGhost = `${btnBase} text-brand-700`;
+const iconBtn = 'inline-flex h-10 w-10 items-center justify-center rounded-xl border border-sandal-200 bg-white text-maroon-900/60';
+const card = 'rounded-2xl border border-sandal-200 bg-white p-4 shadow-soft';
 
 const SLUGS = EKADASHI_CONTENT.map((c) => ({ slug: c.slug, name: c.name }));
 const nameOf = (slug: string) => SLUGS.find((s) => s.slug === slug)?.name || slug;
@@ -99,25 +110,25 @@ const RecordEditor: React.FC<{
     }
   };
 
-  const field = 'field';
+  const field = inputCls;
   return (
     <div className="fixed inset-0 z-[90] flex items-end justify-center sm:items-center sm:p-4">
       <div className="absolute inset-0 bg-stone-900/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
-        <div className="flex items-center justify-between border-b border-stone-100 px-5 py-4">
-          <div>
-            <h3 className="font-semibold text-stone-900">Official Ekadashi record</h3>
-            <p className="text-xs text-stone-500">
+      <div className="relative flex max-h-[90dvh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-sandal-200 px-4 py-3">
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold text-maroon-900">Official Ekadashi record</h3>
+            <p className="text-xs text-maroon-900/50">
               {findPreset(r.locationId)?.name} · times are local wall-clock as printed in the source (24h)
             </p>
           </div>
-          <button className="icon-btn" onClick={onClose} aria-label="Close">
+          <button className={iconBtn} style={{ minHeight: 0 }} onClick={onClose} aria-label="Close">
             <X size={18} />
           </button>
         </div>
-        <div className="grid flex-1 gap-4 overflow-y-auto p-5 sm:grid-cols-2">
-          <label className="sm:col-span-2">
-            <span className="field-label">Ekadashi</span>
+        <div className="grid flex-1 grid-cols-1 gap-3 overflow-y-auto p-4 sm:grid-cols-2">
+          <label className="min-w-0 sm:col-span-2">
+            <span className={labelCls}>Ekadashi</span>
             <select className={field} value={r.slug} onChange={(e) => set('slug', e.target.value)}>
               {SLUGS.map((s) => (
                 <option key={s.slug} value={s.slug}>
@@ -126,64 +137,64 @@ const RecordEditor: React.FC<{
               ))}
             </select>
           </label>
-          <label>
-            <span className="field-label">Fasting date *</span>
+          <label className="min-w-0">
+            <span className={labelCls}>Fasting date *</span>
             <input type="date" className={field} value={r.fastDate} onChange={(e) => setR((x) => ({ ...x, fastDate: e.target.value, paranaDate: x.paranaDate || (e.target.value ? addDaysKey(e.target.value, 1) : '') }))} />
           </label>
-          <label>
-            <span className="field-label">Parana date</span>
+          <label className="min-w-0">
+            <span className={labelCls}>Parana date</span>
             <input type="date" className={field} value={r.paranaDate} onChange={(e) => set('paranaDate', e.target.value)} />
           </label>
-          <label>
-            <span className="field-label">Parana start</span>
+          <label className="min-w-0">
+            <span className={labelCls}>Parana start</span>
             <input type="time" className={field} value={r.paranaStart || ''} onChange={(e) => set('paranaStart', e.target.value)} />
           </label>
-          <label>
-            <span className="field-label">Parana end (blank = “after start”)</span>
+          <label className="min-w-0">
+            <span className={labelCls}>Parana end (blank = “after start”)</span>
             <input type="time" className={field} value={r.paranaEnd || ''} onChange={(e) => set('paranaEnd', e.target.value)} />
           </label>
-          <label className="sm:col-span-2">
-            <span className="field-label">Parana note (as printed)</span>
+          <label className="min-w-0 sm:col-span-2">
+            <span className={labelCls}>Parana note (as printed)</span>
             <input className={field} value={r.paranaNote || ''} placeholder="e.g. Sunrise – End of tithi" onChange={(e) => set('paranaNote', e.target.value)} />
           </label>
-          <label>
-            <span className="field-label">Ekadashi tithi begins</span>
+          <label className="min-w-0">
+            <span className={labelCls}>Ekadashi tithi begins</span>
             <input type="datetime-local" className={field} value={r.ekadashiStart || ''} onChange={(e) => set('ekadashiStart', e.target.value)} />
           </label>
-          <label>
-            <span className="field-label">Ekadashi tithi ends</span>
+          <label className="min-w-0">
+            <span className={labelCls}>Ekadashi tithi ends</span>
             <input type="datetime-local" className={field} value={r.ekadashiEnd || ''} onChange={(e) => set('ekadashiEnd', e.target.value)} />
           </label>
-          <label className="sm:col-span-2">
-            <span className="field-label">Mahadvadashi label (if any)</span>
+          <label className="min-w-0 sm:col-span-2">
+            <span className={labelCls}>Mahadvadashi label (if any)</span>
             <input className={field} value={r.mahadvadashi || ''} placeholder="e.g. Trisprsa Mahadvadasi" onChange={(e) => set('mahadvadashi', e.target.value)} />
           </label>
-          <label>
-            <span className="field-label">Source name *</span>
+          <label className="min-w-0">
+            <span className={labelCls}>Source name *</span>
             <input className={field} value={r.sourceName} placeholder="e.g. ISKCON Mayapur GCal 2027" onChange={(e) => set('sourceName', e.target.value)} />
           </label>
-          <label>
-            <span className="field-label">Source URL</span>
+          <label className="min-w-0">
+            <span className={labelCls}>Source URL</span>
             <input className={field} value={r.sourceUrl || ''} placeholder="https://…" onChange={(e) => set('sourceUrl', e.target.value)} />
           </label>
-          <label className="sm:col-span-2">
-            <span className="field-label">Verification status</span>
+          <label className="min-w-0 sm:col-span-2">
+            <span className={labelCls}>Verification status</span>
             <select className={field} value={r.status} onChange={(e) => set('status', e.target.value as ObservanceStatus)}>
               <option value="source_imported">Official source — review pending</option>
               <option value="verified">Verified against official ISKCON calendar</option>
               <option value="disputed">Disputed — sources disagree</option>
             </select>
           </label>
-          <label className="sm:col-span-2">
-            <span className="field-label">Admin notes</span>
-            <textarea className={field} rows={2} value={r.notes || ''} onChange={(e) => set('notes', e.target.value)} />
+          <label className="min-w-0 sm:col-span-2">
+            <span className={labelCls}>Admin notes</span>
+            <textarea className={areaCls} rows={2} value={r.notes || ''} onChange={(e) => set('notes', e.target.value)} />
           </label>
         </div>
-        <div className="flex justify-end gap-2 border-t border-stone-100 p-4">
-          <button className="btn-secondary" onClick={onClose}>
+        <div className="flex flex-wrap justify-end gap-2 border-t border-sandal-200 p-4">
+          <button className={btnSecondary} style={{ minHeight: 0 }} onClick={onClose}>
             Cancel
           </button>
-          <button className="btn-primary" onClick={save} disabled={saving}>
+          <button className={btnPrimary} style={{ minHeight: 0 }} onClick={save} disabled={saving}>
             <Save size={16} /> {saving ? 'Saving…' : 'Save record'}
           </button>
         </div>
@@ -196,6 +207,8 @@ const CSV_HELP = 'slug,fastDate,paranaDate,paranaStart,paranaEnd,sourceName,sour
 
 const DatesAdmin: React.FC = () => {
   const toast = useToast();
+  const { ask, dialog } = useConfirm();
+  const confirmAsk = (text: string) => askText(ask, text);
   const [cityId, setCityId] = useState(DEFAULT_LOCATION_ID);
   const city = findPreset(cityId)!;
   const thisYear = Number(dateKeyInTz(Date.now(), city.tz).slice(0, 4));
@@ -247,7 +260,7 @@ const DatesAdmin: React.FC = () => {
 
   const setStatus = async (r: DisplayEkadashi, status: ObservanceStatus) => {
     if (!r.record) return;
-    if (status === 'verified' && !confirm(`Mark ${nameOf(r.slug)} on ${r.fastDate} for ${city.name} as VERIFIED?\n\nOnly do this after checking the date and parana times against the official ISKCON calendar (${r.record.sourceName}).`)) return;
+    if (status === 'verified' && !await confirmAsk(`Mark ${nameOf(r.slug)} on ${r.fastDate} for ${city.name} as VERIFIED?\n\nOnly do this after checking the date and parana times against the official ISKCON calendar (${r.record.sourceName}).`)) return;
     try {
       await saveObservance({ ...r.record, status });
       toast.showSuccess(status === 'verified' ? 'Marked verified' : 'Status updated');
@@ -260,7 +273,7 @@ const DatesAdmin: React.FC = () => {
   const verifyAllMatching = async () => {
     const candidates = rows.filter((r) => r.record && r.status === 'source_imported' && r.discrepancies.length === 0 && r.record.sourceUrl);
     if (!candidates.length) return toast.showInfo('No unreviewed records that match the calculation exactly.');
-    if (!confirm(`Mark ${candidates.length} official records for ${city.name} (${year}) as VERIFIED?\n\nThese come from a published GCal calendar and agree with the independent calculation (date, and parana within 5 minutes). Please spot-check the source before confirming.`)) return;
+    if (!await confirmAsk(`Mark ${candidates.length} official records for ${city.name} (${year}) as VERIFIED?\n\nThese come from a published GCal calendar and agree with the independent calculation (date, and parana within 5 minutes). Please spot-check the source before confirming.`)) return;
     setBusy(true);
     try {
       for (const r of candidates) await saveObservance({ ...r.record!, status: 'verified', notes: [r.record!.notes, 'Bulk-verified: official source agrees with independent calculation.'].filter(Boolean).join(' ') });
@@ -272,7 +285,7 @@ const DatesAdmin: React.FC = () => {
   };
 
   const importSeed = async () => {
-    if (!confirm(`Copy ${OFFICIAL_SEED.length} bundled official GCal records (6 cities, 2026–2027) into the database?\nExisting database records are not overwritten. Status stays "review pending".`)) return;
+    if (!await confirmAsk(`Copy ${OFFICIAL_SEED.length} bundled official GCal records (6 cities, 2026–2027) into the database?\nExisting database records are not overwritten. Status stays "review pending".`)) return;
     setBusy(true);
     try {
       const n = await seedOfficialObservances();
@@ -313,190 +326,188 @@ const DatesAdmin: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <label>
-          <span className="field-label">City</span>
-          <select className="field" value={cityId} onChange={(e) => setCityId(e.target.value)}>
-            {PRESET_LOCATIONS.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name} ({l.country})
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className="field-label">Year</span>
-          <select className="field" value={year} onChange={(e) => setYear(Number(e.target.value))}>
-            {[thisYear - 1, thisYear, thisYear + 1, thisYear + 2].map((y) => (
-              <option key={y}>{y}</option>
-            ))}
-          </select>
-        </label>
-        <label className="flex items-center gap-2 pb-2.5 text-sm text-stone-600">
-          <input type="checkbox" checked={onlyIssues} onChange={(e) => setOnlyIssues(e.target.checked)} /> Only items needing attention
-        </label>
-        <div className="ml-auto flex flex-wrap gap-2">
-          <button className="btn-secondary btn-sm" onClick={reload}>
+      {dialog}
+      <div className={`${card} space-y-3`}>
+        <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-end">
+          <label className="col-span-2 min-w-0 sm:col-span-1">
+            <span className={labelCls}>City</span>
+            <select className={inputCls} value={cityId} onChange={(e) => setCityId(e.target.value)}>
+              {PRESET_LOCATIONS.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name} ({l.country})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="min-w-0">
+            <span className={labelCls}>Year</span>
+            <select className={inputCls} value={year} onChange={(e) => setYear(Number(e.target.value))}>
+              {[thisYear - 1, thisYear, thisYear + 1, thisYear + 2].map((y) => (
+                <option key={y}>{y}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex h-11 items-center gap-2 text-sm text-maroon-900/65">
+            <input type="checkbox" checked={onlyIssues} onChange={(e) => setOnlyIssues(e.target.checked)} /> Only needing attention
+          </label>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button className={btnSecondary} style={{ minHeight: 0 }} onClick={reload}>
             <RefreshCw size={14} /> Refresh
           </button>
-          <button className="btn-secondary btn-sm" onClick={() => setCsvOpen((v) => !v)}>
+          <button className={btnSecondary} style={{ minHeight: 0 }} onClick={() => setCsvOpen((v) => !v)}>
             <Upload size={14} /> Bulk import
           </button>
-          <button className="btn-secondary btn-sm" onClick={importSeed} disabled={busy}>
-            <Database size={14} /> Import bundled GCal data
+          <button className={btnSecondary} style={{ minHeight: 0 }} onClick={importSeed} disabled={busy}>
+            <Database size={14} /> Import bundled data
           </button>
-          <button className="btn-primary btn-sm" onClick={() => setEditing({ rec: emptyRecord(cityId) })}>
+          <button className={btnPrimary} style={{ minHeight: 0 }} onClick={() => setEditing({ rec: emptyRecord(cityId) })}>
             <Plus size={14} /> Add record
           </button>
         </div>
       </div>
 
       {dbError && (
-        <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700 ring-1 ring-red-200">
+        <p className="break-words rounded-xl bg-red-50 p-3 text-sm text-red-700 ring-1 ring-red-200">
           Database read failed ({dbError}). Make sure the <code>ekadashi</code> rules in database.rules.json are deployed.
         </p>
       )}
 
       {csvOpen && (
-        <div className="space-y-2 rounded-2xl bg-stone-50 p-4 ring-1 ring-stone-200">
-          <p className="text-xs text-stone-600">
+        <div className={`${card} space-y-2`}>
+          <p className="break-words text-xs text-maroon-900/50">
             Paste official data for <b>{city.name}</b>, one Ekadashi per line: <code>{CSV_HELP}</code>. Times are 24h local. Records are saved as “review pending”.
           </p>
-          <textarea className="field font-mono text-xs" rows={6} value={csv} onChange={(e) => setCsv(e.target.value)} placeholder={`utpanna,2027-11-24,2027-11-25,05:56,09:34,ISKCON Mayapur GCal 2027,https://…`} />
-          <button className="btn-primary btn-sm" onClick={importCsv} disabled={busy || !csv.trim()}>
+          <textarea className={`${areaCls} font-mono text-xs`} rows={6} value={csv} onChange={(e) => setCsv(e.target.value)} placeholder={`utpanna,2027-11-24,2027-11-25,05:56,09:34,ISKCON Mayapur GCal 2027,https://…`} />
+          <button className={btnPrimary} style={{ minHeight: 0 }} onClick={importCsv} disabled={busy || !csv.trim()}>
             Import lines
           </button>
         </div>
       )}
 
       <div className="flex flex-wrap gap-2 text-xs">
-        <span className="badge-green">{stats.verified} verified</span>
-        <span className="badge-blue">{stats.imported} official · review pending</span>
-        <span className="badge bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200">{stats.calculated} calculated only</span>
-        <span className="badge-red">{stats.issues} with discrepancies</span>
+        <span className="rounded-full bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200">{stats.verified} verified</span>
+        <span className="rounded-full bg-sky-50 px-2.5 py-1 font-semibold text-sky-700 ring-1 ring-inset ring-sky-200">{stats.imported} official · review pending</span>
+        <span className="rounded-full bg-amber-50 px-2.5 py-1 font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">{stats.calculated} calculated only</span>
+        <span className="rounded-full bg-red-50 px-2.5 py-1 font-semibold text-red-700 ring-1 ring-inset ring-red-200">{stats.issues} with discrepancies</span>
         {stats.imported > 0 && (
-          <button className="badge-green cursor-pointer hover:bg-emerald-100" onClick={verifyAllMatching} disabled={busy}>
+          <button className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-200 hover:bg-emerald-100" style={{ minHeight: 0 }} onClick={verifyAllMatching} disabled={busy}>
             <ShieldCheck size={12} /> Verify all that match calculation…
           </button>
         )}
       </div>
 
       {loading ? (
-        <div className="skeleton h-64 w-full" />
+        <div className="h-64 w-full animate-pulse rounded-2xl bg-sandal-100" />
       ) : (
-        <div className="overflow-x-auto rounded-2xl ring-1 ring-stone-200">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-stone-50 text-xs uppercase tracking-wide text-stone-500">
-              <tr>
-                <th className="px-3 py-2">Ekadashi</th>
-                <th className="px-3 py-2">Calculated</th>
-                <th className="px-3 py-2">Official record</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-stone-100 bg-white">
-              {shown.map((r) => (
-                <tr key={r.key} className="align-top">
-                  <td className="px-3 py-3">
-                    <p className="font-semibold text-stone-900">{nameOf(r.slug)}</p>
-                    <p className="text-xs text-stone-500">{formatDateKey(r.fastDate, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</p>
-                  </td>
-                  <td className="px-3 py-3 text-xs text-stone-600">
-                    {r.calc ? (
-                      <>
-                        <p>Fast {r.calc.fastDate}</p>
-                        <p>
-                          Parana {hm(r.calc.paranaStart)}–{hm(r.calc.paranaEnd)}
-                        </p>
-                        {r.calc.rule !== 'shuddha' && <p className="text-brand-700">{RULE_LABELS[r.calc.rule].title}</p>}
-                        {r.calc.reviewFlags
-                          .filter((f) => f.startsWith('Borderline'))
-                          .map((f) => (
-                            <p key={f} className="mt-1 flex gap-1 text-amber-700">
-                              <AlertTriangle size={12} className="mt-0.5 shrink-0" /> borderline
-                            </p>
-                          ))}
-                      </>
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                  <td className="px-3 py-3 text-xs text-stone-600">
-                    {r.record ? (
-                      <>
-                        <p>Fast {r.record.fastDate}</p>
-                        <p>
-                          Parana {r.record.paranaStart || '—'}–{r.record.paranaEnd || '…'}
-                        </p>
-                        {r.record.mahadvadashi && <p className="text-brand-700">{r.record.mahadvadashi}</p>}
-                        <p className="mt-1 flex items-center gap-1 text-stone-400">
-                          {r.origin === 'seed' ? 'bundled seed' : 'database'}
-                          {r.record.sourceUrl && (
-                            <a href={r.record.sourceUrl} target="_blank" rel="noreferrer" className="text-brand-600" title={r.record.sourceName}>
-                              <ExternalLink size={11} />
-                            </a>
-                          )}
-                        </p>
-                        {r.discrepancies.map((d) => (
-                          <p key={d} className="mt-1 text-red-600">
-                            {d}
+        <div className="space-y-3">
+          {shown.map((r) => (
+            <div key={r.key} className={card}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-maroon-900">{nameOf(r.slug)}</p>
+                  <p className="text-xs text-maroon-900/50">{formatDateKey(r.fastDate, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <StatusBadge status={r.status} />
+                  {r.record?.verifiedBy && <p className="mt-1 text-[11px] text-maroon-900/50">by {r.record.verifiedBy}</p>}
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="min-w-0 rounded-xl bg-sandal-50 p-3 text-xs text-maroon-900/65">
+                  <p className="mb-1 text-maroon-900/50">Calculated</p>
+                  {r.calc ? (
+                    <>
+                      <p>Fast {r.calc.fastDate}</p>
+                      <p>
+                        Parana {hm(r.calc.paranaStart)}–{hm(r.calc.paranaEnd)}
+                      </p>
+                      {r.calc.rule !== 'shuddha' && <p className="text-brand-700">{RULE_LABELS[r.calc.rule].title}</p>}
+                      {r.calc.reviewFlags
+                        .filter((f) => f.startsWith('Borderline'))
+                        .map((f) => (
+                          <p key={f} className="mt-1 flex gap-1 text-amber-700">
+                            <AlertTriangle size={12} className="mt-0.5 shrink-0" /> borderline
                           </p>
                         ))}
-                      </>
-                    ) : (
-                      <span className="text-stone-400">No official record</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-3">
-                    <StatusBadge status={r.status} />
-                    {r.record?.verifiedBy && <p className="mt-1 text-[11px] text-stone-400">by {r.record.verifiedBy}</p>}
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex justify-end gap-1">
-                      {r.record && r.status !== 'verified' && (
-                        <button className="icon-btn h-8 w-8 text-emerald-600" title="Mark verified" onClick={() => setStatus(r, 'verified')}>
-                          <CheckCircle2 size={16} />
-                        </button>
-                      )}
-                      {r.record && r.status !== 'disputed' && (
-                        <button className="icon-btn h-8 w-8 text-red-500" title="Mark disputed" onClick={() => setStatus(r, 'disputed')}>
-                          <Flag size={15} />
-                        </button>
-                      )}
-                      <button
-                        className="icon-btn h-8 w-8"
-                        title={r.record ? 'Edit record' : 'Add official record'}
-                        onClick={() =>
-                          setEditing(
-                            r.record
-                              ? { rec: { ...r.record }, originalKey: r.origin === 'database' ? r.record.fastDate : undefined }
-                              : { rec: emptyRecord(cityId, r.slug, r.fastDate) }
-                          )
-                        }
-                      >
-                        {r.record ? <Edit3 size={15} /> : <Plus size={15} />}
-                      </button>
-                      {r.origin === 'database' && (
-                        <button
-                          className="icon-btn h-8 w-8 text-stone-400 hover:text-red-600"
-                          title="Delete database record"
-                          onClick={async () => {
-                            if (!confirm('Delete this database record? (A bundled seed record for the same date, if any, will show again.)')) return;
-                            await deleteObservance(cityId, r.record!.fastDate);
-                            reload();
-                          }}
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {shown.length === 0 && <p className="p-6 text-center text-sm text-stone-500">Nothing to show.</p>}
+                    </>
+                  ) : (
+                    '—'
+                  )}
+                </div>
+                <div className="min-w-0 rounded-xl bg-sandal-50 p-3 text-xs text-maroon-900/65">
+                  <p className="mb-1 text-maroon-900/50">Official record</p>
+                  {r.record ? (
+                    <>
+                      <p>Fast {r.record.fastDate}</p>
+                      <p>
+                        Parana {r.record.paranaStart || '—'}–{r.record.paranaEnd || '…'}
+                      </p>
+                      {r.record.mahadvadashi && <p className="break-words text-brand-700">{r.record.mahadvadashi}</p>}
+                      <p className="mt-1 flex items-center gap-1 text-maroon-900/50">
+                        {r.origin === 'seed' ? 'bundled seed' : 'database'}
+                        {r.record.sourceUrl && (
+                          <a href={r.record.sourceUrl} target="_blank" rel="noreferrer" className="text-brand-600" title={r.record.sourceName}>
+                            <ExternalLink size={11} />
+                          </a>
+                        )}
+                      </p>
+                      {r.discrepancies.map((d) => (
+                        <p key={d} className="mt-1 break-words text-red-600">
+                          {d}
+                        </p>
+                      ))}
+                    </>
+                  ) : (
+                    <span className="text-maroon-900/50">No official record</span>
+                  )}
+                </div>
+              </div>
+              <div className="mt-3 flex flex-wrap justify-end gap-2">
+                {r.record && r.status !== 'verified' && (
+                  <button className={`${iconBtn} text-emerald-600`} style={{ minHeight: 0 }} title="Mark verified" aria-label="Mark verified" onClick={() => setStatus(r, 'verified')}>
+                    <CheckCircle2 size={16} />
+                  </button>
+                )}
+                {r.record && r.status !== 'disputed' && (
+                  <button className={`${iconBtn} text-red-500`} style={{ minHeight: 0 }} title="Mark disputed" aria-label="Mark disputed" onClick={() => setStatus(r, 'disputed')}>
+                    <Flag size={15} />
+                  </button>
+                )}
+                <button
+                  className={iconBtn}
+                  style={{ minHeight: 0 }}
+                  title={r.record ? 'Edit record' : 'Add official record'}
+                  aria-label={r.record ? 'Edit record' : 'Add official record'}
+                  onClick={() =>
+                    setEditing(
+                      r.record
+                        ? { rec: { ...r.record }, originalKey: r.origin === 'database' ? r.record.fastDate : undefined }
+                        : { rec: emptyRecord(cityId, r.slug, r.fastDate) }
+                    )
+                  }
+                >
+                  {r.record ? <Edit3 size={15} /> : <Plus size={15} />}
+                </button>
+                {r.origin === 'database' && (
+                  <button
+                    className={`${iconBtn} hover:text-red-600`}
+                    style={{ minHeight: 0 }}
+                    title="Delete database record"
+                    aria-label="Delete database record"
+                    onClick={async () => {
+                      if (!await confirmAsk('Delete this database record? (A bundled seed record for the same date, if any, will show again.)')) return;
+                      await deleteObservance(cityId, r.record!.fastDate);
+                      reload();
+                    }}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+          {shown.length === 0 && <p className={`${card} text-center text-sm text-maroon-900/50`}>Nothing to show.</p>}
         </div>
       )}
 
@@ -530,6 +541,8 @@ const textToRefs = (t: string): SourceRef[] =>
 
 const ContentEditor: React.FC<{ initial: EkadashiContent; onSaved: () => void }> = ({ initial, onSaved }) => {
   const toast = useToast();
+  const { ask, dialog } = useConfirm();
+  const confirmAsk = (text: string) => askText(ask, text);
   const [c, setC] = useState<EkadashiContent>(initial);
   const [scriptureText, setScriptureText] = useState(refsToText(initial.scripture));
   const [sourcesText, setSourcesText] = useState(refsToText(initial.sources));
@@ -577,9 +590,9 @@ const ContentEditor: React.FC<{ initial: EkadashiContent; onSaved: () => void }>
     }
   };
 
-  const revert = () => {
+  const revert = async () => {
     const b = bundledContent(c.slug);
-    if (b && confirm('Discard edits and load the bundled (researched) version into the editor?')) {
+    if (b && (await confirmAsk('Discard edits and load the bundled (researched) version into the editor?'))) {
       setC(b);
       setScriptureText(refsToText(b.scripture));
       setSourcesText(refsToText(b.sources));
@@ -588,91 +601,92 @@ const ContentEditor: React.FC<{ initial: EkadashiContent; onSaved: () => void }>
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2">
+      {dialog}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label>
-          <span className="field-label">Name</span>
-          <input className="field" value={c.name} onChange={(e) => set('name', e.target.value)} />
+          <span className={labelCls}>Name</span>
+          <input className={inputCls} value={c.name} onChange={(e) => set('name', e.target.value)} />
         </label>
         <label>
-          <span className="field-label">Other names (comma separated)</span>
-          <input className="field" value={c.altNames.join(', ')} onChange={(e) => set('altNames', e.target.value.split(',').map((x) => x.trim()).filter(Boolean))} />
+          <span className={labelCls}>Other names (comma separated)</span>
+          <input className={inputCls} value={c.altNames.join(', ')} onChange={(e) => set('altNames', e.target.value.split(',').map((x) => x.trim()).filter(Boolean))} />
         </label>
         <label>
-          <span className="field-label">Month</span>
-          <input className="field" value={c.month} onChange={(e) => set('month', e.target.value)} />
+          <span className={labelCls}>Month</span>
+          <input className={inputCls} value={c.month} onChange={(e) => set('month', e.target.value)} />
         </label>
         <label>
-          <span className="field-label">Paksha</span>
-          <select className="field" value={c.paksha} onChange={(e) => set('paksha', e.target.value as 'shukla' | 'krishna')}>
+          <span className={labelCls}>Paksha</span>
+          <select className={inputCls} value={c.paksha} onChange={(e) => set('paksha', e.target.value as 'shukla' | 'krishna')}>
             <option value="shukla">Shukla</option>
             <option value="krishna">Krishna</option>
           </select>
         </label>
       </div>
       <label className="block">
-        <span className="field-label">One-line summary</span>
-        <input className="field" value={c.summary} onChange={(e) => set('summary', e.target.value)} />
+        <span className={labelCls}>One-line summary</span>
+        <input className={inputCls} value={c.summary} onChange={(e) => set('summary', e.target.value)} />
       </label>
       <label className="block">
-        <span className="field-label">Significance</span>
-        <textarea className="field" rows={3} value={c.significance} onChange={(e) => set('significance', e.target.value)} />
+        <span className={labelCls}>Significance</span>
+        <textarea className={`${areaCls}`} rows={3} value={c.significance} onChange={(e) => set('significance', e.target.value)} />
       </label>
       <label className="block">
-        <span className="field-label">Special observance</span>
-        <textarea className="field" rows={2} value={c.specialObservance || ''} onChange={(e) => set('specialObservance', e.target.value || undefined)} />
+        <span className={labelCls}>Special observance</span>
+        <textarea className={`${areaCls}`} rows={2} value={c.specialObservance || ''} onChange={(e) => set('specialObservance', e.target.value || undefined)} />
       </label>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label>
-          <span className="field-label">Katha — scripture</span>
-          <input className="field" value={c.katha.scripture} onChange={(e) => set('katha', { ...c.katha, scripture: e.target.value })} />
+          <span className={labelCls}>Katha — scripture</span>
+          <input className={inputCls} value={c.katha.scripture} onChange={(e) => set('katha', { ...c.katha, scripture: e.target.value })} />
         </label>
         <label>
-          <span className="field-label">Katha — speakers</span>
-          <input className="field" value={c.katha.speakers} onChange={(e) => set('katha', { ...c.katha, speakers: e.target.value })} />
+          <span className={labelCls}>Katha — speakers</span>
+          <input className={inputCls} value={c.katha.speakers} onChange={(e) => set('katha', { ...c.katha, speakers: e.target.value })} />
         </label>
       </div>
       <label className="block">
-        <span className="field-label">Story (blank line between paragraphs)</span>
+        <span className={labelCls}>Story (blank line between paragraphs)</span>
         <textarea
-          className="field font-serif"
+          className={`${areaCls} font-serif`}
           rows={10}
           value={c.katha.paragraphs.join('\n\n')}
           onChange={(e) => set('katha', { ...c.katha, paragraphs: e.target.value.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean) })}
         />
       </label>
       <label className="block">
-        <span className="field-label">Spiritual lessons (one per line)</span>
-        <textarea className="field" rows={4} value={c.lessons.join('\n')} onChange={(e) => set('lessons', e.target.value.split('\n').map((x) => x.trim()).filter(Boolean))} />
+        <span className={labelCls}>Spiritual lessons (one per line)</span>
+        <textarea className={`${areaCls}`} rows={4} value={c.lessons.join('\n')} onChange={(e) => set('lessons', e.target.value.split('\n').map((x) => x.trim()).filter(Boolean))} />
       </label>
 
       <div>
-        <div className="mb-2 flex items-center justify-between">
-          <span className="field-label mb-0">Srila Prabhupada’s teachings</span>
-          <button className="btn-ghost btn-sm" onClick={() => set('teachings', [...c.teachings, { summary: '', reference: '' }])}>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <span className="text-sm font-semibold text-maroon-900">Srila Prabhupada’s teachings</span>
+          <button className={btnGhost} style={{ minHeight: 0 }} onClick={() => set('teachings', [...c.teachings, { summary: '', reference: '' }])}>
             <Plus size={14} /> Add
           </button>
         </div>
         <div className="space-y-3">
           {c.teachings.map((t, i) => (
-            <div key={i} className="space-y-2 rounded-2xl bg-stone-50 p-3 ring-1 ring-stone-200">
-              <textarea className="field" rows={2} placeholder="Summary in your own words" value={t.summary} onChange={(e) => setTeaching(i, { summary: e.target.value })} />
-              <div className="grid gap-2 sm:grid-cols-2">
-                <input className="field" placeholder="Reference, e.g. SB 9.4.29 purport" value={t.reference} onChange={(e) => setTeaching(i, { reference: e.target.value })} />
-                <input className="field" placeholder="https://vedabase.io/…" value={t.url || ''} onChange={(e) => setTeaching(i, { url: e.target.value || undefined })} />
+            <div key={i} className="space-y-2 rounded-2xl border border-sandal-200 bg-sandal-50 p-3">
+              <textarea className={`${areaCls}`} rows={2} placeholder="Summary in your own words" value={t.summary} onChange={(e) => setTeaching(i, { summary: e.target.value })} />
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <input className={inputCls} placeholder="Reference, e.g. SB 9.4.29 purport" value={t.reference} onChange={(e) => setTeaching(i, { reference: e.target.value })} />
+                <input className={inputCls} placeholder="https://vedabase.io/…" value={t.url || ''} onChange={(e) => setTeaching(i, { url: e.target.value || undefined })} />
               </div>
               <textarea
-                className="field"
+                className={areaCls}
                 rows={2}
                 placeholder="Optional verbatim quotation — paste exactly from Vedabase"
                 value={t.quote || ''}
                 onChange={(e) => setTeaching(i, { quote: e.target.value || undefined, quoteVerified: false })}
               />
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 text-xs text-stone-600">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <label className="flex min-w-0 items-start gap-2 text-xs text-maroon-900/65">
                   <input type="checkbox" checked={!!t.quoteVerified} disabled={!t.quote} onChange={(e) => setTeaching(i, { quoteVerified: e.target.checked })} />
                   Quotation checked word-for-word against the reference (only then is it displayed)
                 </label>
-                <button className="text-xs text-red-500 hover:underline" onClick={() => set('teachings', c.teachings.filter((_, j) => j !== i))}>
+                <button className="h-9 px-2 text-xs font-semibold text-red-500" style={{ minHeight: 0 }} onClick={() => set('teachings', c.teachings.filter((_, j) => j !== i))}>
                   Remove
                 </button>
               </div>
@@ -682,31 +696,31 @@ const ContentEditor: React.FC<{ initial: EkadashiContent; onSaved: () => void }>
       </div>
 
       <label className="block">
-        <span className="field-label">Scriptural references — one per line: label | url | note</span>
-        <textarea className="field font-mono text-xs" rows={4} value={scriptureText} onChange={(e) => setScriptureText(e.target.value)} />
+        <span className={labelCls}>Scriptural references — one per line: label | url | note</span>
+        <textarea className={`${areaCls} font-mono text-xs`} rows={4} value={scriptureText} onChange={(e) => setScriptureText(e.target.value)} />
       </label>
       <label className="block">
-        <span className="field-label">Sources — one per line: label | url | note</span>
-        <textarea className="field font-mono text-xs" rows={3} value={sourcesText} onChange={(e) => setSourcesText(e.target.value)} />
+        <span className={labelCls}>Sources — one per line: label | url | note</span>
+        <textarea className={`${areaCls} font-mono text-xs`} rows={3} value={sourcesText} onChange={(e) => setSourcesText(e.target.value)} />
       </label>
       <label className="block">
-        <span className="field-label">Review note (shown to readers)</span>
-        <input className="field" value={c.reviewNote || ''} onChange={(e) => set('reviewNote', e.target.value || undefined)} />
+        <span className={labelCls}>Review note (shown to readers)</span>
+        <input className={inputCls} value={c.reviewNote || ''} onChange={(e) => set('reviewNote', e.target.value || undefined)} />
       </label>
 
-      <div className="space-y-3 rounded-2xl bg-emerald-50/60 p-4 ring-1 ring-emerald-200">
+      <div className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
         <label className="flex items-start gap-2 text-sm text-emerald-900">
           <input type="checkbox" className="mt-1" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
           I have checked this story, the references and Srila Prabhupada’s teachings against the cited sources, and nothing is fabricated.
         </label>
         <div className="flex flex-wrap gap-2">
-          <button className="btn-secondary btn-sm" onClick={() => save('needs_review')} disabled={saving}>
+          <button className={btnSecondary} style={{ minHeight: 0 }} onClick={() => save('needs_review')} disabled={saving}>
             <Save size={14} /> Save as needs review
           </button>
-          <button className="btn-primary btn-sm" onClick={() => save('verified')} disabled={saving || !checked}>
+          <button className={btnPrimary} style={{ minHeight: 0 }} onClick={() => save('verified')} disabled={saving || !checked}>
             <ShieldCheck size={14} /> Save &amp; mark verified
           </button>
-          <button className="btn-ghost btn-sm" onClick={revert}>
+          <button className={btnGhost} style={{ minHeight: 0 }} onClick={revert}>
             Load bundled version
           </button>
         </div>
@@ -717,6 +731,8 @@ const ContentEditor: React.FC<{ initial: EkadashiContent; onSaved: () => void }>
 
 const ContentAdmin: React.FC = () => {
   const toast = useToast();
+  const { ask, dialog } = useConfirm();
+  const confirmAsk = (text: string) => askText(ask, text);
   const [content, setContent] = useState<Record<string, EkadashiContent>>({});
   const [slug, setSlug] = useState(EKADASHI_CONTENT[0].slug);
   const [busy, setBusy] = useState(false);
@@ -730,7 +746,7 @@ const ContentAdmin: React.FC = () => {
   const verified = list.filter((c) => c.status === 'verified').length;
 
   const seed = async () => {
-    if (!confirm('Write the bundled researched content for all Ekadashis that are not yet in the database?')) return;
+    if (!await confirmAsk('Write the bundled researched content for all Ekadashis that are not yet in the database?')) return;
     setBusy(true);
     try {
       const n = await seedEkadashiContent(false);
@@ -744,22 +760,23 @@ const ContentAdmin: React.FC = () => {
   };
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
-      <aside className="space-y-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[260px_1fr]">
+      {dialog}
+      <aside className={`${card} min-w-0 space-y-2 self-start`}>
         <div className="flex items-center justify-between">
-          <p className="text-xs text-stone-500">
+          <p className="text-xs text-maroon-900/50">
             {verified}/{list.length} verified
           </p>
-          <button className="btn-secondary btn-sm" onClick={seed} disabled={busy}>
+          <button className={btnSecondary} style={{ minHeight: 0 }} onClick={seed} disabled={busy}>
             <Database size={13} /> Sync to DB
           </button>
         </div>
-        <div className="max-h-[70vh] space-y-1 overflow-y-auto rounded-2xl bg-stone-50 p-1.5 ring-1 ring-stone-200">
+        <div className="max-h-56 space-y-1 overflow-y-auto rounded-xl bg-sandal-50 p-1.5 lg:max-h-[70vh]">
           {list.map((c) => (
             <button
               key={c.slug}
               onClick={() => setSlug(c.slug)}
-              className={`flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm ${slug === c.slug ? 'bg-white shadow-soft ring-1 ring-stone-200' : 'hover:bg-white/70'}`}
+              className={`flex min-h-10 w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm ${slug === c.slug ? 'bg-white font-semibold text-maroon-900 shadow-soft ring-1 ring-sandal-200' : 'text-maroon-900/65 hover:bg-white/70'}`}
             >
               <span className="truncate">{c.name}</span>
               {c.status === 'verified' ? <ShieldCheck size={14} className="shrink-0 text-emerald-600" /> : <AlertTriangle size={14} className="shrink-0 text-amber-500" />}
@@ -767,7 +784,7 @@ const ContentAdmin: React.FC = () => {
           ))}
         </div>
       </aside>
-      <div className="min-w-0">
+      <div className={`${card} min-w-0`}>
         {content[slug] && <ContentEditor key={slug} initial={content[slug]} onSaved={reload} />}
       </div>
     </div>
@@ -779,19 +796,26 @@ const ContentAdmin: React.FC = () => {
 const EkadashiAdmin: React.FC = () => {
   const [tab, setTab] = useState<'dates' | 'content'>('dates');
   return (
-    <div className="space-y-5 rounded-2xl bg-white p-4 shadow-card ring-1 ring-stone-200 sm:p-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="min-w-0 space-y-4">
+      <div className="space-y-3">
         <div>
-          <h2 className="flex items-center gap-2 text-xl font-bold text-stone-900">Ekadashi management</h2>
-          <p className="text-sm text-stone-500">Verify dates and timings against official ISKCON calendars, and review the reading content.</p>
+          <h2 className="text-base font-semibold text-maroon-900">Ekadashi management</h2>
+          <p className="text-xs text-maroon-900/50">Verify dates and timings against official ISKCON calendars, and review the reading content.</p>
         </div>
-        <div className="tabs">
-          <button className={`tab flex items-center gap-1.5 ${tab === 'dates' ? 'tab-active' : ''}`} onClick={() => setTab('dates')}>
-            <CalendarCheck size={14} /> Verified dates
-          </button>
-          <button className={`tab flex items-center gap-1.5 ${tab === 'content' ? 'tab-active' : ''}`} onClick={() => setTab('content')}>
-            <BookOpen size={14} /> Content
-          </button>
+        <div className="flex flex-wrap gap-2">
+          {([
+            ['dates', 'Verified dates', CalendarCheck],
+            ['content', 'Content', BookOpen],
+          ] as const).map(([id, label, Icon]) => (
+            <button
+              key={id}
+              style={{ minHeight: 0 }}
+              className={`inline-flex h-9 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold ${tab === id ? 'bg-brand-600 text-white' : 'bg-white ring-1 ring-sandal-200 text-maroon-900/65'}`}
+              onClick={() => setTab(id)}
+            >
+              <Icon size={14} /> {label}
+            </button>
+          ))}
         </div>
       </div>
       {tab === 'dates' ? <DatesAdmin /> : <ContentAdmin />}

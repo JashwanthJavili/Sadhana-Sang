@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { PageLoader } from '../components/LoadingScreen';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { useConfirm, askText } from '../components/ConfirmDialog';
+import { useToast } from '../contexts/ToastContext';
 import { 
   Users, Trash2, RefreshCw, BarChart3, MessageSquare, 
   HelpCircle, Shield, UserX, Calendar, Activity, UserPlus, UserMinus,
@@ -19,7 +21,8 @@ import {
   ADMIN_EMAIL,
   getAllAdmins,
   grantAdminAccess,
-  revokeAdminAccess,} from '../services/admin';
+  revokeAdminAccess,
+} from '../services/admin';
 import { migrateAllUserProfiles } from '../scripts/migrateUserProfiles';
 import { ref, set, push, get, remove, update } from 'firebase/database';
 import { db } from '../services/firebase';
@@ -57,16 +60,85 @@ interface AppStats {
   totalChats: number;
 }
 
+/* ---- Small layout helpers shared by the admin tabs ---- */
+const Panel: React.FC<{ title: string; icon?: React.ElementType; children: React.ReactNode; action?: React.ReactNode }> = ({ title, icon: Icon, children, action }) => (
+  <section className="rounded-2xl border border-sandal-200 bg-white p-4 shadow-soft sm:p-5">
+    <div className="mb-3 flex items-center justify-between gap-2">
+      <h3 className="flex min-w-0 items-center gap-2 text-base font-semibold text-maroon-900">
+        {Icon && <Icon size={18} className="shrink-0 text-brand-600" />}
+        <span className="truncate">{title}</span>
+      </h3>
+      {action}
+    </div>
+    {children}
+  </section>
+);
+
+const MetricRow: React.FC<{ label: string; value: React.ReactNode; tone?: string }> = ({ label, value, tone = 'text-maroon-900' }) => (
+  <div className="flex items-center justify-between gap-3 rounded-xl bg-sandal-50 px-3.5 py-2.5 text-sm">
+    <span className="min-w-0 truncate text-maroon-900/70">{label}</span>
+    <span className={`shrink-0 font-semibold ${tone}`}>{value}</span>
+  </div>
+);
+
+const StatTile: React.FC<{ label: string; value: React.ReactNode; icon: React.ElementType; tone: string }> = ({ label, value, icon: Icon, tone }) => (
+  <div className="flex items-center gap-3 rounded-2xl border border-sandal-200 bg-white p-3 shadow-soft">
+    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone}`}>
+      <Icon size={17} />
+    </span>
+    <div className="min-w-0">
+      <p className="text-lg font-bold leading-none text-maroon-900">{value}</p>
+      <p className="mt-1 truncate text-[11px] font-medium text-maroon-900/50">{label}</p>
+    </div>
+  </div>
+);
+
+const IconAction: React.FC<{ onClick: () => void; title: string; tone: string; children: React.ReactNode }> = ({ onClick, title, tone, children }) => (
+  <button
+    onClick={onClick}
+    title={title}
+    aria-label={title}
+    className={`flex h-9 w-9 items-center justify-center rounded-xl transition active:scale-95 ${tone}`}
+    style={{ minHeight: 0 }}
+  >
+    {children}
+  </button>
+);
+
+const Toggle: React.FC<{ label: string; hint: string; checked: boolean; onChange: (v: boolean) => void }> = ({ label, hint, checked, onChange }) => (
+  <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl bg-sandal-50 px-3.5 py-3">
+    <span className="min-w-0">
+      <span className="block text-sm font-semibold text-maroon-900">{label}</span>
+      <span className="block text-xs text-maroon-900/55">{hint}</span>
+    </span>
+    <span className="relative inline-flex shrink-0 items-center">
+      <input type="checkbox" className="peer sr-only" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span className="h-6 w-11 rounded-full bg-sandal-300 transition peer-checked:bg-brand-600 peer-focus-visible:ring-4 peer-focus-visible:ring-marigold-400/40 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-5" />
+    </span>
+  </label>
+);
+
 const AdminPanel: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const toast = useToast();
+  const { ask, dialog } = useConfirm();
+  const confirmAsk = (text: string) => askText(ask, text);
+  const [profileUser, setProfileUser] = useState<UserInfo | null>(null);
+  // In-app notice instead of the browser's alert(): the leading ✅ / ❌ / ⚠️ picks the style
+  const notify = (text: string) => {
+    const raw = text.trim();
+    const type = raw.startsWith('✅') ? 'success' : raw.startsWith('❌') ? 'error' : raw.startsWith('⚠') ? 'warning' : 'info';
+    const lines = raw.replace(/^(✅|❌|⚠️|⚠)\s*/, '').split(/[\r\n]+/);
+    toast.showToast({ type, title: lines[0], message: lines.slice(1).join(String.fromCharCode(10)).trim() || undefined });
+  };
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [admins, setAdmins] = useState<Admin[]>([]);
   const [stats, setStats] = useState<AppStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [migrationStatus, setMigrationStatus] = useState<'idle' | 'running' | 'success' | 'error'>('idle');
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'users' | 'admins' | 'content' | 'ekadashi' | 'feedback' | 'requests' | 'announcements' | 'system' | 'logs' | 'reports' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'users' | 'admins' | 'content' | 'ekadashi' | 'feedback' | 'requests' | 'announcements' | 'system' | 'logs' | 'reports' | 'settings'>('users');
   
   // Announcements State
   const [announcementTitle, setAnnouncementTitle] = useState('');
@@ -117,7 +189,7 @@ const AdminPanel: React.FC = () => {
   useEffect(() => {
     // Redirect if not admin
     if (!isSuperAdmin) {
-      alert('⛔ Access Denied: Admin privileges required');
+      notify('⛔ Access Denied: Admin privileges required');
       navigate('/dashboard');
       return;
     }
@@ -195,7 +267,7 @@ const AdminPanel: React.FC = () => {
       setAdmins(adminsData);
     } catch (error) {
       console.error('Error loading admin data:', error);
-      alert('Failed to load admin data');
+      notify('Failed to load admin data');
     } finally {
       setLoading(false);
     }
@@ -279,48 +351,46 @@ const AdminPanel: React.FC = () => {
           break;
       }
 
-      alert(`✅ ${setting} ${value ? 'enabled' : 'disabled'}`);
+      notify(`✅ ${setting} ${value ? 'enabled' : 'disabled'}`);
     } catch (error) {
       console.error('Error saving app settings:', error);
-      alert('❌ Failed to save settings');
+      notify('❌ Failed to save settings');
     }
   };
 
   const handleDeleteUser = async (userId: string, userName: string) => {
-    if (!confirm(`⚠️ PERMANENT DELETE\n\nAre you sure you want to permanently delete user "${userName}"?\n\nThis will remove:\n- User profile\n- All entries and journal\n- All messages\n- All questions and answers\n\nThis action CANNOT be undone!`)) {
-      return;
-    }
-
-    // Double confirmation for safety
-    const confirmText = prompt(`Type "${userName}" to confirm deletion:`);
-    if (confirmText !== userName) {
-      alert('❌ Deletion cancelled - name did not match');
-      return;
-    }
+    const ok = await ask({
+      title: `Delete ${userName}?`,
+      message: 'This permanently removes their profile, journal, messages, questions and answers. It cannot be undone.',
+      confirmLabel: 'Delete permanently',
+      danger: true,
+      requireText: userName,
+    });
+    if (!ok) return;
 
     try {
       await deleteUserPermanently(userId);
-      alert(`✅ User "${userName}" has been permanently deleted`);
+      notify(`✅ ${userName} has been deleted`);
       loadData(); // Refresh the list
     } catch (error: any) {
       console.error('Error deleting user:', error);
-      alert(`❌ Failed to delete user: ${error.message}`);
+      notify(`❌ Failed to delete user: ${error.message}`);
     }
   };
 
   const handleMigrateProfiles = async () => {
-    if (!confirm('Create chat profiles for all existing users?')) return;
+    if (!await confirmAsk('Create chat profiles for all existing users?')) return;
 
     try {
       setMigrationStatus('running');
       const result = await migrateAllUserProfiles();
       setMigrationStatus('success');
-      alert(`✅ Migration complete!\n${result.migratedCount} created\n${result.skippedCount} skipped\n${result.errorCount} errors`);
+      notify(`✅ Migration complete!\n${result.migratedCount} created\n${result.skippedCount} skipped\n${result.errorCount} errors`);
       setTimeout(() => setMigrationStatus('idle'), 3000);
       loadData();
     } catch (error: any) {
       setMigrationStatus('error');
-      alert(`❌ Migration failed: ${error.message}`);
+      notify(`❌ Migration failed: ${error.message}`);
       setTimeout(() => setMigrationStatus('idle'), 3000);
     }
   };
@@ -429,11 +499,11 @@ const AdminPanel: React.FC = () => {
 
   const handleBroadcastAnnouncement = async () => {
     if (!announcement.trim()) {
-      alert('⚠️ Please enter an announcement message');
+      notify('⚠️ Please enter an announcement message');
       return;
     }
 
-    if (!confirm(`📢 Send this announcement to all ${users.length} users?\n\n"${announcement}"`)) {
+    if (!await confirmAsk(`📢 Send this announcement to all ${users.length} users?\n\n"${announcement}"`)) {
       return;
     }
 
@@ -466,39 +536,39 @@ const AdminPanel: React.FC = () => {
 
       await Promise.all(notificationPromises);
 
-      alert(`✅ Success!\n\nAnnouncement sent to ${users.length} users.\n\nAll users will receive this notification when they next use the app.`);
+      notify(`✅ Success!\n\nAnnouncement sent to ${users.length} users.\n\nAll users will receive this notification when they next use the app.`);
       setAnnouncement('');
       
       // Reload data to show updated stats
       loadData();
     } catch (error) {
       console.error('Broadcast error:', error);
-      alert('❌ Failed to send announcement. Please try again.');
+      notify('❌ Failed to send announcement. Please try again.');
     }
   };
 
   // Content Moderation Handlers
   const handleDeleteQuestion = async (questionId: string, title: string) => {
-    if (!confirm(`Delete question: "${title}"?\n\nThis will also delete all answers.`)) return;
+    if (!await confirmAsk(`Delete question: "${title}"?\n\nThis will also delete all answers.`)) return;
 
     try {
       await remove(ref(db, `questions/${questionId}`));
-      alert('✅ Question deleted successfully');
+      notify('✅ Question deleted successfully');
       loadContentData();
     } catch (error: any) {
-      alert(`❌ Failed to delete: ${error.message}`);
+      notify(`❌ Failed to delete: ${error.message}`);
     }
   };
 
   const handleDeleteAnswer = async (questionId: string, answerId: string) => {
-    if (!confirm('Delete this answer?')) return;
+    if (!await confirmAsk('Delete this answer?')) return;
 
     try {
       await remove(ref(db, `questions/${questionId}/answers/${answerId}`));
-      alert('✅ Answer deleted successfully');
+      notify('✅ Answer deleted successfully');
       loadContentData();
     } catch (error: any) {
-      alert(`❌ Failed to delete: ${error.message}`);
+      notify(`❌ Failed to delete: ${error.message}`);
     }
   };
 
@@ -514,22 +584,22 @@ const AdminPanel: React.FC = () => {
         reason: 'Admin flagged for review',
         status: 'pending'
       });
-      alert('✅ Content flagged successfully');
+      notify('✅ Content flagged successfully');
       loadContentData();
     } catch (error: any) {
-      alert(`❌ Failed to flag: ${error.message}`);
+      notify(`❌ Failed to flag: ${error.message}`);
     }
   };
 
   const handleUnflagContent = async (flagId: string) => {
-    if (!confirm('Remove flag from this content?')) return;
+    if (!await confirmAsk('Remove flag from this content?')) return;
 
     try {
       await remove(ref(db, `flaggedContent/${flagId}`));
-      alert('✅ Content unflagged');
+      notify('✅ Content unflagged');
       loadContentData();
     } catch (error: any) {
-      alert(`❌ Failed: ${error.message}`);
+      notify(`❌ Failed: ${error.message}`);
     }
   };
 
@@ -540,15 +610,15 @@ const AdminPanel: React.FC = () => {
         reviewedBy: user?.uid,
         reviewedAt: Date.now()
       });
-      alert('✅ Content approved');
+      notify('✅ Content approved');
       loadContentData();
     } catch (error: any) {
-      alert(`❌ Failed: ${error.message}`);
+      notify(`❌ Failed: ${error.message}`);
     }
   };
 
   const handleHideContent = async (contentType: 'question' | 'answer', contentId: string, questionId?: string) => {
-    if (!confirm('Hide this content? It will no longer be visible to users.')) return;
+    if (!await confirmAsk('Hide this content? It will no longer be visible to users.')) return;
 
     try {
       const path = contentType === 'question' 
@@ -561,10 +631,10 @@ const AdminPanel: React.FC = () => {
         hiddenAt: Date.now()
       });
       
-      alert('✅ Content hidden successfully');
+      notify('✅ Content hidden successfully');
       loadContentData();
     } catch (error: any) {
-      alert(`❌ Failed: ${error.message}`);
+      notify(`❌ Failed: ${error.message}`);
     }
   };
 
@@ -585,26 +655,26 @@ const AdminPanel: React.FC = () => {
   });
 
   const handleGrantAdmin = async (userId: string, userEmail: string) => {
-    if (!confirm(`Grant admin privileges to ${userEmail}?`)) return;
+    if (!await confirmAsk(`Grant admin privileges to ${userEmail}?`)) return;
 
     try {
       await grantAdminAccess(userId, userEmail);
-      alert(`✅ Admin rights granted to ${userEmail}`);
+      notify(`✅ Admin rights granted to ${userEmail}`);
       loadData();
     } catch (error: any) {
-      alert(`❌ Failed: ${error.message}`);
+      notify(`❌ Failed: ${error.message}`);
     }
   };
 
   const handleRevokeAdmin = async (userId: string, userName: string) => {
-    if (!confirm(`Revoke admin privileges from ${userName}?`)) return;
+    if (!await confirmAsk(`Revoke admin privileges from ${userName}?`)) return;
 
     try {
       await revokeAdminAccess(userId);
-      alert(`✅ Admin rights revoked from ${userName}`);
+      notify(`✅ Admin rights revoked from ${userName}`);
       loadData();
     } catch (error: any) {
-      alert(`❌ Failed: ${error.message}`);
+      notify(`❌ Failed: ${error.message}`);
     }
   };
 
@@ -613,48 +683,42 @@ const AdminPanel: React.FC = () => {
   // Password Authentication Screen
   if (!isAuthenticated) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-sandal-50">
-        <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-8 max-w-md w-full mx-4">
-          <div className="text-center mb-6">
-            <Shield className="mx-auto mb-4 text-brand-600" size={48} />
-            <h1 className="text-3xl font-bold text-stone-800 mb-2">Admin Panel Access</h1>
-            <p className="text-stone-600">Enter password to continue</p>
+      <div className="flex min-h-[calc(100dvh-11rem)] items-center justify-center px-1 lg:min-h-[calc(100dvh-9rem)]">
+        <div className="w-full max-w-sm overflow-hidden rounded-3xl bg-white shadow-card ring-1 ring-sandal-200">
+          <div className="relative bg-gradient-to-br from-marigold-400 to-brand-500 px-6 pb-6 pt-7 text-center">
+            <div className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-white/10" />
+            <span className="relative mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20 text-white">
+              <Shield size={28} />
+            </span>
+            <h1 className="relative mt-3 text-xl font-bold text-white">Admin access</h1>
+            <p className="relative mt-0.5 text-sm text-white/75">Enter the password to continue</p>
           </div>
-          
-          <form onSubmit={handlePasswordSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-bold text-stone-700 mb-2">
-                Password
-              </label>
-              <input
-                type="password"
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                placeholder="Enter admin password"
-                className="w-full px-4 py-3 border border-sandal-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
-                autoFocus
-              />
-              {passwordError && (
-                <p className="mt-2 text-sm text-red-600 flex items-center gap-1">
-                  <XCircle size={16} />
-                  {passwordError}
-                </p>
-              )}
-            </div>
-            
+
+          <form onSubmit={handlePasswordSubmit} className="space-y-3 p-5">
+            <input
+              type="password"
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              placeholder="Password"
+              aria-label="Admin password"
+              className="h-12 w-full rounded-2xl border border-sandal-300 px-4 outline-none transition focus:border-marigold-400 focus:ring-4 focus:ring-marigold-400/20"
+              autoFocus
+            />
+            {passwordError && (
+              <p className="flex items-center gap-1.5 text-sm text-red-600">
+                <XCircle size={15} className="shrink-0" />
+                {passwordError}
+              </p>
+            )}
             <button
               type="submit"
-              className="w-full px-6 py-3 bg-brand-600 text-white rounded-xl font-semibold hover:bg-brand-700 transition-all"
+              disabled={!passwordInput}
+              className="h-12 w-full rounded-2xl bg-gradient-to-r from-marigold-400 to-brand-500 font-semibold text-white shadow-lg transition active:scale-[0.99] disabled:opacity-50"
+              style={{ minHeight: 0 }}
             >
-              Access Admin Panel
+              Continue
             </button>
           </form>
-          
-          <div className="mt-6 text-center">
-            <p className="text-sm text-stone-500">
-              🔒 Secure access required
-            </p>
-          </div>
         </div>
       </div>
     );
@@ -663,7 +727,6 @@ const AdminPanel: React.FC = () => {
   if (loading) return <PageLoader label="Loading admin panel…" />;
 
   const tabItems: { id: typeof activeTab; label: string; Icon: React.ElementType; count?: number; superOnly?: boolean }[] = [
-    { id: 'overview', label: 'Overview', Icon: BarChart3 },
     { id: 'users', label: 'Users', Icon: Users, count: users.length },
     { id: 'admins', label: 'Admins', Icon: Shield, count: admins.length, superOnly: true },
     { id: 'content', label: 'Moderation', Icon: Flag },
@@ -684,49 +747,144 @@ const AdminPanel: React.FC = () => {
       ]
     : [];
 
+  const renderUserActions = (u: UserInfo) => (
+    <div className="relative">
+      <button
+        onClick={() => setOpenDropdown(openDropdown === u.uid ? null : u.uid)}
+        className="p-2 hover:bg-sandal-200 rounded-lg transition-all"
+        title="User actions"
+      >
+        <MoreVertical size={20} className="text-maroon-900/60" />
+      </button>
+      
+      {/* Dropdown Menu */}
+      {openDropdown === u.uid && (
+        <>
+          {/* Backdrop to close dropdown */}
+          <div 
+            className="fixed inset-0 z-10" 
+            onClick={() => setOpenDropdown(null)}
+          />
+          
+          {/* Dropdown Content */}
+          <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-soft border border-sandal-200 z-20 overflow-hidden">
+            <div className="p-2 bg-sandal-100 border-b border-sandal-200">
+              <p className="text-xs font-bold text-maroon-900/60 px-2">USER ACTIONS</p>
+            </div>
+            
+            <div className="py-1">
+              {/* Admin Actions */}
+              {!u.isAdmin ? (
+                <button
+                  onClick={() => {
+                    handleGrantAdmin(u.uid, u.email);
+                    setOpenDropdown(null);
+                  }}
+                  className="w-full px-4 py-2 text-left hover:bg-green-50 transition-all flex items-center gap-2 text-green-700 font-semibold"
+                >
+                  <UserPlus size={16} />
+                  Grant Admin Rights
+                </button>
+              ) : u.email !== 'jashwanthjavili7@gmail.com' ? (
+                <button
+                  onClick={() => {
+                    handleRevokeAdmin(u.uid, u.userName);
+                    setOpenDropdown(null);
+                  }}
+                  className="w-full px-4 py-2 text-left hover:bg-sandal-50 transition-all flex items-center gap-2 text-brand-600 font-semibold"
+                >
+                  <UserMinus size={16} />
+                  Revoke Admin Rights
+                </button>
+              ) : (
+                <div className="px-4 py-2 text-maroon-900/40 text-sm flex items-center gap-2">
+                  <Shield size={16} />
+                  Super Admin (Protected)
+                </div>
+              )}
+              
+              <div className="border-t border-sandal-200 my-1" />
+              
+              {/* View Profile */}
+              <button
+                onClick={() => {
+                  setProfileUser(u);
+                  setOpenDropdown(null);
+                }}
+                className="w-full px-4 py-2 text-left hover:bg-sandal-50 transition-all flex items-center gap-2 text-brand-600 font-semibold"
+              >
+                <Eye size={16} />
+                View Full Profile
+              </button>
+
+              {isSuperAdmin && (
+                <>
+                  <div className="border-t border-sandal-200 my-1" />
+                  
+                  {/* Delete User */}
+                  <button
+                    onClick={() => {
+                      handleDeleteUser(u.uid, u.userName);
+                      setOpenDropdown(null);
+                    }}
+                    className="w-full px-4 py-2 text-left hover:bg-red-50 transition-all flex items-center gap-2 text-red-700 font-semibold"
+                  >
+                    <Trash2 size={16} />
+                    Delete User
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+
   return (
     <div className="mx-auto min-h-full max-w-7xl animate-fadeIn space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between gap-3 rounded-3xl border border-sandal-200 bg-white p-4 shadow-soft sm:p-5">
+      <div className="flex items-center justify-between gap-3 px-1">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-marigold-400 to-brand-500 text-white">
-            <Shield size={22} />
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-marigold-400 to-brand-500 text-white shadow-soft">
+            <Shield size={20} />
           </span>
           <div className="min-w-0">
-            <h1 className="text-lg font-bold leading-tight text-maroon-900 sm:text-xl">Admin dashboard</h1>
-            <p className="truncate text-xs text-maroon-900/55 sm:text-sm">{user?.email}</p>
+            <h1 className="text-lg font-bold leading-tight text-maroon-900 sm:text-xl">Admin</h1>
+            <p className="truncate text-xs text-maroon-900/50">{user?.email}</p>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            onClick={loadData}
-            className="flex items-center gap-1.5 rounded-xl bg-brand-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-700"
-            style={{ minHeight: 0 }}
-          >
-            <RefreshCw size={16} />
-            Refresh
-          </button>
-        </div>
+        <button
+          onClick={loadData}
+          className="flex h-10 shrink-0 items-center gap-2 rounded-full bg-white px-4 text-sm font-semibold text-brand-700 shadow-soft ring-1 ring-amber-200 transition hover:bg-amber-50 active:scale-95"
+          style={{ minHeight: 0 }}
+          aria-label="Refresh"
+        >
+          <RefreshCw size={16} />
+          <span className="hidden sm:inline">Refresh</span>
+        </button>
       </div>
 
-      {/* Statistics */}
+      {/* Statistics — swipe on phones, one row on larger screens */}
       {stats && (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        <div className="-mx-4 flex snap-x gap-2.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-5 sm:overflow-visible sm:px-0" style={{ scrollbarWidth: 'none' }}>
           {statTiles.map(({ label, value, Icon, tone }) => (
-            <div key={label} className="rounded-2xl border border-sandal-200 bg-white p-4 shadow-soft">
-              <span className={`mb-2 flex h-9 w-9 items-center justify-center rounded-xl ${tone}`}>
-                <Icon size={18} />
+            <div key={label} className="flex w-[132px] shrink-0 snap-start items-center gap-3 rounded-2xl border border-sandal-200 bg-white p-3 shadow-soft sm:w-auto">
+              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${tone}`}>
+                <Icon size={17} />
               </span>
-              <p className="text-2xl font-bold text-maroon-900">{value}</p>
-              <p className="text-xs font-medium text-maroon-900/55">{label}</p>
+              <div className="min-w-0">
+                <p className="text-lg font-bold leading-none text-maroon-900">{value}</p>
+                <p className="mt-1 truncate text-[11px] font-medium text-maroon-900/50">{label}</p>
+              </div>
             </div>
           ))}
         </div>
       )}
 
       {/* Navigation */}
-      <div className="sticky top-0 z-10 -mx-1 overflow-x-auto bg-sandal-50/90 px-1 py-2 backdrop-blur" style={{ scrollbarWidth: 'none' }}>
-        <div className="flex w-max gap-2">
+      <div className="sticky top-16 z-20 -mx-4 overflow-x-auto bg-sandal-100/90 px-4 py-2 backdrop-blur sm:top-[72px] sm:mx-0 sm:rounded-2xl sm:px-2" style={{ scrollbarWidth: 'none' }}>
+        <div className="flex w-max gap-1.5">
           {tabItems
             .filter((t) => !t.superOnly || isSuperAdmin)
             .map(({ id, label, Icon, count }) => (
@@ -734,14 +892,14 @@ const AdminPanel: React.FC = () => {
                 key={id}
                 onClick={() => setActiveTab(id)}
                 style={{ minHeight: 0 }}
-                className={`flex items-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm font-semibold transition ${
-                  activeTab === id ? 'bg-brand-600 text-white shadow-soft' : 'border border-sandal-200 bg-white text-maroon-900/70 hover:bg-sandal-100'
+                className={`flex h-9 items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 text-sm font-semibold transition ${
+                  activeTab === id ? 'bg-brand-600 text-white shadow-soft' : 'bg-white text-maroon-900/65 ring-1 ring-sandal-200 hover:bg-sandal-50'
                 }`}
               >
-                <Icon size={16} />
+                <Icon size={15} />
                 {label}
                 {count !== undefined && (
-                  <span className={`rounded-full px-1.5 text-xs ${activeTab === id ? 'bg-white/25' : 'bg-sandal-100'}`}>{count}</span>
+                  <span className={`rounded-full px-1.5 text-[11px] ${activeTab === id ? 'bg-white/25' : 'bg-sandal-100'}`}>{count}</span>
                 )}
               </button>
             ))}
@@ -751,786 +909,352 @@ const AdminPanel: React.FC = () => {
       {/* Tab Content */}
       {activeTab === 'ekadashi' && <EkadashiAdmin />}
 
-      {activeTab === 'overview' && (
-        <div className="space-y-6">
-          {/* Analytics Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* User Activity Chart */}
-            <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
-              <h3 className="text-base font-bold text-maroon-900 mb-4 flex items-center gap-2">
-                <TrendingUp className="text-blue-600" size={24} />
-                User Activity (Last 7 Days)
-              </h3>
-              <ResponsiveContainer width="100%" height={250}>
-                <LineChart data={getUserActivityData()}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" stroke="#888888" tickLine={true} />
-                  <YAxis stroke="#888888" tickLine={true} />
-                  <Tooltip />
-                  <Legend />
-                  <Line type="monotone" dataKey="active" stroke="#d97706" strokeWidth={2} name="Active Users" />
-                  <Line type="monotone" dataKey="new" stroke="#10b981" strokeWidth={2} name="New Users" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Center Distribution */}
-            <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
-              <h3 className="text-base font-bold text-maroon-900 mb-4 flex items-center gap-2">
-                <Users className="text-green-600" size={24} />
-                Top ISKCON Centers
-              </h3>
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={getCenterDistribution()}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} fontSize={12} stroke="#888888" tickLine={true} />
-                  <YAxis stroke="#888888" tickLine={true} />
-                  <Tooltip />
-                  <Bar dataKey="value" fill="#ee9a1e" radius={[6,6,0,0]} name="Users" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Engagement Pie Chart */}
-          <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
-            <h3 className="text-base font-bold text-maroon-900 mb-4 flex items-center gap-2">
-              <Activity className="text-purple-600" size={24} />
-              User Engagement Levels
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={getEngagementStats()}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, value, percent }) => `${name}: ${value} (${(percent * 100).toFixed(0)}%)`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {getEngagementStats().map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="space-y-4">
-                {getEngagementStats().map((stat, idx) => (
-                  <div key={idx} className="flex items-center justify-between p-4 bg-stone-50 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="w-4 h-4 rounded-full" style={{ backgroundColor: stat.color }}></div>
-                      <span className="font-semibold">{stat.name}</span>
-                    </div>
-                    <span className="text-2xl font-bold" style={{ color: stat.color }}>{stat.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Broadcast Announcement */}
-          <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
-            <h3 className="text-base font-bold text-maroon-900 mb-4 flex items-center gap-2">
-              <Bell className="text-orange-600" size={24} />
-              Broadcast Announcement to All Users
-            </h3>
-            <div className="flex gap-4">
-              <textarea
-                value={announcement}
-                onChange={(e) => setAnnouncement(e.target.value)}
-                placeholder="Type your announcement message here..."
-                className="flex-1 p-4 border-2 border-orange-300 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none resize-none"
-                rows={3}
-              />
-              <button
-                onClick={handleBroadcastAnnouncement}
-                className="px-6 bg-orange-600 text-white rounded-xl font-bold hover:bg-orange-700 transition-all shadow-lg"
-              >
-                <Bell className="inline mr-2" size={20} />
-                Send
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {activeTab === 'users' && (
-        <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
-          {/* Search and Filters */}
-          <div className="flex flex-wrap gap-4 mb-6">
-            <div className="flex-1 min-w-[250px]">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-maroon-900/40" size={20} />
+        <div className="space-y-3">
+          {/* Search and filters */}
+          <div className="rounded-2xl border border-sandal-200 bg-white p-3 shadow-soft sm:p-4">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-maroon-900/40" size={18} />
                 <input
                   type="text"
-                  placeholder="Search users..."
+                  placeholder="Search users…"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-sandal-200 rounded-xl focus:ring-2 focus:ring-marigold-400/40 outline-none"
+                  className="h-11 w-full rounded-xl border border-sandal-200 pl-10 pr-4 outline-none focus:ring-2 focus:ring-marigold-400/40"
                 />
               </div>
+              <div className="flex gap-2">
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'inactive')}
+                  className="h-11 min-w-0 flex-1 rounded-xl border border-sandal-200 bg-white px-3 text-sm font-semibold outline-none focus:ring-2 focus:ring-marigold-400/40 sm:flex-none"
+                >
+                  <option value="all">All users</option>
+                  <option value="active">Active (7 days)</option>
+                  <option value="inactive">Inactive (&gt;7 days)</option>
+                </select>
+                <button
+                  onClick={handleExportUsers}
+                  className="flex h-11 shrink-0 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-semibold text-white transition hover:bg-brand-700"
+                  style={{ minHeight: 0 }}
+                >
+                  <Download size={17} />
+                  <span className="hidden sm:inline">Export CSV</span>
+                  <span className="sm:hidden">CSV</span>
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value as 'all' | 'active' | 'inactive')}
-                className="px-4 py-3 border border-sandal-200 rounded-xl font-semibold focus:ring-2 focus:ring-marigold-400/40 outline-none"
-              >
-                <option value="all">All Users</option>
-                <option value="active">Active (Last 7 Days)</option>
-                <option value="inactive">Inactive (&gt;7 Days)</option>
-              </select>
-              <button
-                onClick={handleExportUsers}
-                className="px-6 py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 transition-all shadow-soft flex items-center gap-2"
-              >
-                <Download size={20} />
-                Export CSV
-              </button>
-            </div>
+            <p className="mt-2 text-xs text-maroon-900/50">{filteredUsers.length} of {users.length} users</p>
           </div>
 
-          {/* Bulk Actions */}
           {selectedUsers.size > 0 && (
-            <div className="mb-4 p-4 bg-sandal-50 border border-sandal-200 rounded-xl flex items-center justify-between">
-              <span className="font-bold text-brand-600">
-                {selectedUsers.size} user{selectedUsers.size > 1 ? 's' : ''} selected
-              </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setSelectedUsers(new Set())}
-                  className="px-4 py-2 bg-sandal-200 text-maroon-900 rounded-lg font-semibold hover:bg-sandal-200 transition-all"
-                >
-                  Clear Selection
-                </button>
-                {/* Bulk deletion removed - delete users individually for safety */}
-              </div>
+            <div className="flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <span className="text-sm font-semibold text-brand-700">{selectedUsers.size} selected</span>
+              <button
+                onClick={() => setSelectedUsers(new Set())}
+                className="rounded-full bg-white px-3.5 py-1.5 text-sm font-semibold text-maroon-900/70 ring-1 ring-sandal-200"
+                style={{ minHeight: 0 }}
+              >
+                Clear
+              </button>
             </div>
           )}
 
-          {/* Users Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-sandal-100 border-b-2 border-sandal-200">
-              <tr>
-                <th className="p-3 text-left">
+          {/* One card per user */}
+          <ul className="grid gap-2.5 lg:grid-cols-2">
+            {filteredUsers.map((u) => (
+              <li key={u.uid} className="rounded-2xl border border-sandal-200 bg-white p-4 shadow-soft">
+                <div className="flex items-start gap-3">
                   <input
                     type="checkbox"
-                    checked={selectedUsers.size === filteredUsers.length && filteredUsers.length > 0}
-                    onChange={() => handleBulkAction(selectedUsers.size === filteredUsers.length ? 'deselect-all' : 'select-all')}
-                    className="w-5 h-5 cursor-pointer"
+                    checked={selectedUsers.has(u.uid)}
+                    onChange={() => {
+                      const s = new Set(selectedUsers);
+                      if (s.has(u.uid)) s.delete(u.uid);
+                      else s.add(u.uid);
+                      setSelectedUsers(s);
+                    }}
+                    className="mt-1 h-5 w-5 shrink-0"
                   />
-                </th>
-                <th className="p-3 text-left font-bold">User</th>
-                <th className="p-3 text-left font-bold">Email</th>
-                <th className="p-3 text-left font-bold">Guru</th>
-                <th className="p-3 text-left font-bold">Center</th>
-                <th className="p-3 text-left font-bold">Joined</th>
-                <th className="p-3 text-left font-bold">Last Active</th>
-                <th className="p-3 text-center font-bold">Logins</th>
-                <th className="p-3 text-center font-bold">Feedback</th>
-                <th className="p-3 text-center font-bold">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredUsers.map((u) => (
-                <tr key={u.uid} className="border-b border-sandal-200 hover:bg-sandal-50">
-                  <td className="p-3">
-                    <input
-                      type="checkbox"
-                      checked={selectedUsers.has(u.uid)}
-                      onChange={() => {
-                        const newSet = new Set(selectedUsers);
-                        if (newSet.has(u.uid)) {
-                          newSet.delete(u.uid);
-                        } else {
-                          newSet.add(u.uid);
-                        }
-                        setSelectedUsers(newSet);
-                      }}
-                      className="w-5 h-5 cursor-pointer"
-                    />
-                  </td>
-                  <td className="p-3 font-semibold">
-                    {u.userName}
-                    <span className="ml-2 text-xs font-medium text-maroon-900/40">{u.gender === 'female' ? 'Female' : u.gender === 'male' ? 'Male' : 'Gender not set'}</span>
-                    {u.isAdmin && (
-                      <span className="ml-2 px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded-full">
-                        ADMIN
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-3 text-sm text-maroon-900/60">{u.email}</td>
-                  <td className="p-3 text-sm">{u.guruName}</td>
-                  <td className="p-3 text-sm">{u.iskconCenter}</td>
-                  <td className="p-3 text-sm">{formatDate(u.joinedDate)}</td>
-                  <td className="p-3 text-sm">
-                    <span className={u.lastActive > Date.now() - 86400000 ? 'text-green-600 font-bold' : 'text-maroon-900/60'}>
-                      {formatRelativeTime(u.lastActive)}
-                    </span>
-                  </td>
-                  <td className="p-3 text-center font-bold">{u.loginCount}</td>
-                  <td className="p-3 text-center">
-                    {u.feedbackRating ? (
-                      <div className="flex flex-col items-center gap-1">
-                        <div className="flex gap-0.5">
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <span key={star} className={star <= u.feedbackRating! ? 'text-yellow-400' : 'text-stone-300'}>
-                              ⭐
-                            </span>
-                          ))}
-                        </div>
-                        <span className="text-xs text-maroon-900/60">
-                          {formatDate(u.feedbackTimestamp!)}
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-maroon-900/40 text-xs">No feedback</span>
-                    )}
-                  </td>
-                  <td className="p-3 text-center">
-                    <div className="relative">
-                      <button
-                        onClick={() => setOpenDropdown(openDropdown === u.uid ? null : u.uid)}
-                        className="p-2 hover:bg-sandal-200 rounded-lg transition-all"
-                        title="User actions"
-                      >
-                        <MoreVertical size={20} className="text-maroon-900/60" />
-                      </button>
-                      
-                      {/* Dropdown Menu */}
-                      {openDropdown === u.uid && (
-                        <>
-                          {/* Backdrop to close dropdown */}
-                          <div 
-                            className="fixed inset-0 z-10" 
-                            onClick={() => setOpenDropdown(null)}
-                          />
-                          
-                          {/* Dropdown Content */}
-                          <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-soft border border-sandal-200 z-20 overflow-hidden">
-                            <div className="p-2 bg-sandal-100 border-b border-sandal-200">
-                              <p className="text-xs font-bold text-maroon-900/60 px-2">USER ACTIONS</p>
-                            </div>
-                            
-                            <div className="py-1">
-                              {/* Admin Actions */}
-                              {!u.isAdmin ? (
-                                <button
-                                  onClick={() => {
-                                    handleGrantAdmin(u.uid, u.email);
-                                    setOpenDropdown(null);
-                                  }}
-                                  className="w-full px-4 py-2 text-left hover:bg-green-50 transition-all flex items-center gap-2 text-green-700 font-semibold"
-                                >
-                                  <UserPlus size={16} />
-                                  Grant Admin Rights
-                                </button>
-                              ) : u.email !== 'jashwanthjavili7@gmail.com' ? (
-                                <button
-                                  onClick={() => {
-                                    handleRevokeAdmin(u.uid, u.userName);
-                                    setOpenDropdown(null);
-                                  }}
-                                  className="w-full px-4 py-2 text-left hover:bg-sandal-50 transition-all flex items-center gap-2 text-brand-600 font-semibold"
-                                >
-                                  <UserMinus size={16} />
-                                  Revoke Admin Rights
-                                </button>
-                              ) : (
-                                <div className="px-4 py-2 text-maroon-900/40 text-sm flex items-center gap-2">
-                                  <Shield size={16} />
-                                  Super Admin (Protected)
-                                </div>
-                              )}
-                              
-                              <div className="border-t border-sandal-200 my-1" />
-                              
-                              {/* View Profile */}
-                              <button
-                                onClick={() => {
-                                  alert(`User Profile:\n\nName: ${u.userName}\nEmail: ${u.email}\nGuru: ${u.guruName}\nCenter: ${u.iskconCenter}\nJoined: ${formatDate(u.joinedDate)}\nLogins: ${u.loginCount}`);
-                                  setOpenDropdown(null);
-                                }}
-                                className="w-full px-4 py-2 text-left hover:bg-sandal-50 transition-all flex items-center gap-2 text-brand-600 font-semibold"
-                              >
-                                <Eye size={16} />
-                                View Full Profile
-                              </button>
-                              
-                              {/* Send Message */}
-                              <button
-                                onClick={() => {
-                                  const message = prompt(`Send message to ${u.userName}:`);
-                                  if (message) {
-                                    alert(`Message sent to ${u.userName}: ${message}`);
-                                  }
-                                  setOpenDropdown(null);
-                                }}
-                                className="w-full px-4 py-2 text-left hover:bg-sandal-50 transition-all flex items-center gap-2 text-brand-600 font-semibold"
-                              >
-                                <Bell size={16} />
-                                Send Direct Message
-                              </button>
-                              
-                              {isSuperAdmin && (
-                                <>
-                                  <div className="border-t border-sandal-200 my-1" />
-                                  
-                                  {/* Delete User */}
-                                  <button
-                                    onClick={() => {
-                                      handleDeleteUser(u.uid, u.userName);
-                                      setOpenDropdown(null);
-                                    }}
-                                    className="w-full px-4 py-2 text-left hover:bg-red-50 transition-all flex items-center gap-2 text-red-700 font-semibold"
-                                  >
-                                    <Trash2 size={16} />
-                                    Delete User
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="flex flex-wrap items-center gap-1.5 font-semibold text-maroon-900">
+                      <span className="truncate">{u.userName}</span>
+                      {u.isAdmin && <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">ADMIN</span>}
+                    </p>
+                    <p className="truncate text-xs text-maroon-900/55">{u.email}</p>
+                  </div>
+                  <div className="shrink-0">{renderUserActions(u)}</div>
+                </div>
+                <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                  <div className="min-w-0"><dt className="text-maroon-900/40">Guru</dt><dd className="truncate font-medium text-maroon-900/80">{u.guruName || '—'}</dd></div>
+                  <div className="min-w-0"><dt className="text-maroon-900/40">Center</dt><dd className="truncate font-medium text-maroon-900/80">{u.iskconCenter || '—'}</dd></div>
+                  <div><dt className="text-maroon-900/40">Joined</dt><dd className="font-medium text-maroon-900/80">{formatDate(u.joinedDate)}</dd></div>
+                  <div>
+                    <dt className="text-maroon-900/40">Last active</dt>
+                    <dd className={`font-medium ${u.lastActive > Date.now() - 86400000 ? 'text-emerald-600' : 'text-maroon-900/80'}`}>{formatRelativeTime(u.lastActive)}</dd>
+                  </div>
+                  <div><dt className="text-maroon-900/40">Logins</dt><dd className="font-medium text-maroon-900/80">{u.loginCount}</dd></div>
+                  <div><dt className="text-maroon-900/40">Feedback</dt><dd className="font-medium text-maroon-900/80">{u.feedbackRating ? `${u.feedbackRating} / 5 ⭐` : 'None'}</dd></div>
+                </dl>
+              </li>
+            ))}
+          </ul>
+
+          {filteredUsers.length === 0 && (
+            <div className="rounded-2xl border border-sandal-200 bg-white py-10 text-center text-sm text-maroon-900/50">No users match.</div>
+          )}
         </div>
       )}
 
       {activeTab === 'admins' && (
-        <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold flex items-center gap-2">
-              <Shield size={28} className="text-red-600" />
-              Admin Management ({admins.length})
-            </h2>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-red-50 border-b-2 border-red-300">
-                <tr>
-                  <th className="p-3 text-left font-bold">Admin User</th>
-                  <th className="p-3 text-left font-bold">Email</th>
-                  <th className="p-3 text-left font-bold">Type</th>
-                  <th className="p-3 text-left font-bold">Granted At</th>
-                  <th className="p-3 text-center font-bold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {admins.map((admin) => (
-                  <tr key={admin.uid} className="border-b border-sandal-200 hover:bg-red-50">
-                    <td className="p-3 font-semibold">
-                      {users.find(u => u.uid === admin.uid)?.userName || admin.email.split('@')[0] || 'Admin User'}
-                    </td>
-                    <td className="p-3 text-sm text-maroon-900/60">{admin.email}</td>
-                    <td className="p-3">
-                      {admin.isSuperAdmin ? (
-                        <span className="px-3 py-1 bg-brand-600 text-white text-xs font-bold rounded-full">
-                          SUPER ADMIN
-                        </span>
-                      ) : (
-                        <span className="px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-full">
-                          ADMIN
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-3 text-sm">
-                      {admin.grantedAt ? formatDate(admin.grantedAt) : 'N/A'}
-                    </td>
-                    <td className="p-3 text-center">
-                      {!admin.isSuperAdmin ? (
-                        <button
-                          onClick={() => handleRevokeAdmin(admin.uid, users.find(u => u.uid === admin.uid)?.userName || admin.email.split('@')[0] || 'Admin')}
-                          className="px-4 py-2 bg-brand-600 text-white rounded-lg font-bold hover:bg-brand-600 transition-all flex items-center gap-2 mx-auto"
-                          title="Revoke admin rights"
-                        >
-                          <UserMinus size={16} />
-                          Revoke Admin
-                        </button>
-                      ) : (
-                        <span className="px-4 py-2 bg-sandal-200 text-maroon-900/60 rounded-lg font-bold text-sm">
-                          Cannot Revoke
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="space-y-3">
+          <h2 className="flex items-center gap-2 px-1 text-base font-semibold text-maroon-900">
+            <Shield size={18} className="text-brand-600" /> Admins ({admins.length})
+          </h2>
+          <ul className="space-y-2.5">
+            {admins.map((admin) => {
+              const name = users.find((u) => u.uid === admin.uid)?.userName || admin.email.split('@')[0] || 'Admin';
+              return (
+                <li key={admin.uid} className="flex flex-col gap-3 rounded-2xl border border-sandal-200 bg-white p-4 shadow-soft sm:flex-row sm:items-center">
+                  <div className="min-w-0 flex-1">
+                    <p className="flex flex-wrap items-center gap-2 font-semibold text-maroon-900">
+                      <span className="truncate">{name}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold text-white ${admin.isSuperAdmin ? 'bg-brand-600' : 'bg-red-600'}`}>
+                        {admin.isSuperAdmin ? 'SUPER ADMIN' : 'ADMIN'}
+                      </span>
+                    </p>
+                    <p className="truncate text-xs text-maroon-900/55">{admin.email}</p>
+                    <p className="mt-0.5 text-xs text-maroon-900/40">Granted {admin.grantedAt ? formatDate(admin.grantedAt) : 'N/A'}</p>
+                  </div>
+                  {!admin.isSuperAdmin ? (
+                    <button
+                      onClick={() => handleRevokeAdmin(admin.uid, name)}
+                      className="flex h-10 items-center justify-center gap-2 rounded-xl bg-red-50 px-4 text-sm font-semibold text-red-700 ring-1 ring-red-200 transition hover:bg-red-100"
+                      style={{ minHeight: 0 }}
+                    >
+                      <UserMinus size={16} /> Revoke
+                    </button>
+                  ) : (
+                    <span className="text-xs font-medium text-maroon-900/40">Protected</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 
       {activeTab === 'content' && (
-        <div className="space-y-6">
-          <div className="bg-brand-600 rounded-xl p-6 text-white shadow-soft">
-            <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
-              <Flag size={32} />
-              Advanced Content Moderation
-            </h2>
-            <p className="text-purple-100">Review, moderate, and manage all user-generated content</p>
-          </div>
-
-          {/* Stats Overview */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-sandal-50 rounded-xl p-6 border border-sandal-200">
-              <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
-                <HelpCircle className="text-brand-600" size={24} />
-                Questions
-              </h3>
-              <p className="text-2xl font-bold text-brand-600">{questions.length}</p>
-              <p className="text-sm text-maroon-900/60 mt-2">Total questions</p>
-            </div>
-
-            <div className="bg-sandal-50 rounded-xl p-6 border border-sandal-200">
-              <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
-                <MessageSquare className="text-green-600" size={24} />
-                Answers
-              </h3>
-              <p className="text-2xl font-bold text-green-600">{answers.length}</p>
-              <p className="text-sm text-maroon-900/60 mt-2">Total answers</p>
-            </div>
-
-            <div className="bg-sandal-50 rounded-xl p-6 border border-sandal-200">
-              <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
-                <AlertTriangle className="text-red-600" size={24} />
-                Flagged
-              </h3>
-              <p className="text-2xl font-bold text-red-600">{flaggedContent.filter(f => f.status === 'pending').length}</p>
-              <p className="text-sm text-maroon-900/60 mt-2">Awaiting review</p>
-            </div>
-
-            <div className="bg-sandal-50 rounded-xl p-6 border border-sandal-200">
-              <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
-                <Eye className="text-brand-600" size={24} />
-                Hidden
-              </h3>
-              <p className="text-2xl font-bold text-brand-600">
-                {questions.filter(q => q.hidden).length + answers.filter(a => a.hidden).length}
-              </p>
-              <p className="text-sm text-maroon-900/60 mt-2">Hidden content</p>
-            </div>
+        <div className="space-y-3">
+          {/* Counts */}
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+            <StatTile label="Questions" value={questions.length} icon={HelpCircle} tone="bg-amber-100 text-amber-700" />
+            <StatTile label="Answers" value={answers.length} icon={MessageSquare} tone="bg-emerald-100 text-emerald-700" />
+            <StatTile label="Flagged" value={flaggedContent.filter((f) => f.status === 'pending').length} icon={AlertTriangle} tone="bg-red-100 text-red-700" />
+            <StatTile label="Hidden" value={questions.filter((q) => q.hidden).length + answers.filter((a) => a.hidden).length} icon={Eye} tone="bg-sandal-200 text-maroon-900/70" />
           </div>
 
           {/* Filters */}
-          <div className="bg-white rounded-xl p-4 shadow-soft border border-sandal-200">
-            <div className="flex flex-wrap gap-4 items-center">
-              <div className="flex gap-2">
+          <div className="rounded-2xl border border-sandal-200 bg-white p-3 shadow-soft">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-maroon-900/40" size={18} />
+              <input
+                type="text"
+                placeholder="Search content…"
+                value={contentSearch}
+                onChange={(e) => setContentSearch(e.target.value)}
+                className="h-11 w-full rounded-xl border border-sandal-200 pl-10 pr-4 outline-none focus:ring-2 focus:ring-marigold-400/40"
+              />
+            </div>
+            <div className="-mx-1 mt-2 flex gap-1.5 overflow-x-auto px-1 pb-0.5" style={{ scrollbarWidth: 'none' }}>
+              {(
+                [
+                  ['all', 'All'],
+                  ['questions', `Questions ${questions.length}`],
+                  ['answers', `Answers ${answers.length}`],
+                  ['flagged', `Flagged ${flaggedContent.filter((f) => f.status === 'pending').length}`],
+                ] as const
+              ).map(([id, label]) => (
                 <button
-                  onClick={() => setContentFilter('all')}
-                  className={`px-4 py-2 rounded-lg font-bold transition-all ${
-                    contentFilter === 'all'
-                      ? 'bg-brand-600 text-white'
-                      : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
+                  key={id}
+                  onClick={() => setContentFilter(id)}
+                  className={`h-9 shrink-0 rounded-full px-3.5 text-sm font-semibold transition ${
+                    contentFilter === id ? 'bg-brand-600 text-white' : 'bg-white text-maroon-900/65 ring-1 ring-sandal-200'
                   }`}
+                  style={{ minHeight: 0 }}
                 >
-                  All Content
+                  {label}
                 </button>
-                <button
-                  onClick={() => setContentFilter('questions')}
-                  className={`px-4 py-2 rounded-lg font-bold transition-all ${
-                    contentFilter === 'questions'
-                      ? 'bg-brand-600 text-white'
-                      : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
-                  }`}
-                >
-                  Questions ({questions.length})
-                </button>
-                <button
-                  onClick={() => setContentFilter('answers')}
-                  className={`px-4 py-2 rounded-lg font-bold transition-all ${
-                    contentFilter === 'answers'
-                      ? 'bg-green-600 text-white'
-                      : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
-                  }`}
-                >
-                  Answers ({answers.length})
-                </button>
-                <button
-                  onClick={() => setContentFilter('flagged')}
-                  className={`px-4 py-2 rounded-lg font-bold transition-all ${
-                    contentFilter === 'flagged'
-                      ? 'bg-red-600 text-white'
-                      : 'bg-sandal-100 text-maroon-900/65 hover:bg-sandal-200'
-                  }`}
-                >
-                  Flagged ({flaggedContent.filter(f => f.status === 'pending').length})
-                </button>
-              </div>
-              <div className="flex-1 min-w-[200px]">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-maroon-900/40" size={20} />
-                  <input
-                    type="text"
-                    placeholder="Search content..."
-                    value={contentSearch}
-                    onChange={(e) => setContentSearch(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-sandal-200 rounded-lg focus:border-sandal-200 focus:outline-none"
-                  />
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 
-          {/* Questions List */}
+          {/* Questions */}
           {(contentFilter === 'all' || contentFilter === 'questions') && (
-            <div className="bg-white rounded-xl p-6 shadow-soft border border-sandal-200">
-              <h3 className="font-bold text-xl mb-4 flex items-center gap-2">
-                <HelpCircle className="text-brand-600" size={24} />
-                Questions Management
-              </h3>
-              <div className="space-y-4">
+            <Panel title="Questions" icon={HelpCircle}>
+              <ul className="space-y-2.5">
                 {questions
-                  .filter(q => 
-                    !contentSearch || 
-                    q.title?.toLowerCase().includes(contentSearch.toLowerCase()) ||
-                    q.description?.toLowerCase().includes(contentSearch.toLowerCase())
+                  .filter(
+                    (q) =>
+                      !contentSearch ||
+                      q.title?.toLowerCase().includes(contentSearch.toLowerCase()) ||
+                      q.description?.toLowerCase().includes(contentSearch.toLowerCase())
                   )
                   .slice(0, 10)
                   .map((question) => (
-                    <div key={question.id} className={`p-4 rounded-lg border ${question.hidden ? 'bg-red-50 border-red-300' : 'bg-sandal-50 border-sandal-200'}`}>
-                      <div className="flex justify-between items-start gap-4">
-                        <div className="flex-1">
-                          <h4 className="font-bold text-lg text-maroon-900">{question.title}</h4>
-                          <p className="text-maroon-900/60 text-sm mt-1 line-clamp-2">{question.description}</p>
-                          <div className="flex gap-4 mt-2 text-xs text-maroon-900/60">
-                            <span>By: {question.userName || 'Anonymous'}</span>
-                            <span>Category: {question.category || 'General'}</span>
-                            <span>Posted: {new Date(question.timestamp).toLocaleDateString()}</span>
-                            {question.hidden && <span className="text-red-600 font-bold">⚠️ HIDDEN</span>}
-                          </div>
+                    <li key={question.id} className={`rounded-xl border p-3.5 ${question.hidden ? 'border-red-200 bg-red-50' : 'border-sandal-200 bg-sandal-50/60'}`}>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-semibold text-maroon-900">{question.title}</h4>
+                          <p className="mt-1 line-clamp-2 text-sm text-maroon-900/60">{question.description}</p>
+                          <p className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-maroon-900/50">
+                            <span>{question.userName || 'Anonymous'}</span>
+                            <span>{question.category || 'General'}</span>
+                            <span>{new Date(question.timestamp).toLocaleDateString()}</span>
+                            {question.hidden && <span className="font-semibold text-red-600">Hidden</span>}
+                          </p>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex shrink-0 gap-2">
                           {!question.hidden && (
                             <>
-                              <button
-                                onClick={() => handleHideContent('question', question.id)}
-                                className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-bold hover:bg-brand-600"
-                                title="Hide Content"
-                              >
+                              <IconAction onClick={() => handleHideContent('question', question.id)} title="Hide" tone="bg-amber-100 text-amber-700">
                                 <EyeOff size={16} />
-                              </button>
-                              <button
-                                onClick={() => handleFlagContent(question.id, 'question', question)}
-                                className="px-3 py-2 bg-yellow-500 text-white rounded-lg text-sm font-bold hover:bg-yellow-600"
-                                title="Flag for Review"
-                              >
+                              </IconAction>
+                              <IconAction onClick={() => handleFlagContent(question.id, 'question', question)} title="Flag for review" tone="bg-yellow-100 text-yellow-700">
                                 <Flag size={16} />
-                              </button>
+                              </IconAction>
                             </>
                           )}
-                          <button
-                            onClick={() => handleDeleteQuestion(question.id, question.title)}
-                            className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700"
-                            title="Delete Question"
-                          >
+                          <IconAction onClick={() => handleDeleteQuestion(question.id, question.title)} title="Delete" tone="bg-red-100 text-red-700">
                             <Trash2 size={16} />
-                          </button>
+                          </IconAction>
                         </div>
                       </div>
-                    </div>
+                    </li>
                   ))}
-                {questions.length === 0 && (
-                  <div className="text-center py-8 text-maroon-900/60">
-                    No questions found
-                  </div>
-                )}
-              </div>
-            </div>
+              </ul>
+              {questions.length === 0 && <p className="py-6 text-center text-sm text-maroon-900/50">No questions found</p>}
+            </Panel>
           )}
 
-          {/* Answers List */}
+          {/* Answers */}
           {(contentFilter === 'all' || contentFilter === 'answers') && (
-            <div className="bg-white rounded-xl p-6 shadow-soft border border-sandal-200">
-              <h3 className="font-bold text-xl mb-4 flex items-center gap-2">
-                <MessageSquare className="text-green-600" size={24} />
-                Answers Management
-              </h3>
-              <div className="space-y-4">
+            <Panel title="Answers" icon={MessageSquare}>
+              <ul className="space-y-2.5">
                 {answers
-                  .filter(a => 
-                    !contentSearch || 
-                    a.answer?.toLowerCase().includes(contentSearch.toLowerCase()) ||
-                    a.questionTitle?.toLowerCase().includes(contentSearch.toLowerCase())
+                  .filter(
+                    (a) =>
+                      !contentSearch ||
+                      a.answer?.toLowerCase().includes(contentSearch.toLowerCase()) ||
+                      a.questionTitle?.toLowerCase().includes(contentSearch.toLowerCase())
                   )
                   .slice(0, 10)
                   .map((answer) => (
-                    <div key={answer.id} className={`p-4 rounded-lg border ${answer.hidden ? 'bg-red-50 border-red-300' : 'bg-green-50 border-green-200'}`}>
-                      <div className="flex justify-between items-start gap-4">
-                        <div className="flex-1">
-                          <p className="text-xs text-maroon-900/60 mb-1">Question: {answer.questionTitle}</p>
-                          <p className="text-maroon-900">{answer.answer}</p>
-                          <div className="flex gap-4 mt-2 text-xs text-maroon-900/60">
-                            <span>By: {answer.userName || 'Anonymous'}</span>
-                            <span>Posted: {new Date(answer.timestamp).toLocaleDateString()}</span>
-                            {answer.hidden && <span className="text-red-600 font-bold">⚠️ HIDDEN</span>}
-                          </div>
+                    <li key={answer.id} className={`rounded-xl border p-3.5 ${answer.hidden ? 'border-red-200 bg-red-50' : 'border-sandal-200 bg-sandal-50/60'}`}>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs text-maroon-900/50">On: {answer.questionTitle}</p>
+                          <p className="mt-1 line-clamp-3 text-sm text-maroon-900">{answer.answer}</p>
+                          <p className="mt-2 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-maroon-900/50">
+                            <span>{answer.userName || 'Anonymous'}</span>
+                            <span>{new Date(answer.timestamp).toLocaleDateString()}</span>
+                            {answer.hidden && <span className="font-semibold text-red-600">Hidden</span>}
+                          </p>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex shrink-0 gap-2">
                           {!answer.hidden && (
                             <>
-                              <button
-                                onClick={() => handleHideContent('answer', answer.id, answer.questionId)}
-                                className="px-3 py-2 bg-orange-500 text-white rounded-lg text-sm font-bold hover:bg-brand-600"
-                                title="Hide Content"
-                              >
+                              <IconAction onClick={() => handleHideContent('answer', answer.id, answer.questionId)} title="Hide" tone="bg-amber-100 text-amber-700">
                                 <EyeOff size={16} />
-                              </button>
-                              <button
-                                onClick={() => handleFlagContent(answer.id, 'answer', answer)}
-                                className="px-3 py-2 bg-yellow-500 text-white rounded-lg text-sm font-bold hover:bg-yellow-600"
-                                title="Flag for Review"
-                              >
+                              </IconAction>
+                              <IconAction onClick={() => handleFlagContent(answer.id, 'answer', answer)} title="Flag for review" tone="bg-yellow-100 text-yellow-700">
                                 <Flag size={16} />
-                              </button>
+                              </IconAction>
                             </>
                           )}
-                          <button
-                            onClick={() => handleDeleteAnswer(answer.questionId, answer.id)}
-                            className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700"
-                            title="Delete Answer"
-                          >
+                          <IconAction onClick={() => handleDeleteAnswer(answer.questionId, answer.id)} title="Delete" tone="bg-red-100 text-red-700">
                             <Trash2 size={16} />
-                          </button>
+                          </IconAction>
                         </div>
                       </div>
-                    </div>
+                    </li>
                   ))}
-                {answers.length === 0 && (
-                  <div className="text-center py-8 text-maroon-900/60">
-                    No answers found
-                  </div>
-                )}
-              </div>
-            </div>
+              </ul>
+              {answers.length === 0 && <p className="py-6 text-center text-sm text-maroon-900/50">No answers found</p>}
+            </Panel>
           )}
 
-          {/* Flagged Content */}
+          {/* Flagged */}
           {(contentFilter === 'all' || contentFilter === 'flagged') && (
-            <div className="bg-white rounded-xl p-6 shadow-soft border border-sandal-200">
-              <h3 className="font-bold text-xl mb-4 flex items-center gap-2">
-                <AlertTriangle className="text-red-600" size={24} />
-                Flagged Content Review
-              </h3>
-              <div className="space-y-4">
+            <Panel title="Flagged for review" icon={AlertTriangle}>
+              <ul className="space-y-2.5">
                 {flaggedContent
-                  .filter(f => f.status === 'pending')
+                  .filter((f) => f.status === 'pending')
                   .map((item) => (
-                    <div key={item.id} className="p-4 bg-red-50 rounded-lg border border-sandal-200">
-                      <div className="flex justify-between items-start gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="px-2 py-1 bg-red-600 text-white text-xs font-bold rounded">
-                              {item.contentType?.toUpperCase()}
-                            </span>
-                            <span className="text-xs text-maroon-900/60">
-                              Flagged: {new Date(item.flaggedAt).toLocaleDateString()}
-                            </span>
-                          </div>
-                          <p className="text-maroon-900">{item.content?.title || item.content?.answer}</p>
-                          <p className="text-xs text-maroon-900/60 mt-1">Reason: {item.reason}</p>
+                    <li key={item.id} className="rounded-xl border border-red-200 bg-red-50 p-3.5">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                        <div className="min-w-0 flex-1">
+                          <p className="flex items-center gap-2 text-xs text-maroon-900/50">
+                            <span className="rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">{item.contentType?.toUpperCase()}</span>
+                            {new Date(item.flaggedAt).toLocaleDateString()}
+                          </p>
+                          <p className="mt-1.5 line-clamp-3 text-sm text-maroon-900">{item.content?.title || item.content?.answer}</p>
+                          <p className="mt-1 text-xs text-maroon-900/55">Reason: {item.reason}</p>
                         </div>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleApproveContent(item.id)}
-                            className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm font-bold hover:bg-green-700"
-                            title="Approve"
-                          >
+                        <div className="flex shrink-0 gap-2">
+                          <IconAction onClick={() => handleApproveContent(item.id)} title="Approve" tone="bg-emerald-100 text-emerald-700">
                             <CheckCircle size={16} />
-                          </button>
-                          <button
-                            onClick={() => handleUnflagContent(item.id)}
-                            className="px-3 py-2 bg-brand-600 text-white rounded-lg text-sm font-bold hover:bg-brand-600"
-                            title="Unflag"
-                          >
+                          </IconAction>
+                          <IconAction onClick={() => handleUnflagContent(item.id)} title="Unflag" tone="bg-sandal-200 text-maroon-900/70">
                             <XCircle size={16} />
-                          </button>
-                          <button
-                            onClick={() => item.contentType === 'question' 
-                              ? handleDeleteQuestion(item.contentId, item.content?.title)
-                              : handleDeleteAnswer(item.content?.questionId, item.contentId)
+                          </IconAction>
+                          <IconAction
+                            onClick={() =>
+                              item.contentType === 'question'
+                                ? handleDeleteQuestion(item.contentId, item.content?.title)
+                                : handleDeleteAnswer(item.content?.questionId, item.contentId)
                             }
-                            className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700"
                             title="Delete"
+                            tone="bg-red-100 text-red-700"
                           >
                             <Trash2 size={16} />
-                          </button>
+                          </IconAction>
                         </div>
                       </div>
-                    </div>
+                    </li>
                   ))}
-                {flaggedContent.filter(f => f.status === 'pending').length === 0 && (
-                  <div className="text-center py-8 text-maroon-900/60">
-                    No flagged content pending review
-                  </div>
-                )}
-              </div>
-            </div>
+              </ul>
+              {flaggedContent.filter((f) => f.status === 'pending').length === 0 && (
+                <p className="py-6 text-center text-sm text-maroon-900/50">Nothing is waiting for review</p>
+              )}
+            </Panel>
           )}
 
-          {/* Bulk Actions */}
-          <div className="bg-brand-600 rounded-xl p-6 text-white">
-            <h3 className="font-bold text-lg mb-4">Bulk Content Actions</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <button 
-                onClick={() => {
-                  if (confirm('Export all content data to JSON?')) {
-                    const data = { questions, answers, flaggedContent };
-                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `content-export-${Date.now()}.json`;
-                    a.click();
-                  }
-                }}
-                className="px-4 py-3 bg-white text-brand-600 rounded-lg font-bold hover:bg-sandal-50 transition-all flex items-center justify-center gap-2"
-              >
-                <Download size={20} />
-                Export All Content
-              </button>
-              <button className="px-4 py-3 bg-white text-brand-600 rounded-lg font-bold hover:bg-sandal-50 transition-all flex items-center justify-center gap-2">
-                <RefreshCw size={20} />
-                Refresh Data
-              </button>
-              <button className="px-4 py-3 bg-white text-brand-600 rounded-lg font-bold hover:bg-sandal-50 transition-all flex items-center justify-center gap-2">
-                <Search size={20} />
-                Advanced Search
-              </button>
-            </div>
-          </div>
+          {/* Export */}
+          <button
+            onClick={async () => {
+              if (await confirmAsk('Export all content data to JSON?')) {
+                const data = { questions, answers, flaggedContent };
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `content-export-${Date.now()}.json`;
+                a.click();
+              }
+            }}
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-brand-700 shadow-soft ring-1 ring-amber-200 transition hover:bg-amber-50 sm:w-auto sm:px-5"
+            style={{ minHeight: 0 }}
+          >
+            <Download size={17} /> Export all content
+          </button>
         </div>
       )}
 
-      {activeTab === 'feedback' && (
-        <div className="space-y-6">
-          <div className="bg-brand-600 rounded-xl p-6 text-white shadow-soft">
-            <h2 className="text-2xl font-bold mb-2 flex items-center gap-2">
-              <MessageCircle size={32} />
-              User Feedback Management
-            </h2>
-            <p className="text-pink-100">View and manage all user feedback submissions</p>
-          </div>
+      {activeTab === 'feedback' && <FeedbackViewer />}
 
-          <FeedbackViewer />
-        </div>
-      )}
-
-      {activeTab === 'requests' && (
-        <AdminRequestsPanel />
-      )}
+      {activeTab === 'requests' && <AdminRequestsPanel />}
 
       {/* Announcements Tab - Rich Text Broadcast System */}
       {activeTab === 'announcements' && (
@@ -1705,7 +1429,7 @@ const AdminPanel: React.FC = () => {
               <button
                 onClick={async () => {
                   if (!announcementTitle || !announcementText) {
-                    alert('Please enter both title and message');
+                    notify('Please enter both title and message');
                     return;
                   }
                   
@@ -1743,7 +1467,7 @@ const AdminPanel: React.FC = () => {
                     const historyRef = push(ref(db, 'announcements'));
                     await set(historyRef, announcementData);
 
-                    alert(`✅ Announcement sent to ${users.length} users!`);
+                    notify(`✅ Announcement sent to ${users.length} users!`);
                     setAnnouncementTitle('');
                     setAnnouncementText('');
                     setIsBold(false);
@@ -1751,7 +1475,7 @@ const AdminPanel: React.FC = () => {
                     setFontSize('16');
                     setTextColor('#000000');
                   } catch (error: any) {
-                    alert(`❌ Failed to send: ${error.message}`);
+                    notify(`❌ Failed to send: ${error.message}`);
                   }
                 }}
                 disabled={!announcementTitle || !announcementText}
@@ -1821,532 +1545,188 @@ const AdminPanel: React.FC = () => {
       )}
 
       {activeTab === 'system' && (
-        <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold flex items-center gap-2">
-              <Database size={28} className="text-brand-600" />
-              System Health & Monitoring
-            </h2>
-            <p className="text-maroon-900/60 mt-2">Monitor system performance and database health</p>
-          </div>
+        <div className="space-y-3">
+          <div className="grid gap-3 lg:grid-cols-3">
+            <Panel title="Status" icon={Zap}>
+              <p className="text-2xl font-bold text-emerald-600">Healthy</p>
+              <p className="mt-1 text-sm text-maroon-900/55">All systems operational</p>
+            </Panel>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-            <div className="bg-sandal-50 rounded-xl p-6 border border-sandal-200">
-              <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
-                <Zap className="text-green-600" size={24} />
-                System Status
-              </h3>
-              <p className="text-2xl font-bold text-green-600">Healthy</p>
-              <p className="text-sm text-maroon-900/60 mt-2">All systems operational</p>
-            </div>
-
-            <div className="bg-sandal-50 rounded-xl p-6 border border-sandal-200">
-              <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
-                <Database className="text-brand-600" size={24} />
-                Database Size
-              </h3>
-              <p className="text-2xl font-bold text-brand-600">
-                {firebaseUsage ? `${firebaseUsage.totalSizeMB} MB` : 'Loading...'}
-              </p>
-              <p className="text-sm text-maroon-900/60 mt-2">
-                {firebaseUsage ? `${firebaseUsage.usagePercent}% of 1GB used` : 'Firebase Realtime DB'}
-              </p>
+            <Panel title="Database" icon={Database}>
+              <p className="text-2xl font-bold text-brand-600">{firebaseUsage ? `${firebaseUsage.totalSizeMB} MB` : 'Loading…'}</p>
+              <p className="mt-1 text-sm text-maroon-900/55">{firebaseUsage ? `${firebaseUsage.usagePercent}% of 1 GB used` : 'Firebase Realtime DB'}</p>
               {firebaseUsage && (
-                <div className="mt-4 space-y-2">
-                  <div className="flex justify-between text-xs">
-                    <span className="text-maroon-900/60">Users</span>
-                    <span className="font-semibold text-brand-600">{firebaseUsage.userCount} records</span>
+                <div className="mt-3 space-y-2">
+                  <div className="h-2 overflow-hidden rounded-full bg-sandal-200">
+                    <div className="h-full rounded-full bg-brand-600 transition-all" style={{ width: `${Math.min(firebaseUsage.usagePercent, 100)}%` }} />
                   </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-maroon-900/60">Questions</span>
-                    <span className="font-semibold text-brand-600">{firebaseUsage.questionCount} records</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="text-maroon-900/60">Chats</span>
-                    <span className="font-semibold text-brand-600">{firebaseUsage.chatCount} records</span>
-                  </div>
-                  <div className="w-full bg-blue-200 rounded-full h-2 mt-3">
-                    <div 
-                      className="bg-brand-600 h-2 rounded-full transition-all"
-                      style={{ width: `${Math.min(firebaseUsage.usagePercent, 100)}%` }}
-                    ></div>
-                  </div>
+                  <MetricRow label="Users" value={`${firebaseUsage.userCount} records`} />
+                  <MetricRow label="Questions" value={`${firebaseUsage.questionCount} records`} />
+                  <MetricRow label="Chats" value={`${firebaseUsage.chatCount} records`} />
                 </div>
               )}
-            </div>
+            </Panel>
 
-            <div className="bg-sandal-50 rounded-xl p-6 border border-sandal-200">
-              <h3 className="font-bold text-lg mb-2 flex items-center gap-2">
-                <Activity className="text-brand-600" size={24} />
-                Active Sessions
-              </h3>
-              <p className="text-2xl font-bold text-brand-600">{users.filter(u => {
-                const lastActive = u.lastActive ? new Date(u.lastActive) : null;
-                return lastActive && (new Date().getTime() - lastActive.getTime()) < 15 * 60 * 1000;
-              }).length}</p>
-              <p className="text-sm text-maroon-900/60 mt-2">Users online now</p>
-            </div>
+            <Panel title="Online now" icon={Activity}>
+              <p className="text-2xl font-bold text-brand-600">
+                {
+                  users.filter((u) => {
+                    const lastActive = u.lastActive ? new Date(u.lastActive) : null;
+                    return lastActive && new Date().getTime() - lastActive.getTime() < 15 * 60 * 1000;
+                  }).length
+                }
+              </p>
+              <p className="mt-1 text-sm text-maroon-900/55">Active in the last 15 minutes</p>
+            </Panel>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl border border-sandal-200 p-6">
-              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                <TrendingUp className="text-brand-600" size={24} />
-                Performance Metrics
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center p-3 bg-sandal-50 rounded-lg">
-                  <span className="font-semibold">Avg Response Time</span>
-                  <span className="text-green-600 font-bold">~300ms</span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-sandal-50 rounded-lg">
-                  <span className="font-semibold">Uptime (30 days)</span>
-                  <span className="text-green-600 font-bold">99.9%</span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-sandal-50 rounded-lg">
-                  <span className="font-semibold">Error Rate</span>
-                  <span className="text-green-600 font-bold">&lt;0.1%</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl border border-sandal-200 p-6">
-              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                <Zap className="text-brand-600" size={24} />
-                System Information
-              </h3>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center p-3 bg-sandal-50 rounded-lg">
-                  <span className="font-semibold">Platform</span>
-                  <span className="text-brand-600 font-bold">Firebase</span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-sandal-50 rounded-lg">
-                  <span className="font-semibold">Plan</span>
-                  <span className="text-brand-600 font-bold">Spark (Free)</span>
-                </div>
-                <div className="flex justify-between items-center p-3 bg-sandal-50 rounded-lg">
-                  <span className="font-semibold">Region</span>
-                  <span className="text-brand-600 font-bold">Asia-South</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* App Settings Tab */}
-      {activeTab === 'settings' && (
-        <div className="space-y-6">
-          <div className="bg-brand-600 rounded-xl p-6 text-white">
-            <h2 className="text-2xl font-bold mb-2">⚙️ Application Settings</h2>
-            <p className="text-maroon-900/60 mt-2">Track all admin actions and system events</p>
-          </div>
-
-          <div className="space-y-4">
-            {/* Recent Admin Actions */}
-            <div className="bg-sandal-50 rounded-xl p-6 border border-sandal-200">
-              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                <Activity className="text-brand-600" size={24} />
-                Recent Admin Actions
-              </h3>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Panel title="Performance" icon={TrendingUp}>
               <div className="space-y-2">
-                <div className="flex items-center justify-between p-3 bg-white rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <UserPlus className="text-green-600" size={20} />
-                    <div>
-                      <p className="font-semibold">Admin Rights Granted</p>
-                      <p className="text-sm text-maroon-900/60">User promoted to admin</p>
-                    </div>
-                  </div>
-                  <span className="text-xs text-maroon-900/60">2 hours ago</span>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-white rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Bell className="text-brand-600" size={20} />
-                    <div>
-                      <p className="font-semibold">Broadcast Sent</p>
-                      <p className="text-sm text-maroon-900/60">Announcement to {users.length} users</p>
-                    </div>
-                  </div>
-                  <span className="text-xs text-maroon-900/60">5 hours ago</span>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-white rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Trash2 className="text-red-600" size={20} />
-                    <div>
-                      <p className="font-semibold">User Deleted</p>
-                      <p className="text-sm text-maroon-900/60">Account permanently removed</p>
-                    </div>
-                  </div>
-                  <span className="text-xs text-maroon-900/60">1 day ago</span>
-                </div>
+                <MetricRow label="Avg response time" value="~300ms" tone="text-emerald-600" />
+                <MetricRow label="Uptime (30 days)" value="99.9%" tone="text-emerald-600" />
+                <MetricRow label="Error rate" value="<0.1%" tone="text-emerald-600" />
               </div>
-            </div>
-
-            {/* System Events */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-xl border border-sandal-200 p-6">
-                <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                  <Zap className="text-amber-600" size={24} />
-                  System Events (Last 24h)
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center p-3 bg-sandal-50 rounded-lg">
-                    <span className="font-semibold">New User Registrations</span>
-                    <span className="text-green-600 font-bold">{users.filter(u => Date.now() - u.joinedDate < 86400000).length}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-sandal-50 rounded-lg">
-                    <span className="font-semibold">User Logins</span>
-                    <span className="text-brand-600 font-bold">{users.filter(u => Date.now() - u.lastActive < 86400000).length}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-sandal-50 rounded-lg">
-                    <span className="font-semibold">Failed Login Attempts</span>
-                    <span className="text-red-600 font-bold">0</span>
-                  </div>
-                </div>
+            </Panel>
+            <Panel title="System information" icon={Zap}>
+              <div className="space-y-2">
+                <MetricRow label="Platform" value="Firebase" tone="text-brand-600" />
+                <MetricRow label="Plan" value="Spark (Free)" tone="text-brand-600" />
+                <MetricRow label="Region" value="Asia-South" tone="text-brand-600" />
               </div>
-
-              <div className="bg-white rounded-xl border border-sandal-200 p-6">
-                <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                  <Database className="text-brand-600" size={24} />
-                  Database Operations
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center p-3 bg-sandal-50 rounded-lg">
-                    <span className="font-semibold">Read Operations</span>
-                    <span className="text-brand-600 font-bold">~2,450</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-sandal-50 rounded-lg">
-                    <span className="font-semibold">Write Operations</span>
-                    <span className="text-green-600 font-bold">~890</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-sandal-50 rounded-lg">
-                    <span className="font-semibold">Bandwidth Used</span>
-                    <span className="text-brand-600 font-bold">~15 MB</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Export Logs */}
-            <div className="flex justify-end gap-4">
-              <button className="px-6 py-3 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-600 transition-all shadow-soft flex items-center gap-2">
-                <Download size={20} />
-                Export Audit Logs
-              </button>
-            </div>
+            </Panel>
           </div>
         </div>
       )}
 
-      {activeTab === 'reports' && (
-        <div className="bg-white rounded-3xl shadow-soft border border-sandal-200 p-6">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold flex items-center gap-2">
-              <BarChart3 size={28} className="text-brand-600" />
-              Reports & Advanced Insights
-            </h2>
-            <p className="text-maroon-900/60 mt-2">Comprehensive analytics and business intelligence</p>
-          </div>
-
-          <div className="space-y-6">
-            {/* Quick Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-sandal-50 rounded-xl p-4 border border-sandal-200">
-                <p className="text-sm font-semibold text-maroon-900">Growth Rate</p>
-                <p className="text-2xl font-bold text-brand-600">+{Math.round((users.filter(u => Date.now() - u.joinedDate < 604800000).length / users.length) * 100)}%</p>
-                <p className="text-xs text-maroon-900/60 mt-1">Last 7 days</p>
-              </div>
-              <div className="bg-sandal-50 rounded-xl p-4 border border-sandal-200">
-                <p className="text-sm font-semibold text-maroon-900">Retention Rate</p>
-                <p className="text-2xl font-bold text-green-600">{Math.round((users.filter(u => u.loginCount > 3).length / users.length) * 100)}%</p>
-                <p className="text-xs text-maroon-900/60 mt-1">Active users</p>
-              </div>
-              <div className="bg-sandal-50 rounded-xl p-4 border border-sandal-200">
-                <p className="text-sm font-semibold text-maroon-900">Avg Logins/User</p>
-                <p className="text-2xl font-bold text-brand-600">{users.length > 0 ? Math.round(users.reduce((sum, u) => sum + u.loginCount, 0) / users.length) : 0}</p>
-                <p className="text-xs text-maroon-900/60 mt-1">All time</p>
-              </div>
-              <div className="bg-sandal-50 rounded-xl p-4 border border-sandal-200">
-                <p className="text-sm font-semibold text-maroon-900">Feedback Rate</p>
-                <p className="text-2xl font-bold text-brand-600">{Math.round((users.filter(u => u.feedbackRating).length / users.length) * 100)}%</p>
-                <p className="text-xs text-maroon-900/60 mt-1">Users who rated</p>
-              </div>
-            </div>
-
-            {/* Report Cards */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-sandal-50 rounded-xl p-6 border border-sandal-200">
-                <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                  <TrendingUp className="text-brand-600" size={24} />
-                  User Demographics
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center p-3 bg-white rounded-lg">
-                    <span className="font-semibold">Most Popular Center</span>
-                    <span className="text-brand-600 font-bold">{getCenterDistribution()[0]?.name || 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-white rounded-lg">
-                    <span className="font-semibold">Total Centers</span>
-                    <span className="text-brand-600 font-bold">{new Set(users.map(u => u.iskconCenter)).size}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-white rounded-lg">
-                    <span className="font-semibold">Avg Users/Center</span>
-                    <span className="text-brand-600 font-bold">{Math.round(users.length / new Set(users.map(u => u.iskconCenter)).size)}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-sandal-50 rounded-xl p-6 border border-sandal-200">
-                <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                  <Activity className="text-brand-600" size={24} />
-                  Engagement Metrics
-                </h3>
-                <div className="space-y-3">
-                  <div className="flex justify-between items-center p-3 bg-white rounded-lg">
-                    <span className="font-semibold">Daily Active Users</span>
-                    <span className="text-brand-600 font-bold">{users.filter(u => Date.now() - u.lastActive < 86400000).length}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-white rounded-lg">
-                    <span className="font-semibold">Weekly Active Users</span>
-                    <span className="text-brand-600 font-bold">{users.filter(u => Date.now() - u.lastActive < 604800000).length}</span>
-                  </div>
-                  <div className="flex justify-between items-center p-3 bg-white rounded-lg">
-                    <span className="font-semibold">Monthly Active Users</span>
-                    <span className="text-brand-600 font-bold">{users.filter(u => Date.now() - u.lastActive < 2592000000).length}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Export Reports */}
-            <div className="bg-brand-600 rounded-xl p-6 text-white">
-              <h3 className="font-bold text-lg mb-4">Generate Custom Reports</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <button className="px-4 py-3 bg-white text-brand-600 rounded-lg font-bold hover:bg-sandal-50 transition-all">
-                  📊 User Activity Report
-                </button>
-                <button className="px-4 py-3 bg-white text-brand-600 rounded-lg font-bold hover:bg-sandal-50 transition-all">
-                  📈 Growth Analysis
-                </button>
-                <button className="px-4 py-3 bg-white text-brand-600 rounded-lg font-bold hover:bg-sandal-50 transition-all">
-                  💬 Engagement Report
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* App Settings Tab */}
+      {/* App settings */}
       {activeTab === 'settings' && (
-        <div className="space-y-6">
-          <div className="bg-brand-600 rounded-xl p-6 text-white">
-            <h2 className="text-2xl font-bold mb-2">⚙️ Application Settings</h2>
-            <p className="text-indigo-100">Configure app-wide settings and features</p>
+        <div className="space-y-3">
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Panel title="General" icon={Zap}>
+              <div className="space-y-2">
+                <Toggle label="Maintenance mode" hint="Disable the app for maintenance" checked={maintenanceMode} onChange={(v) => saveAppSettings('maintenanceMode', v)} />
+                <Toggle label="Guest mode access" hint="Allow guest demo access" checked={guestModeEnabled} onChange={(v) => saveAppSettings('guestModeEnabled', v)} />
+                <Toggle label="New user registration" hint="Allow new sign-ups" checked={registrationEnabled} onChange={(v) => saveAppSettings('registrationEnabled', v)} />
+              </div>
+            </Panel>
+
+            <Panel title="Database" icon={Database}>
+              <button
+                onClick={handleMigrateProfiles}
+                disabled={migrationStatus === 'running'}
+                className={`flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white transition ${
+                  migrationStatus === 'running'
+                    ? 'cursor-wait bg-yellow-500'
+                    : migrationStatus === 'success'
+                    ? 'bg-emerald-500'
+                    : migrationStatus === 'error'
+                    ? 'bg-red-500'
+                    : 'bg-brand-600 hover:bg-brand-700'
+                }`}
+                style={{ minHeight: 0 }}
+              >
+                <RefreshCw size={17} className={migrationStatus === 'running' ? 'animate-spin' : ''} />
+                {migrationStatus === 'running'
+                  ? 'Migrating…'
+                  : migrationStatus === 'success'
+                  ? 'Migration complete'
+                  : migrationStatus === 'error'
+                  ? 'Migration failed'
+                  : 'Migrate chat profiles'}
+              </button>
+            </Panel>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* General Settings */}
-            <div className="bg-white rounded-xl p-6 shadow-soft border border-sandal-200">
-              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                <Zap className="text-brand-600" size={24} />
-                General Settings
-              </h3>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-3 bg-sandal-50 rounded-lg">
-                  <div>
-                    <p className="font-semibold">Maintenance Mode</p>
-                    <p className="text-xs text-maroon-900/60">Disable app for maintenance</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer" 
-                      checked={maintenanceMode}
-                      onChange={(e) => saveAppSettings('maintenanceMode', e.target.checked)}
-                    />
-                    <div className="w-11 h-6 bg-sandal-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-marigold-400/40 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-sandal-200 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600"></div>
-                  </label>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-sandal-50 rounded-lg">
-                  <div>
-                    <p className="font-semibold">Guest Mode Access</p>
-                    <p className="text-xs text-maroon-900/60">Allow guest demo access</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer" 
-                      checked={guestModeEnabled}
-                      onChange={(e) => saveAppSettings('guestModeEnabled', e.target.checked)}
-                    />
-                    <div className="w-11 h-6 bg-sandal-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-marigold-400/40 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-sandal-200 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600"></div>
-                  </label>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-sandal-50 rounded-lg">
-                  <div>
-                    <p className="font-semibold">New User Registration</p>
-                    <p className="text-xs text-maroon-900/60">Allow new signups</p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer" 
-                      checked={registrationEnabled}
-                      onChange={(e) => saveAppSettings('registrationEnabled', e.target.checked)}
-                    />
-                    <div className="w-11 h-6 bg-sandal-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-marigold-400/40 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-sandal-200 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-brand-600"></div>
-                  </label>
-                </div>
-              </div>
-            </div>
-
-            {/* Database Management */}
-            <div className="bg-white rounded-xl p-6 shadow-soft border border-sandal-200">
-              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                <Database className="text-red-600" size={24} />
-                Database Management
-              </h3>
-              <div className="space-y-3">
-                <button 
-                  onClick={handleMigrateProfiles}
-                  className={`w-full px-4 py-3 rounded-lg font-bold transition-all flex items-center justify-center gap-2 ${
-                    migrationStatus === 'running' 
-                      ? 'bg-yellow-500 text-white cursor-wait' 
-                      : migrationStatus === 'success'
-                      ? 'bg-green-500 text-white'
-                      : migrationStatus === 'error'
-                      ? 'bg-red-500 text-white'
-                      : 'bg-brand-600 text-white hover:bg-brand-700'
-                  }`}
-                  disabled={migrationStatus === 'running'}
-                >
-                  <RefreshCw size={20} className={migrationStatus === 'running' ? 'animate-spin' : ''} />
-                  {migrationStatus === 'running' ? 'Migrating...' : 
-                   migrationStatus === 'success' ? '✅ Migration Complete' :
-                   migrationStatus === 'error' ? '❌ Migration Failed' :
-                   'Migrate Chat Profiles'}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Firebase Usage Monitor */}
           {firebaseUsage && (
-            <div className="bg-white rounded-xl p-6 shadow-soft border border-sandal-200">
-              <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                <Database className="text-brand-600" size={24} />
-                Firebase Usage Monitor
-              </h3>
-              <div className="space-y-4">
-                <div className="p-4 bg-sandal-50 rounded-lg">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="font-semibold text-maroon-900">Storage Used</span>
-                    <span className="text-2xl font-bold text-brand-600">
-                      {firebaseUsage.totalSizeMB} MB
-                    </span>
-                  </div>
-                  <div className="w-full bg-sandal-200 rounded-full h-4 overflow-hidden">
-                    <div 
-                      className={`h-full transition-all ${
-                        firebaseUsage.usagePercent > 80 ? 'bg-red-500' :
-                        firebaseUsage.usagePercent > 50 ? 'bg-yellow-500' :
-                        'bg-green-500'
-                      }`}
-                      style={{ width: `${Math.min(firebaseUsage.usagePercent, 100)}%` }}
-                    />
-                  </div>
-                  <p className="text-sm text-maroon-900/60 mt-2">
-                    {firebaseUsage.usagePercent}% of {firebaseUsage.freeLimitMB} MB free tier
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-3 bg-sandal-50 rounded-lg">
-                    <p className="text-xs text-maroon-900/60 mb-1">Total Users</p>
-                    <p className="text-2xl font-bold text-brand-600">{firebaseUsage.userCount}</p>
-                  </div>
-                  <div className="p-3 bg-sandal-50 rounded-lg">
-                    <p className="text-xs text-maroon-900/60 mb-1">Questions</p>
-                    <p className="text-2xl font-bold text-brand-600">{firebaseUsage.questionCount}</p>
-                  </div>
-                  <div className="p-3 bg-green-50 rounded-lg">
-                    <p className="text-xs text-maroon-900/60 mb-1">Chats</p>
-                    <p className="text-2xl font-bold text-green-600">{firebaseUsage.chatCount}</p>
-                  </div>
-                  <div className="p-3 bg-sandal-50 rounded-lg">
-                    <p className="text-xs text-maroon-900/60 mb-1">Est. Reads/Day</p>
-                    <p className="text-lg font-bold text-brand-600">{firebaseUsage.estimatedReadsPerDay}</p>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-sandal-50 rounded-lg border border-sandal-200">
-                  <p className="font-semibold text-orange-800 mb-2">Free Tier Limits:</p>
-                  <ul className="text-sm text-maroon-900 space-y-1">
-                    <li>• Storage: 1 GB (Realtime Database)</li>
-                    <li>• Downloads: 10 GB/month</li>
-                    <li>• Concurrent Connections: 100</li>
-                    <li>• Estimated time until limit: {
-                      Math.floor((firebaseUsage.freeLimitMB - firebaseUsage.totalSizeMB) / (firebaseUsage.totalSizeMB / 30))
-                    } days</li>
-                  </ul>
-                </div>
-
-                <button 
+            <Panel
+              title="Firebase usage"
+              icon={Database}
+              action={
+                <button
                   onClick={() => loadFirebaseUsage()}
-                  className="w-full px-4 py-3 bg-brand-600 text-white rounded-lg font-bold hover:bg-brand-700 transition-all flex items-center justify-center gap-2"
+                  className="flex h-9 items-center gap-1.5 rounded-full bg-white px-3.5 text-sm font-semibold text-brand-700 ring-1 ring-amber-200 transition hover:bg-amber-50"
+                  style={{ minHeight: 0 }}
                 >
-                  <RefreshCw size={20} />
-                  Refresh Usage Stats
+                  <RefreshCw size={14} /> Refresh
                 </button>
+              }
+            >
+              <div className="rounded-xl bg-sandal-50 p-3.5">
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="text-sm text-maroon-900/70">Storage used</span>
+                  <span className="text-xl font-bold text-brand-600">{firebaseUsage.totalSizeMB} MB</span>
+                </div>
+                <div className="mt-2 h-3 overflow-hidden rounded-full bg-sandal-200">
+                  <div
+                    className={`h-full transition-all ${firebaseUsage.usagePercent > 80 ? 'bg-red-500' : firebaseUsage.usagePercent > 50 ? 'bg-yellow-500' : 'bg-emerald-500'}`}
+                    style={{ width: `${Math.min(firebaseUsage.usagePercent, 100)}%` }}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-maroon-900/55">
+                  {firebaseUsage.usagePercent}% of {firebaseUsage.freeLimitMB} MB free tier
+                </p>
               </div>
-            </div>
+              <div className="mt-2.5 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                <StatTile label="Users" value={firebaseUsage.userCount} icon={Users} tone="bg-marigold-100 text-brand-700" />
+                <StatTile label="Questions" value={firebaseUsage.questionCount} icon={HelpCircle} tone="bg-amber-100 text-amber-700" />
+                <StatTile label="Chats" value={firebaseUsage.chatCount} icon={MessageSquare} tone="bg-sky-100 text-sky-700" />
+                <StatTile label="Reads / day" value={firebaseUsage.estimatedReadsPerDay} icon={Activity} tone="bg-emerald-100 text-emerald-700" />
+              </div>
+              <p className="mt-3 text-xs leading-relaxed text-maroon-900/55">
+                Free tier: 1 GB storage, 10 GB downloads per month, 100 concurrent connections. Estimated time until the storage limit:{' '}
+                {Math.floor((firebaseUsage.freeLimitMB - firebaseUsage.totalSizeMB) / (firebaseUsage.totalSizeMB / 30))} days.
+              </p>
+            </Panel>
           )}
 
-          {/* Security Settings */}
-          <div className="bg-white rounded-xl p-6 shadow-soft border border-sandal-200">
-            <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-              <Shield className="text-green-600" size={24} />
-              Security & Privacy
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 bg-green-50 rounded-lg">
-                <p className="font-semibold mb-2">Admin Password</p>
-                <div className="flex gap-2">
-                  <input 
-                    type="password" 
-                    value="Hare Krishna"
-                    disabled
-                    className="flex-1 px-3 py-2 border border-sandal-200 rounded-lg bg-white"
-                  />
-                  <button className="px-4 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700">
-                    Change
-                  </button>
-                </div>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Panel title="Last 24 hours" icon={Activity}>
+              <div className="space-y-2">
+                <MetricRow label="New registrations" value={users.filter((u) => Date.now() - u.joinedDate < 86400000).length} tone="text-emerald-600" />
+                <MetricRow label="Active users" value={users.filter((u) => Date.now() - u.lastActive < 86400000).length} tone="text-brand-600" />
               </div>
-              <div className="p-4 bg-green-50 rounded-lg">
-                <p className="font-semibold mb-2">Session Timeout</p>
-                <select className="w-full px-3 py-2 border border-sandal-200 rounded-lg bg-white">
-                  <option>30 minutes</option>
-                  <option>1 hour</option>
-                  <option>2 hours</option>
-                  <option>Never</option>
-                </select>
+            </Panel>
+            <Panel title="Security" icon={Shield}>
+              <p className="text-sm text-maroon-900/60">
+                Admin access is protected by a password and limited to super admins. Password change, 2FA and IP allow-lists are not available yet.
+              </p>
+            </Panel>
+          </div>
+        </div>
+      )}
+
+      {dialog}
+
+      {profileUser && (
+        <div className="fixed inset-0 z-[120] flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label="User profile">
+          <div className="absolute inset-0 animate-fadeIn bg-maroon-900/35 backdrop-blur-[2px]" onClick={() => setProfileUser(null)} />
+          <div className="relative max-h-[90dvh] w-full animate-rise-in overflow-y-auto rounded-t-[28px] bg-white p-6 shadow-lift sm:max-w-sm sm:rounded-[28px]" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h3 className="truncate text-lg font-semibold text-maroon-900">{profileUser.userName}</h3>
+                <p className="truncate text-sm text-maroon-900/55">{profileUser.email}</p>
               </div>
-              <div className="p-4 bg-green-50 rounded-lg">
-                <p className="font-semibold mb-2">Two-Factor Auth</p>
-                <button className="px-4 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 w-full">
-                  Enable 2FA
-                </button>
-              </div>
-              <div className="p-4 bg-green-50 rounded-lg">
-                <p className="font-semibold mb-2">IP Whitelisting</p>
-                <button className="px-4 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 w-full">
-                  Configure IPs
-                </button>
-              </div>
+              <button onClick={() => setProfileUser(null)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-maroon-900/50 hover:bg-sandal-100" aria-label="Close" style={{ minHeight: 0 }}>
+                <XCircle size={20} />
+              </button>
             </div>
+            <dl className="mt-4 space-y-2 text-sm">
+              {(
+                [
+                  ['Guru', profileUser.guruName],
+                  ['Center', profileUser.iskconCenter],
+                  ['Joined', formatDate(profileUser.joinedDate)],
+                  ['Last active', formatRelativeTime(profileUser.lastActive)],
+                  ['Logins', String(profileUser.loginCount)],
+                ] as const
+              ).map(([k, v]) => (
+                <div key={k} className="flex items-center justify-between gap-3 rounded-xl bg-sandal-50 px-3.5 py-2.5">
+                  <dt className="text-maroon-900/55">{k}</dt>
+                  <dd className="min-w-0 truncate font-medium text-maroon-900">{v || '—'}</dd>
+                </div>
+              ))}
+            </dl>
           </div>
         </div>
       )}

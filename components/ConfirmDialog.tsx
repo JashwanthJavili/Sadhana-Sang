@@ -87,3 +87,16 @@ export function useConfirm() {
 
   return { ask, dialog };
 }
+
+/** Ask using a plain sentence: the first line becomes the title, the rest the message. */
+export const askText = (ask: (o: AskOptions) => Promise<boolean>, text: string) => {
+  const clean = text.replace(/^[^\p{L}\p{N}"'(]+/u, '').trim();
+  const lines = clean.split(/[\r\n]+/);
+  const title = lines[0];
+  const message = lines.slice(1).join(String.fromCharCode(10)).trim();
+  return ask({
+    title: title.slice(0, 140),
+    message: message || undefined,
+    danger: /delete|revoke|permanent|hide|discard|remove/i.test(text),
+  });
+};

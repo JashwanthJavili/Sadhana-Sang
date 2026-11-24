@@ -348,7 +348,9 @@ const Community: React.FC = () => {
               style={{ minHeight: 0 }}
             >
               <span className="whitespace-nowrap">{t.label}</span>
-              <span className={`text-xs font-medium ${view === t.id ? 'text-brand-600' : 'text-maroon-900/40'}`}>{t.count}</span>
+              {t.id === 'connected' && (
+                <span className={`text-xs font-medium ${view === t.id ? 'text-brand-600' : 'text-maroon-900/40'}`}>{t.count}</span>
+              )}
             </button>
           ))}
         </div>

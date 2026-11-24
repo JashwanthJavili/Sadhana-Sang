@@ -27,7 +27,7 @@ const Field: React.FC<{ label: string; children?: React.ReactNode }> = ({ label,
   children ? (
     <div>
       <p className="text-[11px] font-semibold uppercase tracking-wide text-maroon-900/40">{label}</p>
-      <p className="mt-0.5 whitespace-pre-line text-sm leading-relaxed text-maroon-900/80">{children}</p>
+      <p className="mt-0.5 whitespace-pre-line break-words text-sm leading-relaxed text-maroon-900/80">{children}</p>
     </div>
   ) : null;
 
@@ -44,17 +44,17 @@ interface CardProps {
 }
 
 const RequestCard: React.FC<CardProps> = ({ title, meta, status, open, onToggle, comment, reviewedBy, children, review }) => (
-  <li className={`rounded-2xl bg-white ring-1 transition-shadow ${open ? 'shadow-card ring-amber-200' : 'shadow-soft ring-sandal-200'}`}>
-    <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-3 px-4 py-3 text-left" style={{ minHeight: 0 }}>
+  <li className={`rounded-2xl border bg-white shadow-soft transition-colors ${open ? 'border-marigold-400' : 'border-sandal-200'}`}>
+    <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-3 p-4 text-left" style={{ minHeight: 0 }}>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[15px] font-semibold text-maroon-900">{title}</p>
+        <p className="truncate font-semibold text-maroon-900">{title}</p>
         <p className="truncate text-xs text-maroon-900/50">{meta}</p>
       </div>
       <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-bold capitalize ${STATUS_STYLE[status] || 'bg-stone-100 text-stone-700'}`}>{status}</span>
       <ChevronDown size={17} className={`shrink-0 text-maroon-900/40 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
     </button>
     <div className={`grid transition-[grid-template-rows] duration-300 ease-out ${open ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
-      <div className="min-h-0 overflow-hidden">
+      <div className="min-h-0 min-w-0 overflow-hidden">
         <div className="space-y-3 border-t border-sandal-200/70 px-4 pb-4 pt-3">
           {children}
           {comment && (
@@ -132,13 +132,13 @@ export default function AdminRequestsPanel() {
         value={openId === id ? note : ''}
         onChange={(e) => setNote(e.target.value)}
         placeholder="Short note (needed to decline)"
-        className="block w-full rounded-xl border border-sandal-300 bg-white px-3.5 py-2.5 text-sm text-maroon-900 placeholder:text-maroon-900/30 focus:border-marigold-400 focus:outline-none focus:ring-4 focus:ring-marigold-400/20"
+        className="block w-full h-11 rounded-xl border border-sandal-200 bg-white px-3.5 text-sm text-maroon-900 outline-none placeholder:text-maroon-900/30 focus:ring-2 focus:ring-marigold-400/40"
       />
-      <div className="flex gap-2">
-        <button onClick={() => review(kind, id, 'rejected')} disabled={busy} className="btn-secondary flex-1 disabled:opacity-50">
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <button onClick={() => review(kind, id, 'rejected')} disabled={busy} style={{ minHeight: 0 }} className="inline-flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-white text-sm font-semibold text-maroon-900/70 ring-1 ring-sandal-200 disabled:opacity-50">
           <X size={16} /> Decline
         </button>
-        <button onClick={() => review(kind, id, 'approved')} disabled={busy} className="btn-primary flex-[1.4] disabled:opacity-50">
+        <button onClick={() => review(kind, id, 'approved')} disabled={busy} style={{ minHeight: 0 }} className="inline-flex h-10 flex-[1.4] items-center justify-center gap-1.5 rounded-xl bg-brand-600 text-sm font-semibold text-white disabled:opacity-50">
           {busy ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />} {approveLabel}
         </button>
       </div>
@@ -146,7 +146,7 @@ export default function AdminRequestsPanel() {
   );
 
   const empty = (label: string) => (
-    <div className="rounded-3xl bg-white px-6 py-12 text-center shadow-soft ring-1 ring-sandal-200">
+    <div className="rounded-2xl border border-sandal-200 bg-white px-6 py-10 text-center shadow-soft">
       <Inbox size={34} className="mx-auto text-sandal-400" />
       <p className="mt-2 text-sm text-maroon-900/55">No {status === 'all' ? '' : `${status} `}{label}</p>
     </div>
@@ -163,10 +163,10 @@ export default function AdminRequestsPanel() {
   const languages = byStatus(languageRequests);
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       <div>
-        <h2 className="font-elegant text-2xl font-semibold text-maroon-900">Requests</h2>
-        <p className="mt-0.5 text-sm text-maroon-900/55">Review what devotees have suggested.</p>
+        <h2 className="text-base font-semibold text-maroon-900">Requests</h2>
+        <p className="mt-0.5 text-xs text-maroon-900/50">Review what devotees have suggested.</p>
       </div>
 
       {/* Tabs */}
@@ -178,25 +178,25 @@ export default function AdminRequestsPanel() {
               setTab(id);
               setOpenId(null);
             }}
-            className={`flex items-center justify-center gap-1.5 rounded-xl px-2 py-2.5 text-sm font-semibold transition-all ${
+            className={`flex items-center justify-center gap-1.5 h-10 min-w-0 rounded-xl px-1.5 text-sm font-semibold transition-all ${
               tab === id ? 'bg-white text-maroon-900 shadow-soft' : 'text-maroon-900/55 hover:text-maroon-900'
             }`}
             style={{ minHeight: 0 }}
           >
-            <Icon size={16} />
-            {label}
+            <Icon size={16} className="shrink-0" />
+            <span className="truncate">{label}</span>
             {pending[id] > 0 && <span className="rounded-full bg-brand-600 px-1.5 text-[11px] font-bold text-white">{pending[id]}</span>}
           </button>
         ))}
       </div>
 
       {/* Status */}
-      <div className="-mx-4 flex gap-2 overflow-x-auto px-4 scrollbar-none sm:mx-0 sm:px-0">
+      <div className="flex flex-wrap gap-2">
         {(['pending', 'approved', 'rejected', 'all'] as const).map((s) => (
           <button
             key={s}
             onClick={() => setStatus(s)}
-            className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-semibold capitalize transition ${
+            className={`shrink-0 h-9 rounded-full px-3.5 text-sm font-semibold capitalize transition ${
               status === s ? 'bg-brand-600 text-white' : 'bg-white text-maroon-900/65 ring-1 ring-sandal-200 hover:bg-sandal-50'
             }`}
             style={{ minHeight: 0 }}
