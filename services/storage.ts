@@ -203,7 +203,8 @@ export const getSettings = async (userId: string): Promise<UserSettings> => {
       const userSettings = snapshot.val();
       // CRITICAL: If user has cleared their data, don't return defaults
       // Only merge defaults if user has actual saved settings
-      return { ...DEFAULT_SETTINGS, ...userSettings };
+      // A missing gender stays missing (never defaults to male), so the person is asked once
+      return { ...DEFAULT_SETTINGS, ...userSettings, gender: userSettings.gender } as UserSettings;
     }
     
     // CRITICAL FIX: Don't auto-create settings, return minimal empty settings
@@ -211,6 +212,7 @@ export const getSettings = async (userId: string): Promise<UserSettings> => {
     console.log('⚠️ No settings found for user, returning empty settings (not defaults)');
     return {
       ...DEFAULT_SETTINGS,
+      gender: undefined as unknown as UserSettings['gender'],
       userName: '', // Empty instead of 'Bhakta'
       guruName: '', // Empty instead of default guru
       iskconCenter: '', // Empty instead of default center
@@ -234,7 +236,8 @@ export const saveSettings = async (userId: string, settings: UserSettings): Prom
   }
 
   try {
-    await set(ref(db, `users/${userId}/settings`), settings);
+    // Firebase rejects undefined values (e.g. a gender that was never chosen)
+    await set(ref(db, `users/${userId}/settings`), JSON.parse(JSON.stringify(settings)));
   } catch (error) {
     console.error("Error saving settings:", error);
     throw error;

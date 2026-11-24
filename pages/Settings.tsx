@@ -26,6 +26,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useUserData } from '../contexts/UserDataContext';
 import { clearAllChats } from '../scripts/clearAllChats';
 import { useConfirm } from '../components/ConfirmDialog';
+import { updateUserProfile } from '../services/chat';
 import { ref, remove, get } from 'firebase/database';
 import { db, auth } from '../services/firebase';
 import { signOut } from 'firebase/auth';
@@ -322,6 +323,7 @@ const Settings: React.FC = () => {
           iskconCenter: editedSettings.iskconCenter,
           gender: editedSettings.gender,
         });
+        if (editedSettings.gender) updateUserProfile(user.uid, { gender: editedSettings.gender }).catch(() => undefined);
         setSettings(editedSettings);
         setSaveStatus('saved');
         setIsEditing(false);

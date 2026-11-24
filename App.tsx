@@ -12,7 +12,7 @@ import { LanguageProvider } from './contexts/LanguageContext';
 import { UserDataProvider, useUserData } from './contexts/UserDataContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { getSettings, saveSettings, cleanupFakeSeedData } from './services/storage';
-import { createUserProfile, setUserOnlineStatus, getUserProfile } from './services/chat';
+import { createUserProfile, setUserOnlineStatus, getUserProfile, updateUserProfile } from './services/chat';
 import { ref, get, set } from 'firebase/database';
 import { db } from './services/firebase';
 import { checkForUpdates, markVersionSeen, VERSION_HISTORY } from './utils/version';
@@ -249,6 +249,7 @@ function AppContent() {
       });
 
       setShowGenderSelection(false);
+      updateUserProfile(user.uid, { gender }).catch(() => undefined);
 
       // SMART UPDATE: Trigger context refresh
       console.log('✅ Gender updated - updating app state');
