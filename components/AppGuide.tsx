@@ -14,15 +14,15 @@ interface Step {
 
 const STEPS: Step[] = [
   { target: 'menu', title: 'Your menu', text: 'Everything in Sadhana Sang lives here. Tap Next and we will open it for you.' },
-  { target: '/chanting', title: 'Japa Counter', text: 'Tap the circle for each bead. Every completed round is saved, and a gentle bell marks the milestones.' },
-  { target: '/planner', title: 'Weekly Planner', text: 'Set your wake-up time, study hours and chanting goal for each day of the week.' },
-  { target: '/journal', title: 'Journal', text: 'Write your daily reflections: what went well, and what you will improve. Only you can read it.' },
-  { target: '/slokas', title: 'Mantras & Kirtans', text: 'Read prayers and songs in English, Hindi, Telugu and more.' },
-  { target: '/festivals', title: 'Vaishnava Calendar', text: 'Never miss an Ekadashi or festival. Open any day for its story and timings.' },
-  { target: '/chats', title: 'Messages', text: 'Chat privately with devotees you are connected to. Messages are encrypted.' },
-  { target: '/community', title: 'Devotees', text: 'Find devotees by temple or guru, and send a connection request to start a conversation.' },
-  { target: '/questions', title: 'Forum', text: 'Ask a spiritual question, or help someone else with an answer.' },
-  { target: '/settings', title: 'Settings', text: 'Update your profile and privacy. You can replay this guide from here any time.' },
+  { target: '/chanting', title: 'Japa Counter', text: 'Your space for chanting. Count your beads and rounds, track your time, and see your recent japa and daily goal.' },
+  { target: '/planner', title: 'Weekly Planner', text: 'Plan your sadhana for the week: wake-up time, study hours and chanting goal for each day.' },
+  { target: '/journal', title: 'Journal', text: 'A private place for your reflections. Write what went well and what to improve. Only you can read it.' },
+  { target: '/slokas', title: 'Mantras & Kirtans', text: 'A library of prayers and songs that you can read in English, Hindi, Telugu and more.' },
+  { target: '/festivals', title: 'Vaishnava Calendar', text: 'Festivals and Ekadashis with their dates, timings and stories, so you never miss one.' },
+  { target: '/chats', title: 'Messages', text: 'Your private conversations with devotees you are connected to.' },
+  { target: '/community', title: 'Devotees', text: 'Find devotees by name, temple or guru, and send connection requests to build your sangha.' },
+  { target: '/questions', title: 'Forum', text: 'Ask spiritual questions and read answers from the community.' },
+  { target: '/settings', title: 'Settings', text: 'Your profile, privacy and preferences. You can replay this guide from here any time.' },
 ];
 
 type Box = { top: number; left: number; width: number; height: number };
