@@ -94,6 +94,7 @@ function AppContent() {
   const [showGenderSelection, setShowGenderSelection] = useState(false);
   const [showFeatureTour, setShowFeatureTour] = useState(false);
   const [onboardingUserName, setOnboardingUserName] = useState('');
+  const [onboardingPrefill, setOnboardingPrefill] = useState('');
   const [showFeedback, setShowFeedback] = useState(false);
   const [showVersionUpdate, setShowVersionUpdate] = useState(false);
   const [versionInfo, setVersionInfo] = useState<any>(null);
@@ -140,6 +141,7 @@ function AppContent() {
         if (!settings.isFirstTime && !settings.gender) {
           setShowGenderSelection(true);
         } else if (settings.isFirstTime) {
+          setOnboardingPrefill(settings.userName || user.displayName || '');
           setShowOnboarding(true);
         }
 
@@ -301,7 +303,7 @@ function AppContent() {
         </Suspense>
       </Layout>
 
-      <OnboardingModal isOpen={showOnboarding} onComplete={handleOnboardingComplete} prefillName={user?.displayName || ''} />
+      <OnboardingModal isOpen={showOnboarding} onComplete={handleOnboardingComplete} prefillName={onboardingPrefill || user?.displayName || ''} />
       <GenderSelectionModal isOpen={showGenderSelection} onComplete={handleGenderSelection} />
       <FeatureTour isOpen={showFeatureTour} onComplete={() => setShowFeatureTour(false)} userName={onboardingUserName} />
 

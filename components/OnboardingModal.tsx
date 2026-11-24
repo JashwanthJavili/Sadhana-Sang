@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react';
 // @ts-ignore
@@ -23,6 +23,13 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onComplete, p
   const [gender, setGender] = useState<'male' | 'female' | null>(null);
   const [guruName, setGuruName] = useState('');
   const [iskconCenter, setIskconCenter] = useState('');
+
+  // The name from sign-in can arrive after this component mounted — fill it in
+  // as soon as it is known, unless the user has already typed something.
+  const touchedName = React.useRef(false);
+  useEffect(() => {
+    if (prefillName && !touchedName.current) setUserName(prefillName);
+  }, [prefillName, isOpen]);
 
   if (!isOpen) return null;
 
@@ -107,7 +114,10 @@ const OnboardingModal: React.FC<OnboardingModalProps> = ({ isOpen, onComplete, p
               <input
                 type="text"
                 value={userName}
-                onChange={(e) => setUserName(e.target.value)}
+                onChange={(e) => {
+                  touchedName.current = true;
+                  setUserName(e.target.value);
+                }}
                 placeholder="Your name"
                 className={input}
                 autoFocus
