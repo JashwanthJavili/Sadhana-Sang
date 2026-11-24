@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import Login from './components/Login';
 import OnboardingModal from './components/OnboardingModal';
 import GenderSelectionModal from './components/GenderSelectionModal';
+import FeatureTour from './components/FeatureTour';
 import FeedbackPrompt from './components/FeedbackPrompt';
 import LoadingScreen, { PageLoader } from './components/LoadingScreen';
 import VersionChecker from './components/VersionChecker';
@@ -91,6 +92,8 @@ function AppContent() {
   const { user, loading } = useAuth();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showGenderSelection, setShowGenderSelection] = useState(false);
+  const [showFeatureTour, setShowFeatureTour] = useState(false);
+  const [onboardingUserName, setOnboardingUserName] = useState('');
   const [showFeedback, setShowFeedback] = useState(false);
   const [showVersionUpdate, setShowVersionUpdate] = useState(false);
   const [versionInfo, setVersionInfo] = useState<any>(null);
@@ -230,13 +233,12 @@ function AppContent() {
       }
 
       setShowOnboarding(false);
+      setOnboardingUserName(data.userName);
+      setShowFeatureTour(true);
 
-      // SMART UPDATE: Trigger context refresh and navigate to dashboard
-      console.log('✅ Onboarding complete - updating app state and navigating to dashboard');
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('userDataUpdated'));
-        window.location.href = '/'; // Navigate to dashboard
-      }, 300);
+      // SMART UPDATE: Trigger context refresh
+      console.log('✅ Onboarding complete - showing feature tour');
+      window.dispatchEvent(new CustomEvent('userDataUpdated'));
     }
   };
 
@@ -299,8 +301,9 @@ function AppContent() {
         </Suspense>
       </Layout>
 
-      <OnboardingModal isOpen={showOnboarding} onComplete={handleOnboardingComplete} />
+      <OnboardingModal isOpen={showOnboarding} onComplete={handleOnboardingComplete} prefillName={user?.displayName || ''} />
       <GenderSelectionModal isOpen={showGenderSelection} onComplete={handleGenderSelection} />
+      <FeatureTour isOpen={showFeatureTour} onComplete={() => setShowFeatureTour(false)} userName={onboardingUserName} />
 
       {/* Feedback Prompt - Shows after 2+ days */}
       {showFeedback && <FeedbackPrompt onClose={() => setShowFeedback(false)} />}

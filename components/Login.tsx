@@ -83,7 +83,7 @@ const Login: React.FC = () => {
     if (!email.trim()) return setError('Enter your email first.');
     run('reset', async () => {
       await resetPassword(email);
-      setNotice('Reset link sent to your email.');
+      setNotice('Reset link sent! Check your inbox — and your spam or promotions folder, too.');
     });
   };
 
