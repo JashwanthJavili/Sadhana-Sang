@@ -25,6 +25,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useUserData } from '../contexts/UserDataContext';
 import { clearAllChats } from '../scripts/clearAllChats';
+import { useConfirm } from '../components/ConfirmDialog';
 import { ref, remove, get } from 'firebase/database';
 import { db, auth } from '../services/firebase';
 import { signOut } from 'firebase/auth';
@@ -238,6 +239,7 @@ const Settings: React.FC = () => {
   const [editedSettings, setEditedSettings] = useState<UserSettings | null>(null);
   const [privacy, setPrivacy] = useState<PrivacyState>(privacyFrom(null));
   const [privacySaving, setPrivacySaving] = useState(false);
+  const { ask, dialog } = useConfirm();
   const [clearDataStatus, setClearDataStatus] = useState<'idle' | 'clearing' | 'success' | 'error'>('idle');
   const [deleteAccountStatus, setDeleteAccountStatus] = useState<'idle' | 'deleting' | 'success' | 'error'>('idle');
   const [clearChatsStatus, setClearChatsStatus] = useState<'idle' | 'clearing' | 'success' | 'error'>('idle');
@@ -305,6 +307,12 @@ const Settings: React.FC = () => {
 
   const handleSaveEdit = async () => {
     if (editedSettings && user) {
+      const ok = await ask({
+        title: 'Save your profile?',
+        message: 'Other devotees will see your new name, guide and temple.',
+        confirmLabel: 'Save',
+      });
+      if (!ok) return;
       try {
         setSaveStatus('saving');
         // Optimistic update via context - instant UI, background sync
@@ -337,6 +345,12 @@ const Settings: React.FC = () => {
 
   const handleSavePrivacy = async () => {
     if (!user) return;
+    const ok = await ask({
+      title: 'Change who can see you?',
+      message: 'Your privacy choices will update for everyone in the community.',
+      confirmLabel: 'Yes, update',
+    });
+    if (!ok) return;
     try {
       setPrivacySaving(true);
       await updateUserSettings(privacy);
@@ -374,10 +388,11 @@ const Settings: React.FC = () => {
           setTimeout(() => {
             if (registration.waiting) {
               setUpdateAvailable(true);
-              if (confirm('A new version is available. Update now?\n\nThe app will reload to apply the update.')) {
-                registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+              ask({ title: 'A new version is ready', message: 'The app will reload to update.', confirmLabel: 'Update now' }).then((yes) => {
+                if (!yes) return;
+                registration.waiting?.postMessage({ type: 'SKIP_WAITING' });
                 window.location.reload();
-              }
+              });
             } else {
               alert(`You are on the latest version.\n\nVersion: ${versionData.version}\nBuild date: ${versionData.buildDate}`);
             }
@@ -429,22 +444,15 @@ const Settings: React.FC = () => {
       return;
     }
 
-    const confirmed = confirm(
-      'This will permanently delete ALL your data, including:\n\n' +
-        '- Daily entries and history\n' +
-        '- Settings and preferences\n' +
-        '- Journal entries\n' +
-        '- Chat messages and conversations\n' +
-        '- Connections and connection requests\n' +
-        '- Notifications\n' +
-        '- Questions and answers\n\n' +
-        'This cannot be undone. Your account will stay active.\n\n' +
-        'Do you want to continue?'
-    );
+    const confirmed = await ask({
+      title: 'Delete all your data?',
+      message:
+        'This removes your entries, journal, settings, chats, connections and questions. It cannot be undone. Your account stays active.',
+      confirmLabel: 'Delete my data',
+      danger: true,
+      requireText: 'DELETE',
+    });
     if (!confirmed) return;
-
-    const doubleCheck = confirm('Final check.\n\nClick OK to permanently delete all your data.');
-    if (!doubleCheck) return;
 
     try {
       setClearDataStatus('clearing');
@@ -475,24 +483,14 @@ const Settings: React.FC = () => {
       return;
     }
 
-    const confirmed = confirm(
-      'This will permanently delete your account and everything in it:\n\n' +
-        '- Daily entries, journal and settings\n' +
-        '- Chats, connections and notifications\n' +
-        '- Questions and answers\n\n' +
-        'This cannot be undone. You will need a new account to use the app again.\n\n' +
-        'Are you sure?'
-    );
+    const confirmed = await ask({
+      title: 'Delete your account?',
+      message: 'Your account and everything in it will be removed for good. You would need a new account to use the app again.',
+      confirmLabel: 'Delete account',
+      danger: true,
+      requireText: user.email || 'DELETE',
+    });
     if (!confirmed) return;
-
-    const finalConfirm = confirm('Final confirmation.\n\nOn the next step, type your email to confirm: ' + user.email);
-    if (!finalConfirm) return;
-
-    const typedEmail = prompt('Type your email to confirm account deletion:');
-    if (typedEmail !== user.email) {
-      alert('Email does not match. Account deletion cancelled.');
-      return;
-    }
 
     try {
       setDeleteAccountStatus('deleting');
@@ -517,8 +515,14 @@ const Settings: React.FC = () => {
       alert('Access denied. Only the admin can do this.');
       return;
     }
-    if (!confirm('This will permanently delete ALL chat messages and conversations for ALL users.\n\nThis cannot be undone. Continue?')) return;
-    if (!confirm('Final confirmation.\n\nClick OK to permanently delete all chats.')) return;
+    const ok = await ask({
+      title: 'Delete all chats for everyone?',
+      message: 'Every message and conversation of every user will be removed. This cannot be undone.',
+      confirmLabel: 'Delete all chats',
+      danger: true,
+      requireText: 'DELETE',
+    });
+    if (!ok) return;
 
     try {
       setClearChatsStatus('clearing');
@@ -537,6 +541,12 @@ const Settings: React.FC = () => {
   /* ----- Account ----- */
 
   const handleSignOut = async () => {
+    const ok = await ask({
+      title: isGuest ? 'Leave guest mode?' : 'Sign out?',
+      message: isGuest ? 'What you did as a guest stays only on this device.' : 'You can sign back in any time.',
+      confirmLabel: isGuest ? 'Leave' : 'Sign out',
+    });
+    if (!ok) return;
     await logout();
     navigate('/login');
   };
@@ -794,6 +804,7 @@ const Settings: React.FC = () => {
       )}
 
       <p className="text-center text-xs text-maroon-900/40">Hare Krishna. Sadhana Sang v{versionData.version}</p>
+      {dialog}
     </div>
   );
 };

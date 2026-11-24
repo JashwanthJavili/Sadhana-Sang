@@ -37,8 +37,8 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const id = Date.now().toString() + Math.random().toString(36);
     setToasts(prev => [...prev, { ...toast, id }]);
     
-    // Auto remove after 5 seconds
-    setTimeout(() => removeToast(id), 5000);
+    // Auto remove after a few seconds
+    setTimeout(() => removeToast(id), 3500);
   }, [removeToast]);
 
   // Notices that used the browser's alert() appear as in-app toasts instead
@@ -71,44 +71,31 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [showToast]);
 
   const toastConfig = {
-    success: { icon: CheckCircle, bg: 'bg-green-500', border: 'border-green-600' },
-    error: { icon: XCircle, bg: 'bg-red-500', border: 'border-red-600' },
-    warning: { icon: AlertTriangle, bg: 'bg-amber-500', border: 'border-amber-600' },
-    info: { icon: Info, bg: 'bg-blue-500', border: 'border-blue-600' }
+    success: { icon: CheckCircle, tone: 'text-emerald-400' },
+    error: { icon: XCircle, tone: 'text-rose-400' },
+    warning: { icon: AlertTriangle, tone: 'text-amber-300' },
+    info: { icon: Info, tone: 'text-sky-300' },
   };
 
   return (
     <ToastContext.Provider value={{ showToast, showSuccess, showError, showWarning, showInfo }}>
       {children}
       
-      {/* Toast Container */}
-      <div className="fixed top-4 right-4 z-[9999] space-y-3 max-w-md pointer-events-none">
+      {/* Toasts — bottom centre, above the mobile bar, easy to reach and read */}
+      <div className="pointer-events-none fixed inset-x-0 bottom-24 z-[9999] flex flex-col items-center gap-2 px-4 lg:bottom-8" aria-live="polite">
         {toasts.map((toast) => {
           const config = toastConfig[toast.type];
           const Icon = config.icon;
-          
           return (
-            <div
-              key={toast.id}
-              className="pointer-events-auto bg-white rounded-xl shadow-2xl border-3 border-stone-300 overflow-hidden animate-slideInRight"
-            >
-              <div className={`flex items-start gap-3 p-4 border-l-4 ${config.border}`}>
-                <div className={`${config.bg} p-2 rounded-lg flex-shrink-0`}>
-                  <Icon className="text-white" size={20} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-bold text-stone-900 text-base">{toast.title}</h4>
-                  {toast.message && (
-                    <p className="text-sm text-stone-600 mt-1">{toast.message}</p>
-                  )}
-                </div>
-                <button
-                  onClick={() => removeToast(toast.id)}
-                  className="flex-shrink-0 p-1 hover:bg-stone-100 rounded-lg transition-colors"
-                >
-                  <X size={18} className="text-stone-600" />
-                </button>
+            <div key={toast.id} className="pointer-events-auto flex w-full max-w-sm animate-rise-in items-center gap-3 rounded-2xl bg-maroon-900 px-4 py-3 text-white shadow-lift">
+              <Icon size={19} className={config.tone} />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold leading-snug">{toast.title}</p>
+                {toast.message && <p className="mt-0.5 text-xs leading-snug text-white/70">{toast.message}</p>}
               </div>
+              <button onClick={() => removeToast(toast.id)} className="shrink-0 rounded-full p-1 text-white/60 transition hover:text-white" aria-label="Dismiss" style={{ minHeight: 0 }}>
+                <X size={16} />
+              </button>
             </div>
           );
         })}
