@@ -336,7 +336,7 @@ export async function checkTomorrowReminders(
 /* Server-sent pushes (backend/ — FastAPI on Render)                           */
 /* -------------------------------------------------------------------------- */
 
-const PUSH_SERVER = (import.meta.env.VITE_PUSH_SERVER_URL as string | undefined)?.replace(/\/$/, '');
+const PUSH_SERVER = ((import.meta.env.VITE_PUSH_SERVER_URL as string | undefined) || 'https://sadhana-sang.onrender.com').replace(/\/$/, '');
 
 /**
  * Ask the server to notify the other person. The item is written to `pushQueue`
