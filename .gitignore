@@ -38,3 +38,7 @@ firebase-debug.log
 
 # Playwright screenshots
 .playwright-mcp/
+
+# Vite cache
+.vite/
+.playwright-mcp/

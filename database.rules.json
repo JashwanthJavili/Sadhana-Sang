@@ -5,14 +5,10 @@
       ".write": "auth != null && auth.token.email == 'jashwanthjavili7@gmail.com'"
     },
     "users": {
-      ".read": "auth != null",
+      ".read": "auth != null && (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
       "$userId": {
         ".write": "auth != null && (auth.uid == $userId || (!newData.exists() && (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')))",
         ".read": "auth != null && (auth.uid == $userId || root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
-        "email": {
-          ".write": "auth != null && auth.uid == $userId",
-          ".read": "auth != null"
-        },
         "displayName": {
           ".write": "auth != null && auth.uid == $userId",
           ".read": "auth != null"
@@ -22,18 +18,6 @@
           ".read": "auth != null"
         },
         "userName": {
-          ".write": "auth != null && auth.uid == $userId",
-          ".read": "auth != null"
-        },
-        "guruName": {
-          ".write": "auth != null && auth.uid == $userId",
-          ".read": "auth != null"
-        },
-        "iskconCenter": {
-          ".write": "auth != null && auth.uid == $userId",
-          ".read": "auth != null"
-        },
-        "messagingPrivacy": {
           ".write": "auth != null && auth.uid == $userId",
           ".read": "auth != null"
         },
@@ -48,23 +32,24 @@
         "entries": {
           ".read": "auth != null && (auth.uid == $userId || root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
           ".write": "auth != null && (auth.uid == $userId || root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
-          ".indexOn": ["date"],
+          ".indexOn": [
+            "date"
+          ],
           "$entryId": {
             ".validate": "newData.hasChildren(['date']) && newData.child('date').isString()"
           }
         },
         "settings": {
-          ".read": "auth != null",
+          ".read": "auth != null && auth.uid == $userId",
           ".write": "auth != null && auth.uid == $userId",
-          ".validate": "newData.hasChildren(['userName', 'guruName', 'iskconCenter', 'themeColor', 'language'])",
-          "messagingPrivacy": {
-            ".read": "auth != null"
-          }
+          ".validate": "newData.hasChildren(['userName', 'guruName', 'iskconCenter', 'themeColor', 'language'])"
         },
         "journal": {
           ".read": "auth != null && (auth.uid == $userId || root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
           ".write": "auth != null && (auth.uid == $userId || root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
-          ".indexOn": ["date"],
+          ".indexOn": [
+            "date"
+          ],
           "$journalId": {
             ".validate": "newData.hasChildren(['date', 'content']) && newData.child('date').isString() && newData.child('content').isString()"
           }
@@ -80,7 +65,9 @@
         "chantingSessions": {
           ".read": "auth != null && (auth.uid == $userId || root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
           ".write": "auth != null && (auth.uid == $userId || root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
-          ".indexOn": ["timestamp"]
+          ".indexOn": [
+            "timestamp"
+          ]
         },
         "chantingStats": {
           ".read": "auth != null && (auth.uid == $userId || root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
@@ -93,28 +80,45 @@
       }
     },
     "chats": {
-      ".read": "auth != null",
-      ".write": "auth != null || root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com'",
-      ".indexOn": ["lastMessageTime"]
+      ".read": "auth != null && (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
+      ".indexOn": [
+        "lastMessageTime"
+      ],
+      "$chatId": {
+        ".read": "auth != null && (data.child('participants/0').val() == auth.uid || data.child('participants/1').val() == auth.uid)",
+        ".write": "auth != null && ((!data.exists() && newData.child('participants/0').val() == auth.uid && !root.child('blocks').child(newData.child('participants/1').val()).child(auth.uid).exists() && (root.child('users').child(newData.child('participants/1').val()).child('settings/messagingPrivacy').val() != 'connections-only' || root.child('connections').child(newData.child('participants/1').val()).child(auth.uid).exists())) || (data.exists() && (data.child('participants/0').val() == auth.uid || data.child('participants/1').val() == auth.uid) && !root.child('blocks').child(data.child('participants/0').val()).child(auth.uid).exists() && !root.child('blocks').child(data.child('participants/1').val()).child(auth.uid).exists()) || (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com'))"
+      }
     },
     "messages": {
-      ".read": "auth != null",
-      ".write": "auth != null || root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com'",
-      ".indexOn": ["timestamp"]
+      ".read": "auth != null && (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
+      "$chatId": {
+        ".read": "auth != null && (root.child('chats').child($chatId).child('participants/0').val() == auth.uid || root.child('chats').child($chatId).child('participants/1').val() == auth.uid)",
+        ".write": "auth != null && (((root.child('chats').child($chatId).child('participants/0').val() == auth.uid || root.child('chats').child($chatId).child('participants/1').val() == auth.uid) && !root.child('blocks').child(root.child('chats').child($chatId).child('participants/0').val() + '').child(auth.uid).exists() && !root.child('blocks').child(root.child('chats').child($chatId).child('participants/1').val() + '').child(auth.uid).exists()) || (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com'))",
+        ".indexOn": [
+          "timestamp"
+        ]
+      }
     },
     "typing": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      "$chatId": {
+        ".read": "auth != null && (root.child('chats').child($chatId).child('participants/0').val() == auth.uid || root.child('chats').child($chatId).child('participants/1').val() == auth.uid)",
+        ".write": "auth != null && (root.child('chats').child($chatId).child('participants/0').val() == auth.uid || root.child('chats').child($chatId).child('participants/1').val() == auth.uid)"
+      }
     },
     "questions": {
       ".read": "auth != null",
       ".write": "auth != null || root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com'",
-      ".indexOn": ["timestamp", "category"]
+      ".indexOn": [
+        "timestamp",
+        "category"
+      ]
     },
     "answers": {
       ".read": "auth != null",
       ".write": "auth != null || root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com'",
-      ".indexOn": ["timestamp"]
+      ".indexOn": [
+        "timestamp"
+      ]
     },
     "slokaLanguages": {
       ".read": "auth != null",
@@ -127,26 +131,39 @@
     "festivals": {
       ".read": "auth != null",
       ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
-      ".indexOn": ["date"]
+      ".indexOn": [
+        "date"
+      ]
     },
     "ekadashi": {
       ".read": "auth != null",
       ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
       "observances": {
         "$locationId": {
-          ".indexOn": ["fastDate", "status"]
+          ".indexOn": [
+            "fastDate",
+            "status"
+          ]
         }
       }
     },
     "festivalRequests": {
       ".read": "auth != null",
       ".write": "auth != null",
-      ".indexOn": ["timestamp", "status", "requesterId"]
+      ".indexOn": [
+        "timestamp",
+        "status",
+        "requesterId"
+      ]
     },
     "slokaRequests": {
       ".read": "auth != null",
       ".write": "auth != null",
-      ".indexOn": ["timestamp", "status", "requesterId"]
+      ".indexOn": [
+        "timestamp",
+        "status",
+        "requesterId"
+      ]
     },
     "appSettings": {
       ".read": "auth != null && (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
@@ -155,35 +172,56 @@
     "flaggedContent": {
       ".read": "auth != null && (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
       ".write": "auth != null",
-      ".indexOn": ["timestamp", "contentType", "status"]
+      ".indexOn": [
+        "timestamp",
+        "contentType",
+        "status"
+      ]
     },
     "adminNotifications": {
       ".read": "auth != null && (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
       ".write": "auth != null",
-      ".indexOn": ["timestamp", "type", "read"]
+      ".indexOn": [
+        "timestamp",
+        "type",
+        "read"
+      ]
     },
     "userNotifications": {
       "$userId": {
         ".read": "auth != null && auth.uid == $userId",
         ".write": "auth != null",
-        ".indexOn": ["timestamp", "read"]
+        ".indexOn": [
+          "timestamp",
+          "read"
+        ]
       }
     },
     "announcements": {
       ".read": "auth != null",
       ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
-      ".indexOn": ["timestamp", "type"]
+      ".indexOn": [
+        "timestamp",
+        "type"
+      ]
     },
     "broadcasts": {
       ".read": "auth != null && (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
       ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
-      ".indexOn": ["timestamp"]
+      ".indexOn": [
+        "timestamp"
+      ]
     },
     "connectionRequests": {
       ".read": "auth != null",
+      ".indexOn": [
+        "fromUserId",
+        "toUserId",
+        "status",
+        "timestamp"
+      ],
       "$requestId": {
-        ".write": "auth != null && (!data.exists() || data.child('fromUserId').val() == auth.uid || data.child('toUserId').val() == auth.uid)",
-        ".indexOn": ["fromUserId", "toUserId", "status", "timestamp"]
+        ".write": "auth != null && ((!data.exists() && newData.child('fromUserId').val() == auth.uid && !root.child('blocks').child(newData.child('toUserId').val()).child(auth.uid).exists() && root.child('users').child(newData.child('toUserId').val()).child('settings/requestsFrom').val() != 'nobody' && (root.child('users').child(newData.child('toUserId').val()).child('settings/requestsFrom').val() != 'same-gender' || root.child('users').child(newData.child('toUserId').val()).child('settings/gender').val() == root.child('users').child(auth.uid).child('settings/gender').val())) || (data.exists() && (data.child('fromUserId').val() == auth.uid || data.child('toUserId').val() == auth.uid)))"
       }
     },
     "connections": {
@@ -198,13 +236,60 @@
       ".read": "auth != null",
       "$userId": {
         ".write": "auth != null && auth.uid == $userId",
-        ".indexOn": ["isOnline", "lastSeen"]
+        ".indexOn": [
+          "isOnline",
+          "lastSeen"
+        ]
       }
     },
     "chatMessages": {
+      ".read": "auth != null && (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
+      ".write": "auth != null && (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')"
+    },
+    "userChats": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        "$chatId": {
+          ".write": "auth != null && (auth.uid == $uid || (root.child('chats').child($chatId).child('participants/0').val() == auth.uid || root.child('chats').child($chatId).child('participants/1').val() == auth.uid))"
+        }
+      }
+    },
+    "publicProfiles": {
       ".read": "auth != null",
-      ".write": "auth != null",
-      ".indexOn": ["timestamp"]
+      "$uid": {
+        ".write": "auth != null && (auth.uid == $uid || (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com'))",
+        ".validate": "!newData.exists() || (newData.child('uid').val() == $uid && newData.child('userName').isString())"
+      }
+    },
+    "circleProfiles": {
+      "$gender": {
+        ".read": "auth != null && root.child('users').child(auth.uid).child('settings/gender').val() == $gender",
+        "$uid": {
+          ".write": "auth != null && auth.uid == $uid && (!newData.exists() || newData.child('gender').val() == $gender)"
+        }
+      }
+    },
+    "blocks": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "pushSubscribers": {
+      ".read": "auth != null && (root.child('admins').child(auth.uid).exists() || auth.token.email == 'jashwanthjavili7@gmail.com')",
+      "$uid": {
+        ".write": "auth != null && auth.uid == $uid"
+      }
+    },
+    "pushQueue": {
+      "$id": {
+        ".write": "auth != null && !data.exists() && newData.child('from').val() == auth.uid",
+        ".validate": "newData.hasChildren(['type','from','at']) && newData.child('type').val().matches(/^(message|request|accepted)$/)"
+      }
+    },
+    "serverState": {
+      ".read": "false",
+      ".write": "false"
     }
   }
 }

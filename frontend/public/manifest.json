@@ -1,0 +1,46 @@
+{
+  "id": "/",
+  "name": "Sadhana Sang - Spiritual Tracker",
+  "short_name": "Sadhana Sang",
+  "description": "Track your spiritual journey with daily sadhana, devotional journal, slokas, festivals, and community support",
+  "lang": "en",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#FBF5EA",
+  "theme_color": "#FBF5EA",
+  "prefer_related_applications": false,
+  "categories": ["lifestyle", "productivity", "education"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Japa",
+      "short_name": "Japa",
+      "description": "Open the chanting counter",
+      "url": "/#/chanting",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Messages",
+      "short_name": "Messages",
+      "description": "Open your conversations",
+      "url": "/#/chats",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Calendar",
+      "short_name": "Calendar",
+      "description": "Festivals and Ekadashi",
+      "url": "/#/festivals",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}
